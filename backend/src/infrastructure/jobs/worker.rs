@@ -157,6 +157,7 @@ impl Worker {
 }
 
 async fn listen(pool: PgPool, wake: Arc<Notify>, stop: CancellationToken) {
+    let pool = crate::infrastructure::postgres::pool::listener_pool(&pool);
     loop {
         let mut listener = match PgListener::connect_with(&pool).await {
             Ok(l) => l,

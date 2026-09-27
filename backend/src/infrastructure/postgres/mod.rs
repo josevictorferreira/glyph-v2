@@ -1,5 +1,6 @@
 pub mod catalog_repo;
 pub mod jobs;
+pub mod listener;
 pub mod migrate;
 pub mod pool;
 pub mod runs_repo;

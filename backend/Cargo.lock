@@ -988,6 +988,8 @@ dependencies = [
  "chrono-tz",
  "croner",
  "dotenvy",
+ "futures-core",
+ "futures-util",
  "getrandom 0.4.3",
  "hex",
  "http-body-util",

@@ -34,6 +34,7 @@ use crate::infrastructure::jobs::recurring::{self, Recurring};
 use crate::infrastructure::jobs::worker::Worker;
 use crate::infrastructure::pi::runner::{PiConfig, PiStepRunner};
 use crate::shared::redactor::Redactor;
+use crate::infrastructure::postgres::listener::{self, LiveHub};
 use crate::infrastructure::postgres::{self, PgStore};
 use crate::proto;
 use crate::proto::pb::catalog_service_server::CatalogServiceServer;
@@ -170,6 +171,11 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         clock.clone(),
     );
 
+    // --- live --------------------------------------------------------------
+    let stop = CancellationToken::new();
+    let hub = LiveHub::new(listener::CAPACITY);
+    let mut background = vec![hub.clone().spawn_listener(pool.clone(), stop.clone())];
+
     // --- transport ---------------------------------------------------------
     let state = AppState {
         pool: pool.clone(),
@@ -191,15 +197,17 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(workflows.clone())))
         .add_service(DefinitionServiceServer::new(DefinitionGrpc::new(definitions)))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
-        .add_service(LiveServiceServer::new(LiveGrpc))
+        .add_service(LiveServiceServer::new(LiveGrpc::new(
+            Arc::new(hub),
+            config.live_heartbeat,
+            stop.clone(),
+        )))
         .prepare()
         .into_axum_router()
         .layer(GrpcWebLayer::new());
 
     // --- background --------------------------------------------------------
     let scheduling = DispatchDueWorkflows::new(Arc::new(store.clone()), runs.clone());
-    let stop = CancellationToken::new();
-    let mut background = Vec::new();
     if overrides.background.unwrap_or(config.worker_enabled) {
         let worker = worker(pool.clone(), config, &runs)
             .queue(SCHEDULING_QUEUE, 1)
@@ -300,7 +308,14 @@ impl App {
             .await
             .with_context(|| format!("binding {}", self.listen_addr))?;
         tracing::info!(addr = %listener.local_addr()?, "listening");
-        let result = serve(listener, self.router, shutdown_signal()).await;
+        // On the signal: stop background work (tickers, worker drain, live
+        // streams) while in-flight HTTP requests drain.
+        let stop = self.stop.clone();
+        let result = serve(listener, self.router, async move {
+            shutdown_signal().await;
+            stop.cancel();
+        })
+        .await;
         self.stop.cancel();
         for handle in self.background {
             let _ = handle.await;

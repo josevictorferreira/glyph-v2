@@ -12,3 +12,11 @@ pub async fn connect(config: &Config) -> Result<PgPool, sqlx::Error> {
         .connect(&config.database_url)
         .await
 }
+
+/// A dedicated single-connection pool for a long-lived `LISTEN` connection,
+/// so listeners never hold slots of the shared pool.
+pub fn listener_pool(pool: &PgPool) -> PgPool {
+    PgPoolOptions::new()
+        .max_connections(1)
+        .connect_lazy_with((*pool.connect_options()).clone())
+}

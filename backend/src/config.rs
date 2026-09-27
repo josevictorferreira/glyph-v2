@@ -38,6 +38,8 @@ pub struct Config {
     pub step_concurrency: usize,
     /// Worker drain time on shutdown (GLYPH_SHUTDOWN_GRACE seconds).
     pub shutdown_grace: Duration,
+    /// Keep-alive events on idle live streams (GLYPH_LIVE_HEARTBEAT_SECONDS).
+    pub live_heartbeat: Option<Duration>,
     pub pi_bin: String,
     /// Per-step agent timeout (GLYPH_PI_TIMEOUT_SECONDS).
     pub pi_timeout: Duration,
@@ -107,6 +109,11 @@ impl Config {
             step_runner: parse(&var, "GLYPH_STEP_RUNNER", "pi")?,
             step_concurrency: parse(&var, "GLYPH_STEP_CONCURRENCY", "5")?,
             shutdown_grace: Duration::from_secs(parse(&var, "GLYPH_SHUTDOWN_GRACE", "30")?),
+            live_heartbeat: match var("GLYPH_LIVE_HEARTBEAT_SECONDS") {
+                None => None,
+                Some(_) => Some(Duration::from_secs(parse(&var, "GLYPH_LIVE_HEARTBEAT_SECONDS", "30")?))
+                    .filter(|d| !d.is_zero()),
+            },
             pi_bin: var("GLYPH_PI_BIN").unwrap_or_else(|| "pi".into()),
             pi_timeout: Duration::from_secs(parse(&var, "GLYPH_PI_TIMEOUT_SECONDS", "900")?),
             secret_values: SECRET_ENV_KEYS
