@@ -111,15 +111,22 @@ impl Config {
             shutdown_grace: Duration::from_secs(parse(&var, "GLYPH_SHUTDOWN_GRACE", "30")?),
             live_heartbeat: match var("GLYPH_LIVE_HEARTBEAT_SECONDS") {
                 None => None,
-                Some(_) => Some(Duration::from_secs(parse(&var, "GLYPH_LIVE_HEARTBEAT_SECONDS", "30")?))
-                    .filter(|d| !d.is_zero()),
+                Some(_) => Some(Duration::from_secs(parse(
+                    &var,
+                    "GLYPH_LIVE_HEARTBEAT_SECONDS",
+                    "30",
+                )?))
+                .filter(|d| !d.is_zero()),
             },
             pi_bin: var("GLYPH_PI_BIN").unwrap_or_else(|| "pi".into()),
             pi_timeout: Duration::from_secs(parse(&var, "GLYPH_PI_TIMEOUT_SECONDS", "900")?),
             secret_values: SECRET_ENV_KEYS
                 .iter()
                 .filter_map(|k| var(k))
-                .chain(var("DATABASE_URL").and_then(|u| crate::shared::redactor::database_password(&u)))
+                .chain(
+                    var("DATABASE_URL")
+                        .and_then(|u| crate::shared::redactor::database_password(&u)),
+                )
                 .map(SecretString::from)
                 .collect(),
         })
@@ -136,10 +143,12 @@ where
     T::Err: std::fmt::Display,
 {
     let raw = var(name).unwrap_or_else(|| default.to_string());
-    raw.trim().parse().map_err(|e: T::Err| ConfigError::Invalid {
-        name,
-        reason: e.to_string(),
-    })
+    raw.trim()
+        .parse()
+        .map_err(|e: T::Err| ConfigError::Invalid {
+            name,
+            reason: e.to_string(),
+        })
 }
 
 fn parse_bool(

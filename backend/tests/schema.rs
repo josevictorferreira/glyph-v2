@@ -53,7 +53,11 @@ async fn connections_reject_self_edges(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap_err();
-    assert!(err.to_string().contains("workflow_connections_no_self_edge"), "{err}");
+    assert!(
+        err.to_string()
+            .contains("workflow_connections_no_self_edge"),
+        "{err}"
+    );
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]

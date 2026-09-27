@@ -21,7 +21,11 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 // --- gateways --------------------------------------------------------------
 
-async fn gateway(provider: Provider, server: &MockServer, key: Option<&str>) -> OpenAiCompatibleGateway {
+async fn gateway(
+    provider: Provider,
+    server: &MockServer,
+    key: Option<&str>,
+) -> OpenAiCompatibleGateway {
     OpenAiCompatibleGateway::new(
         provider,
         &format!("{}/v1/", server.uri()),
@@ -47,12 +51,19 @@ async fn omniroute_normalizes_the_model_list() {
         .mount(&server)
         .await;
 
-    let models = gateway(Provider::Omniroute, &server, Some("key")).await.fetch_models().await.unwrap();
+    let models = gateway(Provider::Omniroute, &server, Some("key"))
+        .await
+        .fetch_models()
+        .await
+        .unwrap();
     assert_eq!(models.len(), 2);
     assert_eq!(models[0].provider, Provider::Omniroute);
     assert_eq!(models[0].model_id, "glm-4.7");
     assert_eq!(models[0].display_name, "glm-4.7");
-    assert_eq!(json!(models[0].capabilities), json!({ "temperature": true }));
+    assert_eq!(
+        json!(models[0].capabilities),
+        json!({ "temperature": true })
+    );
     assert_eq!(models[1].display_name, "Best");
 }
 
@@ -65,7 +76,11 @@ async fn velox_ignores_names_and_capabilities() {
         })))
         .mount(&server)
         .await;
-    let models = gateway(Provider::Velox, &server, Some("key")).await.fetch_models().await.unwrap();
+    let models = gateway(Provider::Velox, &server, Some("key"))
+        .await
+        .fetch_models()
+        .await
+        .unwrap();
     assert_eq!(models[0].display_name, "combo");
     assert!(models[0].capabilities.is_empty());
 }
@@ -77,7 +92,11 @@ async fn gateway_errors() {
         .respond_with(ResponseTemplate::new(401).set_body_string("unauthorized"))
         .mount(&server)
         .await;
-    let err = gateway(Provider::Omniroute, &server, Some("key")).await.fetch_models().await.unwrap_err();
+    let err = gateway(Provider::Omniroute, &server, Some("key"))
+        .await
+        .fetch_models()
+        .await
+        .unwrap_err();
     assert_eq!(err.0, "omniroute /models answered 401");
 
     let server = MockServer::start().await;
@@ -85,7 +104,11 @@ async fn gateway_errors() {
         .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
         .mount(&server)
         .await;
-    let err = gateway(Provider::Omniroute, &server, Some("key")).await.fetch_models().await.unwrap_err();
+    let err = gateway(Provider::Omniroute, &server, Some("key"))
+        .await
+        .fetch_models()
+        .await
+        .unwrap_err();
     assert_eq!(err.0, "omniroute /models returned invalid JSON");
 
     let server = MockServer::start().await;
@@ -93,12 +116,24 @@ async fn gateway_errors() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "models": [] })))
         .mount(&server)
         .await;
-    let err = gateway(Provider::Velox, &server, Some("key")).await.fetch_models().await.unwrap_err();
+    let err = gateway(Provider::Velox, &server, Some("key"))
+        .await
+        .fetch_models()
+        .await
+        .unwrap_err();
     assert_eq!(err.0, "velox /models returned an unexpected payload");
 
-    let err = gateway(Provider::Omniroute, &server, None).await.fetch_models().await.unwrap_err();
+    let err = gateway(Provider::Omniroute, &server, None)
+        .await
+        .fetch_models()
+        .await
+        .unwrap_err();
     assert_eq!(err.0, "OMNIROUTE_API_KEY is not configured");
-    let err = gateway(Provider::Velox, &server, Some("  ")).await.fetch_models().await.unwrap_err();
+    let err = gateway(Provider::Velox, &server, Some("  "))
+        .await
+        .fetch_models()
+        .await
+        .unwrap_err();
     assert_eq!(err.0, "VELOX_API_KEY is not configured");
 }
 
@@ -153,7 +188,11 @@ impl WorkflowFlagger for RecordingFlagger {
     }
 }
 
-fn refresher(pool: &PgPool, gateway: Arc<FakeGateway>, flagger: Arc<RecordingFlagger>) -> RefreshModels {
+fn refresher(
+    pool: &PgPool,
+    gateway: Arc<FakeGateway>,
+    flagger: Arc<RecordingFlagger>,
+) -> RefreshModels {
     RefreshModels::new(
         Arc::new(PgStore::new(pool.clone(), Arc::new(AesGcmCipher::dev()))),
         vec![gateway as Arc<dyn ModelGateway>],
@@ -163,12 +202,14 @@ fn refresher(pool: &PgPool, gateway: Arc<FakeGateway>, flagger: Arc<RecordingFla
 }
 
 async fn availability(pool: &PgPool, provider: &str, id: &str) -> Option<bool> {
-    sqlx::query_scalar("SELECT available FROM available_models WHERE provider = $1 AND model_id = $2")
-        .bind(provider)
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar(
+        "SELECT available FROM available_models WHERE provider = $1 AND model_id = $2",
+    )
+    .bind(provider)
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
@@ -187,12 +228,24 @@ async fn refresh_upserts_and_marks_vanished_unavailable(pool: PgPool) {
     assert!(result.refreshed);
     assert_eq!(result.count, 1);
     assert_eq!(result.became_unavailable, vec!["old-model"]);
-    assert_eq!(availability(&pool, "omniroute", "new-model").await, Some(true));
-    assert_eq!(availability(&pool, "omniroute", "old-model").await, Some(false));
+    assert_eq!(
+        availability(&pool, "omniroute", "new-model").await,
+        Some(true)
+    );
+    assert_eq!(
+        availability(&pool, "omniroute", "old-model").await,
+        Some(false)
+    );
     // Other providers untouched.
-    assert_eq!(availability(&pool, "velox", "velox-model").await, Some(true));
+    assert_eq!(
+        availability(&pool, "velox", "velox-model").await,
+        Some(true)
+    );
     // Both id shapes flagged.
-    assert_eq!(*flagger.0.lock().unwrap(), vec!["old-model", "omniroute/old-model"]);
+    assert_eq!(
+        *flagger.0.lock().unwrap(),
+        vec!["old-model", "omniroute/old-model"]
+    );
 
     let (event_type, data): (String, serde_json::Value) = sqlx::query_as(
         "SELECT event_type, data FROM events WHERE stream = 'Omniroute$models' ORDER BY id DESC LIMIT 1",
@@ -220,7 +273,10 @@ async fn refresh_failure_leaves_the_db_untouched(pool: PgPool) {
     assert!(!result.refreshed);
     assert_eq!(result.error.as_deref(), Some("boom"));
     assert_eq!(availability(&pool, "omniroute", "kept").await, Some(true));
-    let events: i64 = sqlx::query_scalar("SELECT count(*) FROM events").fetch_one(&pool).await.unwrap();
+    let events: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(events, 0);
 }
 
@@ -241,25 +297,38 @@ async fn catalog_service(pool: PgPool) {
     .await;
     let mut client = CatalogServiceClient::new(server.channel().await);
 
-    let tools = client.list_tools(pb::ListToolsRequest {}).await.unwrap().into_inner().tools;
+    let tools = client
+        .list_tools(pb::ListToolsRequest {})
+        .await
+        .unwrap()
+        .into_inner()
+        .tools;
     let keys: Vec<_> = tools.iter().map(|t| t.key.as_str()).collect();
     assert_eq!(keys, vec!["bash", "edit", "read", "write"]);
     assert!(tools.iter().all(|t| t.enabled && t.pi_tool_name == t.key));
 
     let empty = client
-        .list_models(pb::ListModelsRequest { include_unavailable: false })
+        .list_models(pb::ListModelsRequest {
+            include_unavailable: false,
+        })
         .await
         .unwrap()
         .into_inner();
     assert!(empty.models.is_empty());
     assert!(empty.stale);
 
-    let refreshed = client.refresh_models(pb::RefreshModelsRequest {}).await.unwrap().into_inner();
+    let refreshed = client
+        .refresh_models(pb::RefreshModelsRequest {})
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(refreshed.results.len(), 2);
     assert!(refreshed.results.iter().all(|r| r.refreshed));
 
     let list = client
-        .list_models(pb::ListModelsRequest { include_unavailable: false })
+        .list_models(pb::ListModelsRequest {
+            include_unavailable: false,
+        })
         .await
         .unwrap()
         .into_inner();
@@ -270,25 +339,72 @@ async fn catalog_service(pool: PgPool) {
 
     // Vanished models are hidden unless asked for.
     velox.set(&["alpha"]);
-    client.refresh_models(pb::RefreshModelsRequest {}).await.unwrap();
+    client
+        .refresh_models(pb::RefreshModelsRequest {})
+        .await
+        .unwrap();
     let list = client
-        .list_models(pb::ListModelsRequest { include_unavailable: false })
+        .list_models(pb::ListModelsRequest {
+            include_unavailable: false,
+        })
         .await
         .unwrap()
         .into_inner();
     assert_eq!(list.models.len(), 2);
     let all = client
-        .list_models(pb::ListModelsRequest { include_unavailable: true })
+        .list_models(pb::ListModelsRequest {
+            include_unavailable: true,
+        })
         .await
         .unwrap()
         .into_inner();
     assert_eq!(all.models.len(), 3);
-    assert!(!all.models.iter().find(|m| m.model_id == "zeta").unwrap().available);
+    assert!(
+        !all.models
+            .iter()
+            .find(|m| m.model_id == "zeta")
+            .unwrap()
+            .available
+    );
 
     // Provider errors are reported, not fatal.
     omni.fail("OMNIROUTE_API_KEY is not configured");
-    let refreshed = client.refresh_models(pb::RefreshModelsRequest {}).await.unwrap().into_inner();
-    let failed = refreshed.results.iter().find(|r| r.provider == "omniroute").unwrap();
+    let refreshed = client
+        .refresh_models(pb::RefreshModelsRequest {})
+        .await
+        .unwrap()
+        .into_inner();
+    let failed = refreshed
+        .results
+        .iter()
+        .find(|r| r.provider == "omniroute")
+        .unwrap();
     assert!(!failed.refreshed);
-    assert_eq!(failed.error.as_deref(), Some("OMNIROUTE_API_KEY is not configured"));
+    assert_eq!(
+        failed.error.as_deref(),
+        Some("OMNIROUTE_API_KEY is not configured")
+    );
+}
+
+#[tokio::test]
+async fn transport_errors_name_their_cause() {
+    let g = OpenAiCompatibleGateway::new(
+        Provider::Velox,
+        "http://glyph-unresolvable.invalid/v1",
+        Some(SecretString::from("sk-live-0123456789abcdef".to_string())),
+    );
+    let err = g.fetch_models().await.unwrap_err();
+    assert!(
+        err.0
+            .starts_with("velox /models failed: error sending request: "),
+        "{}",
+        err.0
+    );
+    assert!(err.0.len() > "velox /models failed: error sending request: ".len());
+    assert!(!err.0.contains("sk-live"));
+    assert!(
+        !err.0.contains("glyph-unresolvable.invalid/v1/models"),
+        "URL stripped: {}",
+        err.0
+    );
 }

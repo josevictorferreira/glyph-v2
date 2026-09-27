@@ -104,7 +104,10 @@ fn recurrence(raw: Option<PbRecurrence>) -> Result<Option<Recurrence>, Status> {
 
 #[tonic::async_trait]
 impl Rpc for WorkflowGrpc {
-    async fn list_workflows(&self, r: Request<pb::ListWorkflowsRequest>) -> Rsp<pb::ListWorkflowsResponse> {
+    async fn list_workflows(
+        &self,
+        r: Request<pb::ListWorkflowsRequest>,
+    ) -> Rsp<pb::ListWorkflowsResponse> {
         let r = r.into_inner();
         let status = match r.status {
             None => None,
@@ -126,7 +129,10 @@ impl Rpc for WorkflowGrpc {
         }))
     }
 
-    async fn get_workflow(&self, r: Request<pb::GetWorkflowRequest>) -> Rsp<pb::GetWorkflowResponse> {
+    async fn get_workflow(
+        &self,
+        r: Request<pb::GetWorkflowRequest>,
+    ) -> Rsp<pb::GetWorkflowResponse> {
         let (workflow, found) = self.service.get(parse_id(&r.get_ref().id, "id")?).await?;
         Ok(Response::new(pb::GetWorkflowResponse {
             workflow: Some(convert::workflow(&workflow)),
@@ -134,40 +140,76 @@ impl Rpc for WorkflowGrpc {
         }))
     }
 
-    async fn create_workflow(&self, r: Request<pb::CreateWorkflowRequest>) -> Rsp<pb::CreateWorkflowResponse> {
+    async fn create_workflow(
+        &self,
+        r: Request<pb::CreateWorkflowRequest>,
+    ) -> Rsp<pb::CreateWorkflowResponse> {
         let r = r.into_inner();
-        mutation!(CreateWorkflowResponse, self.service.create(&r.name, r.description, r.fail_fast).await?)
+        mutation!(
+            CreateWorkflowResponse,
+            self.service
+                .create(&r.name, r.description, r.fail_fast)
+                .await?
+        )
     }
 
-    async fn update_workflow(&self, r: Request<pb::UpdateWorkflowRequest>) -> Rsp<pb::UpdateWorkflowResponse> {
+    async fn update_workflow(
+        &self,
+        r: Request<pb::UpdateWorkflowRequest>,
+    ) -> Rsp<pb::UpdateWorkflowResponse> {
         let r = r.into_inner();
         let id = parse_id(&r.id, "id")?;
-        mutation!(UpdateWorkflowResponse, self.service.update(id, r.name, r.description, r.fail_fast).await?)
+        mutation!(
+            UpdateWorkflowResponse,
+            self.service
+                .update(id, r.name, r.description, r.fail_fast)
+                .await?
+        )
     }
 
-    async fn validate_workflow(&self, r: Request<pb::ValidateWorkflowRequest>) -> Rsp<pb::ValidateWorkflowResponse> {
-        let found = self.service.validate(parse_id(&r.get_ref().id, "id")?).await?;
-        Ok(Response::new(pb::ValidateWorkflowResponse { issues: issues(&found) }))
+    async fn validate_workflow(
+        &self,
+        r: Request<pb::ValidateWorkflowRequest>,
+    ) -> Rsp<pb::ValidateWorkflowResponse> {
+        let found = self
+            .service
+            .validate(parse_id(&r.get_ref().id, "id")?)
+            .await?;
+        Ok(Response::new(pb::ValidateWorkflowResponse {
+            issues: issues(&found),
+        }))
     }
 
     async fn add_step(&self, r: Request<pb::AddStepRequest>) -> Rsp<pb::AddStepResponse> {
         let r = r.into_inner();
         let id = parse_id(&r.workflow_id, "workflow_id")?;
         let position = r.canvas_x.zip(r.canvas_y);
-        let m = self.service.add_step(id, convert::kind_from_pb(r.kind), position).await?;
+        let m = self
+            .service
+            .add_step(id, convert::kind_from_pb(r.kind), position)
+            .await?;
         mutation!(AddStepResponse, m, |v| { new_step_id: v.to_string() })
     }
 
-    async fn duplicate_step(&self, r: Request<pb::DuplicateStepRequest>) -> Rsp<pb::DuplicateStepResponse> {
+    async fn duplicate_step(
+        &self,
+        r: Request<pb::DuplicateStepRequest>,
+    ) -> Rsp<pb::DuplicateStepResponse> {
         let r = r.into_inner();
         let m = self
             .service
-            .duplicate_step(parse_id(&r.workflow_id, "workflow_id")?, parse_id(&r.step_id, "step_id")?)
+            .duplicate_step(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.step_id, "step_id")?,
+            )
             .await?;
         mutation!(DuplicateStepResponse, m, |v| { new_step_id: v.to_string() })
     }
 
-    async fn update_step_details(&self, r: Request<pb::UpdateStepDetailsRequest>) -> Rsp<pb::UpdateStepDetailsResponse> {
+    async fn update_step_details(
+        &self,
+        r: Request<pb::UpdateStepDetailsRequest>,
+    ) -> Rsp<pb::UpdateStepDetailsResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -182,7 +224,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(UpdateStepDetailsResponse, m)
     }
 
-    async fn update_step_prompt(&self, r: Request<pb::UpdateStepPromptRequest>) -> Rsp<pb::UpdateStepPromptResponse> {
+    async fn update_step_prompt(
+        &self,
+        r: Request<pb::UpdateStepPromptRequest>,
+    ) -> Rsp<pb::UpdateStepPromptResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -196,7 +241,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(UpdateStepPromptResponse, m)
     }
 
-    async fn update_step_output(&self, r: Request<pb::UpdateStepOutputRequest>) -> Rsp<pb::UpdateStepOutputResponse> {
+    async fn update_step_output(
+        &self,
+        r: Request<pb::UpdateStepOutputRequest>,
+    ) -> Rsp<pb::UpdateStepOutputResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -212,7 +260,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(UpdateStepOutputResponse, m)
     }
 
-    async fn update_step_model(&self, r: Request<pb::UpdateStepModelRequest>) -> Rsp<pb::UpdateStepModelResponse> {
+    async fn update_step_model(
+        &self,
+        r: Request<pb::UpdateStepModelRequest>,
+    ) -> Rsp<pb::UpdateStepModelResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -226,7 +277,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(UpdateStepModelResponse, m)
     }
 
-    async fn toggle_step_tool(&self, r: Request<pb::ToggleStepToolRequest>) -> Rsp<pb::ToggleStepToolResponse> {
+    async fn toggle_step_tool(
+        &self,
+        r: Request<pb::ToggleStepToolRequest>,
+    ) -> Rsp<pb::ToggleStepToolResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -257,12 +311,18 @@ impl Rpc for WorkflowGrpc {
         let r = r.into_inner();
         let m = self
             .service
-            .delete_step(parse_id(&r.workflow_id, "workflow_id")?, parse_id(&r.step_id, "step_id")?)
+            .delete_step(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.step_id, "step_id")?,
+            )
             .await?;
         mutation!(DeleteStepResponse, m)
     }
 
-    async fn add_step_input(&self, r: Request<pb::AddStepInputRequest>) -> Rsp<pb::AddStepInputResponse> {
+    async fn add_step_input(
+        &self,
+        r: Request<pb::AddStepInputRequest>,
+    ) -> Rsp<pb::AddStepInputResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -276,16 +336,25 @@ impl Rpc for WorkflowGrpc {
         mutation!(AddStepInputResponse, m, |v| { new_input_id: v.to_string() })
     }
 
-    async fn remove_step_input(&self, r: Request<pb::RemoveStepInputRequest>) -> Rsp<pb::RemoveStepInputResponse> {
+    async fn remove_step_input(
+        &self,
+        r: Request<pb::RemoveStepInputRequest>,
+    ) -> Rsp<pb::RemoveStepInputResponse> {
         let r = r.into_inner();
         let m = self
             .service
-            .remove_step_input(parse_id(&r.workflow_id, "workflow_id")?, parse_id(&r.input_id, "input_id")?)
+            .remove_step_input(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.input_id, "input_id")?,
+            )
             .await?;
         mutation!(RemoveStepInputResponse, m)
     }
 
-    async fn map_step_input(&self, r: Request<pb::MapStepInputRequest>) -> Rsp<pb::MapStepInputResponse> {
+    async fn map_step_input(
+        &self,
+        r: Request<pb::MapStepInputRequest>,
+    ) -> Rsp<pb::MapStepInputResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -298,41 +367,68 @@ impl Rpc for WorkflowGrpc {
         mutation!(MapStepInputResponse, m)
     }
 
-    async fn add_workflow_input(&self, r: Request<pb::AddWorkflowInputRequest>) -> Rsp<pb::AddWorkflowInputResponse> {
+    async fn add_workflow_input(
+        &self,
+        r: Request<pb::AddWorkflowInputRequest>,
+    ) -> Rsp<pb::AddWorkflowInputResponse> {
         let r = r.into_inner();
         let m = self
             .service
             .add_workflow_input(
                 parse_id(&r.workflow_id, "workflow_id")?,
-                input_fields(r.name, r.description, r.required, r.value, r.ask_at_run_time),
+                input_fields(
+                    r.name,
+                    r.description,
+                    r.required,
+                    r.value,
+                    r.ask_at_run_time,
+                ),
             )
             .await?;
         mutation!(AddWorkflowInputResponse, m, |v| { new_input_id: v.to_string() })
     }
 
-    async fn update_workflow_input(&self, r: Request<pb::UpdateWorkflowInputRequest>) -> Rsp<pb::UpdateWorkflowInputResponse> {
+    async fn update_workflow_input(
+        &self,
+        r: Request<pb::UpdateWorkflowInputRequest>,
+    ) -> Rsp<pb::UpdateWorkflowInputResponse> {
         let r = r.into_inner();
         let m = self
             .service
             .update_workflow_input(
                 parse_id(&r.workflow_id, "workflow_id")?,
                 parse_id(&r.input_id, "input_id")?,
-                input_fields(r.name, r.description, r.required, r.value, r.ask_at_run_time),
+                input_fields(
+                    r.name,
+                    r.description,
+                    r.required,
+                    r.value,
+                    r.ask_at_run_time,
+                ),
             )
             .await?;
         mutation!(UpdateWorkflowInputResponse, m)
     }
 
-    async fn remove_workflow_input(&self, r: Request<pb::RemoveWorkflowInputRequest>) -> Rsp<pb::RemoveWorkflowInputResponse> {
+    async fn remove_workflow_input(
+        &self,
+        r: Request<pb::RemoveWorkflowInputRequest>,
+    ) -> Rsp<pb::RemoveWorkflowInputResponse> {
         let r = r.into_inner();
         let m = self
             .service
-            .remove_workflow_input(parse_id(&r.workflow_id, "workflow_id")?, parse_id(&r.input_id, "input_id")?)
+            .remove_workflow_input(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.input_id, "input_id")?,
+            )
             .await?;
         mutation!(RemoveWorkflowInputResponse, m)
     }
 
-    async fn create_connection(&self, r: Request<pb::CreateConnectionRequest>) -> Rsp<pb::CreateConnectionResponse> {
+    async fn create_connection(
+        &self,
+        r: Request<pb::CreateConnectionRequest>,
+    ) -> Rsp<pb::CreateConnectionResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -346,7 +442,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(CreateConnectionResponse, m, |v| { connection_id: v.to_string() })
     }
 
-    async fn connect_output_to_step(&self, r: Request<pb::ConnectOutputToStepRequest>) -> Rsp<pb::ConnectOutputToStepResponse> {
+    async fn connect_output_to_step(
+        &self,
+        r: Request<pb::ConnectOutputToStepRequest>,
+    ) -> Rsp<pb::ConnectOutputToStepResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -362,7 +461,10 @@ impl Rpc for WorkflowGrpc {
         })
     }
 
-    async fn remove_connection(&self, r: Request<pb::RemoveConnectionRequest>) -> Rsp<pb::RemoveConnectionResponse> {
+    async fn remove_connection(
+        &self,
+        r: Request<pb::RemoveConnectionRequest>,
+    ) -> Rsp<pb::RemoveConnectionResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -374,7 +476,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(RemoveConnectionResponse, m)
     }
 
-    async fn save_schedule(&self, r: Request<pb::SaveScheduleRequest>) -> Rsp<pb::SaveScheduleResponse> {
+    async fn save_schedule(
+        &self,
+        r: Request<pb::SaveScheduleRequest>,
+    ) -> Rsp<pb::SaveScheduleResponse> {
         let r = r.into_inner();
         let id = parse_id(&r.workflow_id, "workflow_id")?;
         let m = self
@@ -384,7 +489,10 @@ impl Rpc for WorkflowGrpc {
         mutation!(SaveScheduleResponse, m)
     }
 
-    async fn set_schedule_value(&self, r: Request<pb::SetScheduleValueRequest>) -> Rsp<pb::SetScheduleValueResponse> {
+    async fn set_schedule_value(
+        &self,
+        r: Request<pb::SetScheduleValueRequest>,
+    ) -> Rsp<pb::SetScheduleValueResponse> {
         let r = r.into_inner();
         let m = self
             .service
@@ -397,16 +505,36 @@ impl Rpc for WorkflowGrpc {
         mutation!(SetScheduleValueResponse, m)
     }
 
-    async fn activate_workflow(&self, r: Request<pb::ActivateWorkflowRequest>) -> Rsp<pb::ActivateWorkflowResponse> {
-        mutation!(ActivateWorkflowResponse, self.service.activate(parse_id(&r.get_ref().id, "id")?).await?)
+    async fn activate_workflow(
+        &self,
+        r: Request<pb::ActivateWorkflowRequest>,
+    ) -> Rsp<pb::ActivateWorkflowResponse> {
+        mutation!(
+            ActivateWorkflowResponse,
+            self.service
+                .activate(parse_id(&r.get_ref().id, "id")?)
+                .await?
+        )
     }
 
-    async fn pause_workflow(&self, r: Request<pb::PauseWorkflowRequest>) -> Rsp<pb::PauseWorkflowResponse> {
-        mutation!(PauseWorkflowResponse, self.service.pause(parse_id(&r.get_ref().id, "id")?).await?)
+    async fn pause_workflow(
+        &self,
+        r: Request<pb::PauseWorkflowRequest>,
+    ) -> Rsp<pb::PauseWorkflowResponse> {
+        mutation!(
+            PauseWorkflowResponse,
+            self.service.pause(parse_id(&r.get_ref().id, "id")?).await?
+        )
     }
 
-    async fn resume_workflow(&self, r: Request<pb::ResumeWorkflowRequest>) -> Rsp<pb::ResumeWorkflowResponse> {
-        let m = self.service.resume(parse_id(&r.get_ref().id, "id")?).await?;
+    async fn resume_workflow(
+        &self,
+        r: Request<pb::ResumeWorkflowRequest>,
+    ) -> Rsp<pb::ResumeWorkflowResponse> {
+        let m = self
+            .service
+            .resume(parse_id(&r.get_ref().id, "id")?)
+            .await?;
         mutation!(ResumeWorkflowResponse, m, |v| { resumed: *v })
     }
 }

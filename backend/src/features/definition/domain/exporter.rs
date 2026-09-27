@@ -10,8 +10,11 @@ use crate::shared::output_format::OutputFileFormat;
 const FOLDABLE_KEYS: [&str; 4] = ["model", "temperature", "tools", "format"];
 
 pub fn document_hash(workflow: &Workflow) -> Value {
-    let mut step_hashes: Vec<Map<String, Value>> =
-        workflow.steps.iter().map(|s| step_hash(workflow, s)).collect();
+    let mut step_hashes: Vec<Map<String, Value>> = workflow
+        .steps
+        .iter()
+        .map(|s| step_hash(workflow, s))
+        .collect();
     let defaults = fold_defaults(workflow, &mut step_hashes);
 
     let mut doc = Map::new();
@@ -33,7 +36,9 @@ pub fn document_hash(workflow: &Workflow) -> Value {
                 // Scalar shorthand only when it reads back identically:
                 // a required constant without description.
                 let value = match &i.value {
-                    Some(v) if i.description.is_none() && i.required && !i.ask_at_run_time => json!(v),
+                    Some(v) if i.description.is_none() && i.required && !i.ask_at_run_time => {
+                        json!(v)
+                    }
                     _ => input_object(i),
                 };
                 (i.name.clone(), value)
@@ -54,7 +59,11 @@ pub fn document_hash(workflow: &Workflow) -> Value {
         let mut rows: Vec<_> = schedule
             .values
             .iter()
-            .filter_map(|v| workflow.input(v.workflow_input_id).map(|i| (i.position, i.name.clone(), v.value.clone())))
+            .filter_map(|v| {
+                workflow
+                    .input(v.workflow_input_id)
+                    .map(|i| (i.position, i.name.clone(), v.value.clone()))
+            })
             .collect();
         rows.sort_by_key(|(p, _, _)| *p);
         if !rows.is_empty() {
@@ -179,7 +188,10 @@ fn step_input(workflow: &Workflow, input: &StepInput) -> Value {
     Value::Object(h)
 }
 
-fn fold_defaults(workflow: &Workflow, hashes: &mut [Map<String, Value>]) -> Option<Map<String, Value>> {
+fn fold_defaults(
+    workflow: &Workflow,
+    hashes: &mut [Map<String, Value>],
+) -> Option<Map<String, Value>> {
     let pi: Vec<usize> = workflow
         .steps
         .iter()

@@ -83,7 +83,12 @@ impl Validator<'_> {
         for step in &self.workflow.steps {
             let label = step.label().to_string();
             if blank(&step.name) {
-                self.error(EntityType::WorkflowStep, step.id, "name", "Name the step.".into());
+                self.error(
+                    EntityType::WorkflowStep,
+                    step.id,
+                    "name",
+                    "Name the step.".into(),
+                );
             }
             if !present(&step.output_name) {
                 self.error(
@@ -210,7 +215,10 @@ impl Validator<'_> {
             let mut known = workflow_names.clone();
             known.extend(step.inputs.iter().map(|i| i.name.as_str()));
             let label = step.label().to_string();
-            for text in [&step.prompt, &step.additional_context].into_iter().flatten() {
+            for text in [&step.prompt, &step.additional_context]
+                .into_iter()
+                .flatten()
+            {
                 for token in variable_tokens(text) {
                     if known.contains(token.as_str()) {
                         continue;

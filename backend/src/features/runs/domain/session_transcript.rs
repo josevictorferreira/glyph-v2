@@ -16,7 +16,11 @@ pub enum ToolState {
 pub enum Block {
     Text(String),
     Thinking(String),
-    Tool { name: String, summary: String, state: ToolState },
+    Tool {
+        name: String,
+        summary: String,
+        state: ToolState,
+    },
 }
 
 pub fn blocks(session_content: &str) -> Vec<Block> {
@@ -54,12 +58,19 @@ pub fn blocks(session_content: &str) -> Vec<Block> {
                 }
             }
             Some("tool_execution_end") => {
-                let state = if event.get("isError").and_then(Value::as_bool).unwrap_or(false) {
+                let state = if event
+                    .get("isError")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
                     ToolState::Error
                 } else {
                     ToolState::Done
                 };
-                let known = event.get("toolCallId").and_then(|id| tools.get(&id.to_string())).copied();
+                let known = event
+                    .get("toolCallId")
+                    .and_then(|id| tools.get(&id.to_string()))
+                    .copied();
                 match known {
                     Some(i) => {
                         if let Block::Tool { state: s, .. } = &mut out[i] {
@@ -79,17 +90,27 @@ pub fn blocks(session_content: &str) -> Vec<Block> {
 }
 
 fn append_message(out: &mut Vec<Block>, message: &Value) {
-    let Some(parts) = message.get("content").and_then(Value::as_array) else { return };
+    let Some(parts) = message.get("content").and_then(Value::as_array) else {
+        return;
+    };
     for part in parts {
         match part.get("type").and_then(Value::as_str) {
             Some("text") => {
-                let text = part.get("text").and_then(Value::as_str).unwrap_or("").trim();
+                let text = part
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim();
                 if !text.is_empty() {
                     out.push(Block::Text(text.to_string()));
                 }
             }
             Some("thinking") => {
-                let text = part.get("thinking").and_then(Value::as_str).unwrap_or("").trim();
+                let text = part
+                    .get("thinking")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim();
                 if !text.is_empty() {
                     out.push(Block::Thinking(text.to_string()));
                 }
@@ -100,19 +121,31 @@ fn append_message(out: &mut Vec<Block>, message: &Value) {
 }
 
 fn tool_block(event: &serde_json::Map<String, Value>, state: ToolState) -> Block {
-    let name = event.get("toolName").and_then(Value::as_str).unwrap_or("").to_string();
+    let name = event
+        .get("toolName")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let summary = match event.get("args") {
         Some(Value::Object(args)) => {
             let s = args
                 .get("command")
                 .or_else(|| args.get("path"))
-                .map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))
+                .map(|v| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .unwrap_or_else(|| v.to_string())
+                })
                 .unwrap_or_else(|| Value::Object(args.clone()).to_string());
             truncate(&s, 120)
         }
         _ => String::new(),
     };
-    Block::Tool { name, summary, state }
+    Block::Tool {
+        name,
+        summary,
+        state,
+    }
 }
 
 /// Rails `String#truncate`: at most `max` chars including the "..." suffix.
@@ -144,7 +177,13 @@ mod tests {
                 {"type": "thinking", "thinking": "hmm"}, {"type": "text", "text": "**Hello**"}]}}),
             json!({"type": "agent_end"}),
         ]);
-        assert_eq!(blocks(&content), vec![Block::Thinking("hmm".into()), Block::Text("**Hello**".into())]);
+        assert_eq!(
+            blocks(&content),
+            vec![
+                Block::Thinking("hmm".into()),
+                Block::Text("**Hello**".into())
+            ]
+        );
     }
 
     #[test]
@@ -159,9 +198,21 @@ mod tests {
         assert_eq!(
             blocks(&content),
             vec![
-                Block::Tool { name: "bash".into(), summary: "ls -la".into(), state: ToolState::Done },
-                Block::Tool { name: "read".into(), summary: "/tmp/x".into(), state: ToolState::Error },
-                Block::Tool { name: "edit".into(), summary: "{\"x\":1}".into(), state: ToolState::Done },
+                Block::Tool {
+                    name: "bash".into(),
+                    summary: "ls -la".into(),
+                    state: ToolState::Done
+                },
+                Block::Tool {
+                    name: "read".into(),
+                    summary: "/tmp/x".into(),
+                    state: ToolState::Error
+                },
+                Block::Tool {
+                    name: "edit".into(),
+                    summary: "{\"x\":1}".into(),
+                    state: ToolState::Done
+                },
             ]
         );
     }
@@ -173,7 +224,13 @@ mod tests {
             json!({"type": "message_start", "message": {"role": "assistant", "content": []}}),
             json!({"type": "message_update", "message": {"role": "assistant", "content": [{"type": "text", "text": "partial out"}]}}),
         ]) + "{\"type\":\"message_upda";
-        assert_eq!(blocks(&content), vec![Block::Text("first".into()), Block::Text("partial out".into())]);
+        assert_eq!(
+            blocks(&content),
+            vec![
+                Block::Text("first".into()),
+                Block::Text("partial out".into())
+            ]
+        );
     }
 
     #[test]
@@ -188,8 +245,12 @@ mod tests {
     #[test]
     fn long_summaries_truncate() {
         let long = "x".repeat(200);
-        let content = ndjson(&[json!({"type": "tool_execution_start", "toolCallId": "1", "toolName": "bash", "args": {"command": long}})]);
-        let Block::Tool { summary, .. } = &blocks(&content)[0] else { panic!() };
+        let content = ndjson(&[
+            json!({"type": "tool_execution_start", "toolCallId": "1", "toolName": "bash", "args": {"command": long}}),
+        ]);
+        let Block::Tool { summary, .. } = &blocks(&content)[0] else {
+            panic!()
+        };
         assert_eq!(summary.chars().count(), 120);
         assert!(summary.ends_with("..."));
     }

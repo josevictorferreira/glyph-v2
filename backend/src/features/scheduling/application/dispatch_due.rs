@@ -23,7 +23,10 @@ pub const OCCURRENCE_TAKEN: &str = "OCCURRENCE_ALREADY_DISPATCHED";
 
 /// `{workflow_id}:{next_run_at UTC, RFC 3339 seconds}` (Rails format).
 pub fn occurrence_key(workflow: WorkflowId, at: Timestamp) -> String {
-    format!("{workflow}:{}", at.to_rfc3339_opts(SecondsFormat::Secs, true))
+    format!(
+        "{workflow}:{}",
+        at.to_rfc3339_opts(SecondsFormat::Secs, true)
+    )
 }
 
 #[derive(Clone)]
@@ -46,16 +49,26 @@ impl DispatchDueWorkflows {
             match self.dispatch_one(id, &catalog, now).await {
                 Ok(true) => dispatched += 1,
                 Ok(false) => {}
-                Err(DomainError::Precondition { code: OCCURRENCE_TAKEN, .. }) => {
+                Err(DomainError::Precondition {
+                    code: OCCURRENCE_TAKEN,
+                    ..
+                }) => {
                     // Another dispatcher already created this occurrence's run.
                 }
-                Err(error) => tracing::error!(workflow_id = %id, %error, "scheduled dispatch failed"),
+                Err(error) => {
+                    tracing::error!(workflow_id = %id, %error, "scheduled dispatch failed")
+                }
             }
         }
         Ok(dispatched)
     }
 
-    async fn dispatch_one(&self, id: WorkflowId, catalog: &CatalogView, now: Timestamp) -> DomainResult<bool> {
+    async fn dispatch_one(
+        &self,
+        id: WorkflowId,
+        catalog: &CatalogView,
+        now: Timestamp,
+    ) -> DomainResult<bool> {
         let mut tx = self.store.begin().await?;
         let Some(mut workflow) = tx.lock_workflow(id).await? else {
             return Ok(false);
@@ -63,7 +76,10 @@ impl DispatchDueWorkflows {
         let Some(schedule) = workflow.schedule.clone() else {
             return Ok(false);
         };
-        let Some(due_at) = schedule.next_run_at.filter(|at| schedule.enabled && *at <= now) else {
+        let Some(due_at) = schedule
+            .next_run_at
+            .filter(|at| schedule.enabled && *at <= now)
+        else {
             return Ok(false);
         };
         if workflow.status != WorkflowStatus::Active {
@@ -129,6 +145,9 @@ mod tests {
     fn occurrence_key_format() {
         let id: WorkflowId = "0b7e8a39-8a6f-4d64-9f40-5d6bb0b2a7c1".parse().unwrap();
         let at: Timestamp = "2026-08-04T09:00:00.123456Z".parse().unwrap();
-        assert_eq!(occurrence_key(id, at), "0b7e8a39-8a6f-4d64-9f40-5d6bb0b2a7c1:2026-08-04T09:00:00Z");
+        assert_eq!(
+            occurrence_key(id, at),
+            "0b7e8a39-8a6f-4d64-9f40-5d6bb0b2a7c1:2026-08-04T09:00:00Z"
+        );
     }
 }

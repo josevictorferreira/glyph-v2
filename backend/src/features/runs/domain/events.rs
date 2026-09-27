@@ -49,6 +49,18 @@ pub fn step(
     run_event(event_type, workflow, run, extra)
 }
 
-pub fn step_state(event_type: &str, run: &Run, s: &StepRunState, reason: Option<&str>) -> DomainEvent {
-    step(event_type, run.workflow_id, run.id, s.id, Some(s.status.as_str()), reason)
+pub fn step_state(
+    event_type: &str,
+    run: &Run,
+    s: &StepRunState,
+    reason: Option<&str>,
+) -> DomainEvent {
+    step(
+        event_type,
+        run.workflow_id,
+        run.id,
+        s.id,
+        Some(s.status.as_str()),
+        reason,
+    )
 }

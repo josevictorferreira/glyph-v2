@@ -21,10 +21,11 @@ async fn enqueue(pool: &PgPool, kind: &str, n: usize) {
 
 async fn wait_finished(pool: &PgPool, n: i64) {
     for _ in 0..200 {
-        let done: i64 = sqlx::query_scalar("SELECT count(*) FROM jobs WHERE finished_at IS NOT NULL")
-            .fetch_one(pool)
-            .await
-            .unwrap();
+        let done: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM jobs WHERE finished_at IS NOT NULL")
+                .fetch_one(pool)
+                .await
+                .unwrap();
         if done >= n {
             return;
         }
@@ -36,7 +37,11 @@ async fn wait_finished(pool: &PgPool, n: i64) {
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn runs_at_most_n_concurrently_and_each_job_once(pool: PgPool) {
     enqueue(&pool, "work", 10).await;
-    let (inflight, peak, total) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+    let (inflight, peak, total) = (
+        Arc::new(AtomicUsize::new(0)),
+        Arc::new(AtomicUsize::new(0)),
+        Arc::new(AtomicUsize::new(0)),
+    );
     let (i, p, t) = (inflight.clone(), peak.clone(), total.clone());
     let stop = CancellationToken::new();
     // Two workers on the same queue compete for jobs.
@@ -59,7 +64,11 @@ async fn runs_at_most_n_concurrently_and_each_job_once(pool: PgPool) {
     stop.cancel();
     w1.await.unwrap();
     assert_eq!(total.load(Ordering::SeqCst), 10, "each job exactly once");
-    assert!(peak.load(Ordering::SeqCst) <= 5, "peak {}", peak.load(Ordering::SeqCst));
+    assert!(
+        peak.load(Ordering::SeqCst) <= 5,
+        "peak {}",
+        peak.load(Ordering::SeqCst)
+    );
     assert!(peak.load(Ordering::SeqCst) >= 2, "ran concurrently");
     let _ = (inflight, p, t);
 }
@@ -122,7 +131,10 @@ async fn failures_are_recorded_not_retried(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(errors[0], ("boom".into(), "exploded".into()));
-    assert_eq!(errors[1], ("mystery".into(), "unknown job kind mystery".into()));
+    assert_eq!(
+        errors[1],
+        ("mystery".into(), "unknown job kind mystery".into())
+    );
     assert!(errors[2].1.contains("panicked"), "{:?}", errors[2]);
 }
 
@@ -146,11 +158,15 @@ async fn shutdown_waits_for_in_flight_jobs(pool: PgPool) {
     started.notified().await;
     stop.cancel();
     h.await.unwrap();
-    let finished: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar("SELECT finished_at FROM jobs")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert!(finished.is_some(), "in-flight job completed before shutdown returned");
+    let finished: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT finished_at FROM jobs")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        finished.is_some(),
+        "in-flight job completed before shutdown returned"
+    );
 
     // With a short grace, a long job is abandoned (row stays locked, unfinished).
     enqueue(&pool, "forever", 1).await;

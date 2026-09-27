@@ -27,9 +27,15 @@ impl RunStatus {
     }
 
     pub fn parse(raw: &str) -> Option<Self> {
-        [Self::Queued, Self::Running, Self::Succeeded, Self::Failed, Self::Cancelled]
-            .into_iter()
-            .find(|s| s.as_str() == raw)
+        [
+            Self::Queued,
+            Self::Running,
+            Self::Succeeded,
+            Self::Failed,
+            Self::Cancelled,
+        ]
+        .into_iter()
+        .find(|s| s.as_str() == raw)
     }
 
     pub fn terminal(self) -> bool {
@@ -127,7 +133,10 @@ pub struct Run {
 impl Run {
     /// `started_at ?? queued_at ?? created_at` → `ended_at`, rounded ms.
     pub fn elapsed_until(&self, ended_at: Timestamp) -> i64 {
-        let start = self.started_at.or(self.queued_at).unwrap_or(self.created_at);
+        let start = self
+            .started_at
+            .or(self.queued_at)
+            .unwrap_or(self.created_at);
         (ended_at - start).num_milliseconds()
     }
 }

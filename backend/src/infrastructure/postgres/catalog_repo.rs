@@ -4,8 +4,8 @@ use serde_json::Value;
 use crate::features::catalog::{
     AvailableModel, CatalogStore, CatalogTx, FetchedModel, Provider, ToolDefinition,
 };
-use crate::infrastructure::postgres::uow::{PgTx, db};
 use crate::infrastructure::postgres::PgStore;
+use crate::infrastructure::postgres::uow::{PgTx, db};
 use crate::shared::error::DomainResult;
 use crate::shared::time::Timestamp;
 
@@ -129,8 +129,12 @@ impl CatalogTx for PgTx {
 
 #[async_trait]
 impl crate::features::workflows::ports::catalog::CatalogReader for PgStore {
-    async fn view(&self) -> DomainResult<crate::features::workflows::domain::catalog_view::CatalogView> {
-        use crate::features::workflows::domain::catalog_view::{CatalogModel, CatalogView, ToolRef};
+    async fn view(
+        &self,
+    ) -> DomainResult<crate::features::workflows::domain::catalog_view::CatalogView> {
+        use crate::features::workflows::domain::catalog_view::{
+            CatalogModel, CatalogView, ToolRef,
+        };
         let models = sqlx::query!(
             "SELECT provider, model_id, available, capabilities FROM available_models ORDER BY provider, model_id"
         )

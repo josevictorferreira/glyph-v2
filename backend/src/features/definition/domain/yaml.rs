@@ -2,7 +2,6 @@
 //! plus a JSON-pointer → 1-based line index recorded in the same pass.
 //! Aliases, anchors and tags are refused (Rails `Psych.safe_load(aliases: false)`).
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 use saphyr_parser::{Event, Parser, ScalarStyle, ScanError, Span};
@@ -52,7 +51,10 @@ pub fn load(text: &str) -> Result<Loaded, LoadError> {
     };
     // StreamStart, then (optionally) one document.
     builder.skip_until_document();
-    let value = if builder.peek().is_some_and(|e| !matches!(e, Event::StreamEnd)) {
+    let value = if builder
+        .peek()
+        .is_some_and(|e| !matches!(e, Event::StreamEnd))
+    {
         builder.node("")
     } else {
         Value::Null
@@ -158,11 +160,11 @@ impl<'a> Builder<'a> {
 
 /// YAML 1.1 core resolution for plain scalars (as Psych); quoted and block
 /// scalars are always strings.
-fn scalar(text: &Cow<'_, str>, style: ScalarStyle) -> Value {
+fn scalar(text: &str, style: ScalarStyle) -> Value {
     if style != ScalarStyle::Plain {
         return Value::String(text.to_string());
     }
-    let t = text.as_ref();
+    let t = text;
     match t {
         "" | "~" | "null" | "Null" | "NULL" => return Value::Null,
         "true" | "True" | "TRUE" | "yes" | "Yes" | "YES" | "on" | "On" | "ON" => {
@@ -176,10 +178,8 @@ fn scalar(text: &Cow<'_, str>, style: ScalarStyle) -> Value {
     if let Some(n) = integer(t) {
         return Value::Number(n);
     }
-    if let Some(f) = float(t) {
-        if let Some(n) = Number::from_f64(f) {
-            return Value::Number(n);
-        }
+    if let Some(n) = float(t).and_then(Number::from_f64) {
+        return Value::Number(n);
     }
     Value::String(t.to_string())
 }
@@ -218,11 +218,7 @@ fn float(t: &str) -> Option<f64> {
         });
         mantissa_ok && exponent_ok
     };
-    if valid {
-        t.parse().ok()
-    } else {
-        None
-    }
+    if valid { t.parse().ok() } else { None }
 }
 
 #[cfg(test)]
@@ -232,7 +228,8 @@ mod tests {
 
     #[test]
     fn typed_scalars_and_order() {
-        let loaded = load("b: 1\na: 0.5\nc: yes\nd: '42'\ne: ~\nf: text\ng: |\n  one\n  two\n").unwrap();
+        let loaded =
+            load("b: 1\na: 0.5\nc: yes\nd: '42'\ne: ~\nf: text\ng: |\n  one\n  two\n").unwrap();
         assert_eq!(
             loaded.value,
             json!({"b": 1, "a": 0.5, "c": true, "d": "42", "e": null, "f": "text", "g": "one\ntwo\n"})
@@ -243,7 +240,8 @@ mod tests {
 
     #[test]
     fn line_index() {
-        let text = "name: W\nsteps:\n  - name: A\n    prompt: x\n  - name: B\ninputs:\n  a/b~c: 1\n";
+        let text =
+            "name: W\nsteps:\n  - name: A\n    prompt: x\n  - name: B\ninputs:\n  a/b~c: 1\n";
         let loaded = load(text).unwrap();
         assert_eq!(loaded.lines["/name"], 1);
         assert_eq!(loaded.lines["/steps"], 2);
@@ -268,7 +266,9 @@ mod tests {
     #[test]
     fn syntax_errors_carry_a_line() {
         let err = load("name: Broken\nsteps:\n\t- name: Research\n\t prompt: Find\n").unwrap_err();
-        let LoadError::Syntax { line, .. } = err else { panic!("{err:?}") };
+        let LoadError::Syntax { line, .. } = err else {
+            panic!("{err:?}")
+        };
         assert!(line.is_some());
     }
 

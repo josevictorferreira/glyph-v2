@@ -24,5 +24,9 @@ pub fn event(event_type: &str, workflow: WorkflowId, extra: Value) -> DomainEven
 }
 
 pub fn needs_attention(workflow: WorkflowId, messages: Vec<String>) -> DomainEvent {
-    event(WORKFLOW_NEEDS_ATTENTION, workflow, json!({ "issues": messages }))
+    event(
+        WORKFLOW_NEEDS_ATTENTION,
+        workflow,
+        json!({ "issues": messages }),
+    )
 }

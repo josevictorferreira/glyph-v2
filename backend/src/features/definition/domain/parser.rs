@@ -22,7 +22,10 @@ pub struct ExistingStep {
     pub name: String,
 }
 
-pub fn parse(text: &str, existing: Option<&[ExistingStep]>) -> Result<Document, Vec<DefinitionError>> {
+pub fn parse(
+    text: &str,
+    existing: Option<&[ExistingStep]>,
+) -> Result<Document, Vec<DefinitionError>> {
     let err = |path: &str, line: Option<i32>, message: &str| {
         Err(vec![DefinitionError {
             path: Some(path.into()),
@@ -31,14 +34,20 @@ pub fn parse(text: &str, existing: Option<&[ExistingStep]>) -> Result<Document, 
         }])
     };
     if text.trim().is_empty() {
-        return err("/", Some(1), "The document is empty. Start with a name and one step.");
+        return err(
+            "/",
+            Some(1),
+            "The document is empty. Start with a name and one step.",
+        );
     }
     if text.len() > SIZE_LIMIT {
         return err("/", None, "The document is too large (limit 256 KiB).");
     }
     let loaded = match yaml::load(text) {
         Ok(loaded) => loaded,
-        Err(yaml::LoadError::AliasOrTag) => return err("/", None, "Aliases and tags are not allowed."),
+        Err(yaml::LoadError::AliasOrTag) => {
+            return err("/", None, "Aliases and tags are not allowed.");
+        }
         Err(yaml::LoadError::Syntax { line, message }) => {
             return err("/", line, &format!("YAML syntax error: {message}"));
         }
@@ -115,19 +124,32 @@ impl<'a> References<'a> {
     }
 
     fn steps(&self) -> &'a [Value] {
-        self.root.get("steps").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
+        self.root
+            .get("steps")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
     }
 
     fn inputs(&self) -> &'a Map<String, Value> {
-        self.root.get("inputs").and_then(Value::as_object).unwrap_or(&EMPTY)
+        self.root
+            .get("inputs")
+            .and_then(Value::as_object)
+            .unwrap_or(&EMPTY)
     }
 
     fn step_inputs(step: &'a Value) -> &'a Map<String, Value> {
-        step.get("inputs").and_then(Value::as_object).unwrap_or(&EMPTY)
+        step.get("inputs")
+            .and_then(Value::as_object)
+            .unwrap_or(&EMPTY)
     }
 
     fn step_names(&self) -> Vec<String> {
-        self.steps().iter().filter_map(|s| s.get("name").and_then(Value::as_str)).map(str::to_string).collect()
+        self.steps()
+            .iter()
+            .filter_map(|s| s.get("name").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect()
     }
 
     fn input_names(&self) -> Vec<String> {
@@ -154,7 +176,10 @@ impl<'a> References<'a> {
             let (value, ask) = match spec {
                 Value::Object(o) => {
                     let value = o.get("value").filter(|v| !v.is_null());
-                    let ask = o.get("ask").and_then(Value::as_bool).unwrap_or(value.is_none());
+                    let ask = o
+                        .get("ask")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(value.is_none());
                     (value, ask)
                 }
                 other => (Some(other).filter(|v| !v.is_null()), false),
@@ -171,7 +196,10 @@ impl<'a> References<'a> {
         for name in self.inputs().keys() {
             let key = name.to_lowercase();
             if !seen.insert(key.clone()) {
-                self.add(&format!("/inputs/{}", yaml::escape(name)), format!("Two workflow inputs are named “{key}”."));
+                self.add(
+                    &format!("/inputs/{}", yaml::escape(name)),
+                    format!("Two workflow inputs are named “{key}”."),
+                );
             }
         }
         // unique step names
@@ -203,7 +231,10 @@ impl<'a> References<'a> {
                 } else {
                     let name = str_of(step.get("name"));
                     let lower = name.to_lowercase();
-                    let matches: Vec<_> = existing.iter().filter(|e| e.name.to_lowercase() == lower).collect();
+                    let matches: Vec<_> = existing
+                        .iter()
+                        .filter(|e| e.name.to_lowercase() == lower)
+                        .collect();
                     match matches.as_slice() {
                         [] => {}
                         [one] => {
@@ -227,11 +258,19 @@ impl<'a> References<'a> {
                 let pointer = format!("/steps/{index}/inputs/{}", yaml::escape(name));
                 let (is_step, is_input) = (self.is_step(&from), self.is_input(&from));
                 if is_step && is_input {
-                    self.add(&pointer, format!("“{from}” is both a step and a workflow input. Rename one of them."));
+                    self.add(
+                        &pointer,
+                        format!(
+                            "“{from}” is both a step and a workflow input. Rename one of them."
+                        ),
+                    );
                 } else if is_step && from.to_lowercase() == step_name {
                     self.add(&pointer, format!("“{from}” cannot feed itself."));
                 } else if !is_step && !is_input {
-                    self.add(&pointer, format!("“{from}” is not a step or a workflow input. Check the spelling."));
+                    self.add(
+                        &pointer,
+                        format!("“{from}” is not a step or a workflow input. Check the spelling."),
+                    );
                 }
             }
         }
@@ -240,17 +279,24 @@ impl<'a> References<'a> {
             self.errors.push(DefinitionError {
                 path: Some("/steps".into()),
                 line: None,
-                message: "The connections form a cycle. Remove the link that closes the loop.".into(),
+                message: "The connections form a cycle. Remove the link that closes the loop."
+                    .into(),
             });
         }
         // schedule
         if let Some(Value::Object(schedule)) = self.root.get("schedule") {
             if schedule_calculator::parse_cron(&str_of(schedule.get("cron"))).is_none() {
-                self.add("/schedule/cron", "The recurrence is not a valid cron expression.".into());
+                self.add(
+                    "/schedule/cron",
+                    "The recurrence is not a valid cron expression.".into(),
+                );
             }
             let tz = str_of(schedule.get("timezone"));
             if !tz.is_empty() && schedule_calculator::parse_timezone(&tz).is_none() {
-                self.add("/schedule/timezone", "The schedule timezone is not a known IANA timezone.".into());
+                self.add(
+                    "/schedule/timezone",
+                    "The schedule timezone is not a known IANA timezone.".into(),
+                );
             }
             if let Some(values) = schedule.get("values").and_then(Value::as_object) {
                 for name in values.keys() {
@@ -288,7 +334,10 @@ impl<'a> References<'a> {
 
     fn build(self) -> Document {
         let root = self.root;
-        let defaults = root.get("defaults").and_then(Value::as_object).unwrap_or(&EMPTY);
+        let defaults = root
+            .get("defaults")
+            .and_then(Value::as_object)
+            .unwrap_or(&EMPTY);
         let inputs = self
             .inputs()
             .iter()
@@ -299,7 +348,10 @@ impl<'a> References<'a> {
                         name: name.clone(),
                         description: opt_str(o.get("description")),
                         required: o.get("required").and_then(Value::as_bool).unwrap_or(true),
-                        ask: o.get("ask").and_then(Value::as_bool).unwrap_or(value.is_none()),
+                        ask: o
+                            .get("ask")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(value.is_none()),
                         value,
                     }
                 }
@@ -313,17 +365,24 @@ impl<'a> References<'a> {
             })
             .collect();
 
-        let schedule = root.get("schedule").and_then(Value::as_object).map(|s| ScheduleDef {
-            cron: str_of(s.get("cron")),
-            timezone: str_of(s.get("timezone")),
-            enabled: s.get("enabled").and_then(Value::as_bool).unwrap_or(true),
-            description: opt_str(s.get("description")),
-            values: s
-                .get("values")
-                .and_then(Value::as_object)
-                .map(|v| v.iter().map(|(k, v)| (k.clone(), str_of(Some(v)))).collect())
-                .unwrap_or_default(),
-        });
+        let schedule = root
+            .get("schedule")
+            .and_then(Value::as_object)
+            .map(|s| ScheduleDef {
+                cron: str_of(s.get("cron")),
+                timezone: str_of(s.get("timezone")),
+                enabled: s.get("enabled").and_then(Value::as_bool).unwrap_or(true),
+                description: opt_str(s.get("description")),
+                values: s
+                    .get("values")
+                    .and_then(Value::as_object)
+                    .map(|v| {
+                        v.iter()
+                            .map(|(k, v)| (k.clone(), str_of(Some(v))))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            });
 
         let steps = self
             .steps()
@@ -332,12 +391,22 @@ impl<'a> References<'a> {
             .map(|(index, step)| {
                 let helper = step.get("kind").and_then(Value::as_str) == Some("helper");
                 let pick = |key: &str| {
-                    if helper { None } else { step.get(key).or_else(|| defaults.get(key)).filter(|v| !v.is_null()) }
+                    if helper {
+                        None
+                    } else {
+                        step.get(key)
+                            .or_else(|| defaults.get(key))
+                            .filter(|v| !v.is_null())
+                    }
                 };
                 let name = str_of(step.get("name"));
                 StepDef {
                     id: self.ids.get(&index).copied(),
-                    kind: if helper { StepKind::Helper } else { StepKind::Pi },
+                    kind: if helper {
+                        StepKind::Helper
+                    } else {
+                        StepKind::Pi
+                    },
                     description: opt_str(step.get("description")),
                     model: pick("model").and_then(|v| opt_str(Some(v))),
                     temperature: pick("temperature").and_then(Value::as_f64),
@@ -354,7 +423,10 @@ impl<'a> References<'a> {
                         None | Some("markdown") => OutputFileFormat::FreeTextMarkdown,
                         Some(word) => OutputFileFormat::parse_or_default(word),
                     },
-                    allow_failure: step.get("allow_failure").and_then(Value::as_bool).unwrap_or(false),
+                    allow_failure: step
+                        .get("allow_failure")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
                     inputs: Self::step_inputs(step)
                         .iter()
                         .map(|(input_name, spec)| {
@@ -362,7 +434,11 @@ impl<'a> References<'a> {
                             StepInputDef {
                                 name: input_name.clone(),
                                 source: from_of(spec).map(|from| Source {
-                                    kind: if self.is_step(&from) { SourceKind::Step } else { SourceKind::WorkflowInput },
+                                    kind: if self.is_step(&from) {
+                                        SourceKind::Step
+                                    } else {
+                                        SourceKind::WorkflowInput
+                                    },
                                     name: from,
                                 }),
                                 required: options
@@ -381,7 +457,10 @@ impl<'a> References<'a> {
         Document {
             name: str_of(root.get("name")),
             description: opt_str(root.get("description")),
-            fail_fast: root.get("fail_fast").and_then(Value::as_bool).unwrap_or(false),
+            fail_fast: root
+                .get("fail_fast")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             inputs,
             schedule,
             steps,

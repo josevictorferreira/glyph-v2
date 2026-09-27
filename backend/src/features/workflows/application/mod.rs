@@ -82,7 +82,12 @@ impl WorkflowService {
 
     /// Runs `change` on the locked aggregate. `revalidate` applies the
     /// Revalidator (active + blocking → needs_attention); move/pause skip it.
-    async fn mutate<T, F>(&self, id: WorkflowId, revalidate: bool, change: F) -> DomainResult<Mutation<T>>
+    async fn mutate<T, F>(
+        &self,
+        id: WorkflowId,
+        revalidate: bool,
+        change: F,
+    ) -> DomainResult<Mutation<T>>
     where
         F: FnOnce(&mut Workflow, &CatalogView, Timestamp) -> DomainResult<(T, Events)> + Send,
         T: Send,
@@ -163,11 +168,17 @@ impl WorkflowService {
         kind: StepKind,
         position: Option<(i32, i32)>,
     ) -> DomainResult<Mutation<StepId>> {
-        self.mutate(id, true, move |wf, _, now| Ok(wf.add_step(kind, position, now)))
-            .await
+        self.mutate(id, true, move |wf, _, now| {
+            Ok(wf.add_step(kind, position, now))
+        })
+        .await
     }
 
-    pub async fn duplicate_step(&self, id: WorkflowId, step: StepId) -> DomainResult<Mutation<StepId>> {
+    pub async fn duplicate_step(
+        &self,
+        id: WorkflowId,
+        step: StepId,
+    ) -> DomainResult<Mutation<StepId>> {
         self.mutate(id, true, move |wf, _, now| wf.duplicate_step(step, now))
             .await
     }
@@ -181,7 +192,10 @@ impl WorkflowService {
         allow_failure: bool,
     ) -> DomainResult<Mutation> {
         self.mutate(id, true, move |wf, _, _| {
-            Ok(((), wf.update_step_details(step, &name, description, allow_failure)?))
+            Ok((
+                (),
+                wf.update_step_details(step, &name, description, allow_failure)?,
+            ))
         })
         .await
     }
@@ -211,7 +225,13 @@ impl WorkflowService {
         self.mutate(id, true, move |wf, _, _| {
             Ok((
                 (),
-                wf.update_step_output(step, &output_name, output_description, expected_output, format)?,
+                wf.update_step_output(
+                    step,
+                    &output_name,
+                    output_description,
+                    expected_output,
+                    format,
+                )?,
             ))
         })
         .await
@@ -230,14 +250,25 @@ impl WorkflowService {
         .await
     }
 
-    pub async fn toggle_step_tool(&self, id: WorkflowId, step: StepId, key: String) -> DomainResult<Mutation> {
+    pub async fn toggle_step_tool(
+        &self,
+        id: WorkflowId,
+        step: StepId,
+        key: String,
+    ) -> DomainResult<Mutation> {
         self.mutate(id, true, move |wf, catalog, _| {
             Ok(((), wf.toggle_step_tool(step, &key, catalog)?))
         })
         .await
     }
 
-    pub async fn move_step(&self, id: WorkflowId, step: StepId, x: i32, y: i32) -> DomainResult<Mutation> {
+    pub async fn move_step(
+        &self,
+        id: WorkflowId,
+        step: StepId,
+        x: i32,
+        y: i32,
+    ) -> DomainResult<Mutation> {
         self.mutate(id, false, move |wf, _, _| {
             wf.move_step(step, x, y)?;
             Ok(((), Vec::new()))
@@ -259,13 +290,21 @@ impl WorkflowService {
         name: String,
         required: bool,
     ) -> DomainResult<Mutation<StepInputId>> {
-        self.mutate(id, true, move |wf, _, now| wf.add_step_input(step, &name, required, now))
-            .await
+        self.mutate(id, true, move |wf, _, now| {
+            wf.add_step_input(step, &name, required, now)
+        })
+        .await
     }
 
-    pub async fn remove_step_input(&self, id: WorkflowId, input: StepInputId) -> DomainResult<Mutation> {
-        self.mutate(id, true, move |wf, _, _| Ok(((), wf.remove_step_input(input)?)))
-            .await
+    pub async fn remove_step_input(
+        &self,
+        id: WorkflowId,
+        input: StepInputId,
+    ) -> DomainResult<Mutation> {
+        self.mutate(id, true, move |wf, _, _| {
+            Ok(((), wf.remove_step_input(input)?))
+        })
+        .await
     }
 
     pub async fn map_step_input(
@@ -287,8 +326,10 @@ impl WorkflowService {
         id: WorkflowId,
         fields: WorkflowInputFields,
     ) -> DomainResult<Mutation<WorkflowInputId>> {
-        self.mutate(id, true, move |wf, _, now| wf.add_workflow_input(fields, now))
-            .await
+        self.mutate(id, true, move |wf, _, now| {
+            wf.add_workflow_input(fields, now)
+        })
+        .await
     }
 
     pub async fn update_workflow_input(
@@ -303,9 +344,15 @@ impl WorkflowService {
         .await
     }
 
-    pub async fn remove_workflow_input(&self, id: WorkflowId, input: WorkflowInputId) -> DomainResult<Mutation> {
-        self.mutate(id, true, move |wf, _, _| Ok(((), wf.remove_workflow_input(input)?)))
-            .await
+    pub async fn remove_workflow_input(
+        &self,
+        id: WorkflowId,
+        input: WorkflowInputId,
+    ) -> DomainResult<Mutation> {
+        self.mutate(id, true, move |wf, _, _| {
+            Ok(((), wf.remove_workflow_input(input)?))
+        })
+        .await
     }
 
     // --- connections -------------------------------------------------------
@@ -336,9 +383,15 @@ impl WorkflowService {
         .await
     }
 
-    pub async fn remove_connection(&self, id: WorkflowId, connection: ConnectionId) -> DomainResult<Mutation> {
-        self.mutate(id, true, move |wf, _, _| Ok(((), wf.remove_connection(connection)?)))
-            .await
+    pub async fn remove_connection(
+        &self,
+        id: WorkflowId,
+        connection: ConnectionId,
+    ) -> DomainResult<Mutation> {
+        self.mutate(id, true, move |wf, _, _| {
+            Ok(((), wf.remove_connection(connection)?))
+        })
+        .await
     }
 
     // --- schedule ----------------------------------------------------------
@@ -372,8 +425,10 @@ impl WorkflowService {
     // --- lifecycle ---------------------------------------------------------
 
     pub async fn activate(&self, id: WorkflowId) -> DomainResult<Mutation> {
-        self.mutate(id, false, move |wf, catalog, now| Ok(((), wf.activate(catalog, now)?)))
-            .await
+        self.mutate(id, false, move |wf, catalog, now| {
+            Ok(((), wf.activate(catalog, now)?))
+        })
+        .await
     }
 
     pub async fn pause(&self, id: WorkflowId) -> DomainResult<Mutation> {
@@ -404,8 +459,8 @@ impl WorkflowService {
             if !workflow.uses_any_model(model_ids) {
                 continue;
             }
-            let events =
-                workflow.mark_needs_attention(vec!["A selected model is no longer available.".into()]);
+            let events = workflow
+                .mark_needs_attention(vec!["A selected model is no longer available.".into()]);
             tx.save_workflow(&workflow).await?;
             tx.append_events(&events).await?;
             flagged += 1;

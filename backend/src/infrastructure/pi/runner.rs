@@ -21,7 +21,9 @@ use tokio::process::{Child, Command};
 
 use crate::features::catalog::Provider;
 use crate::features::runs::domain::{pi_events, prompt};
-use crate::features::runs::{OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner};
+use crate::features::runs::{
+    OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner,
+};
 use crate::features::workflows::CatalogReader;
 use crate::shared::redactor::Redactor;
 
@@ -90,8 +92,16 @@ impl PiStepRunner {
     fn provider_settings(&self, provider: &str) -> Result<(String, String), String> {
         let (base, key) = match Provider::parse(provider) {
             Some(Provider::Velox) => (&self.config.velox_base_url, &self.config.velox_api_key),
-            Some(Provider::Omniroute) => (&self.config.omniroute_base_url, &self.config.omniroute_api_key),
-            None => return Err(format!("{}_API_KEY is not configured", provider.to_uppercase())),
+            Some(Provider::Omniroute) => (
+                &self.config.omniroute_base_url,
+                &self.config.omniroute_api_key,
+            ),
+            None => {
+                return Err(format!(
+                    "{}_API_KEY is not configured",
+                    provider.to_uppercase()
+                ));
+            }
         };
         let key = key
             .as_ref()
@@ -101,7 +111,12 @@ impl PiStepRunner {
         Ok((base.clone(), key))
     }
 
-    async fn execute(&self, ctx: &StepRunContext, progress: &Arc<dyn ProgressSink>, started: Instant) -> Result<StepRunOutcome, String> {
+    async fn execute(
+        &self,
+        ctx: &StepRunContext,
+        progress: &Arc<dyn ProgressSink>,
+        started: Instant,
+    ) -> Result<StepRunOutcome, String> {
         let target = self.target(ctx.model_id.as_deref().unwrap_or("")).await;
         let (base_url, api_key) = self.provider_settings(&target.provider)?;
 
@@ -134,11 +149,20 @@ impl PiStepRunner {
         let prompt_path = workdir.path().join("prompt.md");
         std::fs::write(
             &prompt_path,
-            prompt::user_prompt(ctx.prompt.as_deref(), ctx.additional_context.as_deref(), &ctx.inputs, &ctx.workflow_values),
+            prompt::user_prompt(
+                ctx.prompt.as_deref(),
+                ctx.additional_context.as_deref(),
+                &ctx.inputs,
+                &ctx.workflow_values,
+            ),
         )
         .map_err(|e| e.to_string())?;
 
-        let tools: Vec<&str> = ctx.enabled_tools.iter().map(|t| t.pi_tool_name.as_str()).collect();
+        let tools: Vec<&str> = ctx
+            .enabled_tools
+            .iter()
+            .map(|t| t.pi_tool_name.as_str())
+            .collect();
         let mut args: Vec<String> = vec![
             "--print".into(),
             "--mode".into(),
@@ -157,10 +181,19 @@ impl PiStepRunner {
             args.push(tools.join(","));
         }
         args.extend(
-            ["--no-session", "--no-extensions", "--no-skills", "--no-context-files", "--system-prompt"]
-                .map(String::from),
+            [
+                "--no-session",
+                "--no-extensions",
+                "--no-skills",
+                "--no-context-files",
+                "--system-prompt",
+            ]
+            .map(String::from),
         );
-        args.push(prompt::system_prompt(ctx.expected_output.as_deref(), ctx.output_file_format));
+        args.push(prompt::system_prompt(
+            ctx.expected_output.as_deref(),
+            ctx.output_file_format,
+        ));
         args.push(format!("@{}", prompt_path.display()));
 
         let captured = self.spawn(&args, &home, &work, progress).await?;
@@ -184,8 +217,17 @@ impl PiStepRunner {
     fn child_env(home: &Path) -> Vec<(String, String)> {
         let mut env = vec![
             ("HOME".to_string(), home.display().to_string()),
-            ("PATH".to_string(), std::env::var("PATH").unwrap_or_default()),
-            ("TZ".to_string(), std::env::var("TZ").ok().filter(|v| !v.is_empty()).unwrap_or_else(|| "UTC".into())),
+            (
+                "PATH".to_string(),
+                std::env::var("PATH").unwrap_or_default(),
+            ),
+            (
+                "TZ".to_string(),
+                std::env::var("TZ")
+                    .ok()
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or_else(|| "UTC".into()),
+            ),
         ];
         // CA bundles pass through only when set: an empty value breaks TLS defaults.
         for key in ["SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"] {
@@ -198,7 +240,13 @@ impl PiStepRunner {
         env
     }
 
-    async fn spawn(&self, args: &[String], home: &Path, work: &Path, progress: &Arc<dyn ProgressSink>) -> Result<Captured, String> {
+    async fn spawn(
+        &self,
+        args: &[String],
+        home: &Path,
+        work: &Path,
+        progress: &Arc<dyn ProgressSink>,
+    ) -> Result<Captured, String> {
         let mut child = Command::new(&self.config.pi_bin)
             .args(args)
             .env_clear()
@@ -278,7 +326,10 @@ async fn terminate(child: &mut Child) {
             nix::sys::signal::Signal::SIGTERM,
         );
     }
-    if tokio::time::timeout(KILL_GRACE, child.wait()).await.is_err() {
+    if tokio::time::timeout(KILL_GRACE, child.wait())
+        .await
+        .is_err()
+    {
         let _ = child.kill().await;
     }
 }

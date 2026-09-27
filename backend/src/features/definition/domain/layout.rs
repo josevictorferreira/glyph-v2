@@ -38,7 +38,10 @@ pub fn positions(
     let mut out = HashMap::new();
     while !pending.is_empty() {
         let ready_all = dag.ready_ids(&placed, &HashSet::new());
-        let mut ready: Vec<String> = ready_all.into_iter().filter(|n| pending.contains(n)).collect();
+        let mut ready: Vec<String> = ready_all
+            .into_iter()
+            .filter(|n| pending.contains(n))
+            .collect();
         // Keep the given order among ready steps.
         ready.sort_by_key(|n| pending.iter().position(|p| p == n));
         if ready.is_empty() {
@@ -79,7 +82,9 @@ mod tests {
     }
 
     fn edges(e: &[(&str, &str)]) -> Vec<(String, String)> {
-        e.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+        e.iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
     }
 
     #[test]
@@ -92,7 +97,11 @@ mod tests {
 
     #[test]
     fn places_right_of_its_upstream() {
-        let p = positions(&names(&["second"]), &[("first".into(), 100, 200)], &edges(&[("first", "second")]));
+        let p = positions(
+            &names(&["second"]),
+            &[("first".into(), 100, 200)],
+            &edges(&[("first", "second")]),
+        );
         assert_eq!(p["second"], (420, 200));
     }
 

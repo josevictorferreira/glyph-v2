@@ -16,6 +16,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        lib = pkgs.lib;
 
         postgres = pkgs.postgresql_18;
         pi = pkgs.pi-coding-agent;
@@ -35,6 +36,7 @@
           nodejs_22
           pnpm
           buf
+          cargo-deny
           grpcurl
           jq
           git
@@ -163,6 +165,76 @@
           }
         '';
 
+        # ------------------------------------------------------------------
+        # The backend binary, built offline (sqlx .sqlx data, protox codegen).
+        # ------------------------------------------------------------------
+        glyph = pkgs.rustPlatform.buildRustPackage {
+          pname = "glyph-backend";
+          version = "0.1.0";
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./backend/Cargo.toml
+              ./backend/Cargo.lock
+              ./backend/build.rs
+              ./backend/src
+              ./backend/migrations
+              ./backend/.sqlx
+              ./proto
+            ];
+          };
+          cargoRoot = "backend";
+          buildAndTestSubdir = "backend";
+          cargoLock.lockFile = ./backend/Cargo.lock;
+          nativeBuildInputs = [
+            pkgs.cmake
+            pkgs.perl
+          ];
+          SQLX_OFFLINE = "true";
+          # Tests need Postgres; they run via `nix run .#test`.
+          doCheck = false;
+          meta.mainProgram = "glyph";
+        };
+
+        # Runtime image: the binary, Pi (same nixpkgs version as the dev shell)
+        # and the tools Pi's bash tool may call. Non-root, /tmp for step dirs.
+        image = pkgs.dockerTools.buildLayeredImage {
+          name = "glyph";
+          tag = "latest";
+          contents = with pkgs; [
+            glyph
+            pi
+            cacert
+            tzdata
+            bashInteractive
+            coreutils
+            findutils
+            gnugrep
+            gnused
+          ];
+          extraCommands = ''
+            mkdir -p tmp home/glyph
+            chmod 1777 tmp
+          '';
+          fakeRootCommands = ''
+            chown -R 1000:1000 home/glyph
+          '';
+          config = {
+            Entrypoint = [ "${glyph}/bin/glyph" ];
+            User = "1000:1000";
+            WorkingDir = "/home/glyph";
+            ExposedPorts."3000/tcp" = { };
+            Env = [
+              "HOME=/home/glyph"
+              "PATH=/bin"
+              "TZ=UTC"
+              "GLYPH_LISTEN_ADDR=0.0.0.0:3000"
+              "GLYPH_PI_BIN=${pi}/bin/pi"
+              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            ];
+          };
+        };
+
         mkApp =
           name: text:
           pkgs.writeShellApplication {
@@ -245,6 +317,7 @@
           cd "$ROOT/backend"
           cargo fmt --check
           cargo clippy --all-targets -- -D warnings
+          cargo deny check
           cargo test
         '';
 
@@ -254,7 +327,7 @@
           NAME="Design POC Tournament"
           if grpcurl -plaintext -d "{\"query\":\"$NAME\"}" "localhost:$PORT" \
             glyph.v1.WorkflowService/ListWorkflows | grep -q "\"name\": \"$NAME\""; then
-            log "“$NAME” already exists — nothing to do"
+            log "'$NAME' already exists, nothing to do"
             exit 0
           fi
           log "Importing $NAME"
@@ -269,8 +342,8 @@
           log "Done. Next 'nix run .#web' starts from scratch."
         '';
 
-        # Build and push the container image to GHCR, then restart the
-        # deployment in the owner's homelab. Never run unless asked.
+        # Build the Nix image, push it to GHCR, then restart the deployment in
+        # the owner's homelab. Never run unless explicitly asked.
         deploy = pkgs.writeShellApplication {
           name = "deploy";
           runtimeInputs = [
@@ -284,7 +357,6 @@
             REGISTRY="ghcr.io"
             REPO=$(git remote get-url origin 2>/dev/null | sed -E 's|.*github\.com[:/]||' | sed 's/\.git$//' || echo "$USER/glyph")
             TAG="''${REGISTRY}/''${REPO}:latest"
-            MANIFEST="localhost/glyph:latest"
 
             if [ -n "''${GITHUB_TOKEN:-}" ]; then
               echo "$GITHUB_TOKEN" | podman login "$REGISTRY" -u "josevictorferreira" --password-stdin
@@ -292,13 +364,10 @@
               echo "GITHUB_TOKEN not set; assuming already logged in to $REGISTRY."
             fi
 
-            podman manifest rm "$MANIFEST" 2>/dev/null || true
-            podman build --layers --platform=linux/amd64 --manifest "$MANIFEST" --file Containerfile .
-            podman manifest push --all "$MANIFEST" "docker://$TAG"
-
+            podman load < ${image}
+            podman tag localhost/glyph:latest "$TAG"
+            podman push "$TAG"
             echo "Successfully pushed image: $TAG"
-
-            podman image prune --force --filter "until=168h" >/dev/null 2>&1 || true
 
             echo "Restarting glyph deployment in apps namespace"
             kubectl -n apps rollout restart deployment/glyph
@@ -314,6 +383,8 @@
       {
         packages = {
           inherit
+            glyph
+            image
             web
             test
             check

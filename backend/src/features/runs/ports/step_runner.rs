@@ -68,5 +68,6 @@ pub trait ProgressSink: Send + Sync {
 /// Executes one pi step (the Pi agent in production, scripted in tests).
 #[async_trait]
 pub trait StepRunner: Send + Sync {
-    async fn run(&self, context: StepRunContext, progress: Arc<dyn ProgressSink>) -> StepRunOutcome;
+    async fn run(&self, context: StepRunContext, progress: Arc<dyn ProgressSink>)
+    -> StepRunOutcome;
 }

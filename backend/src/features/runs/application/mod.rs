@@ -15,7 +15,9 @@ use crate::features::runs::domain::model::*;
 use crate::features::runs::domain::workflow_values;
 use crate::features::runs::ports::repository::{RunListFilter, RunStore, RunTx, StepFinish};
 use crate::features::runs::ports::step_runner::{ProgressSink, StepRunContext, StepRunner};
-use crate::features::workflows::{CatalogReader, CatalogView, Workflow, WorkflowStatus, snapshot, validator};
+use crate::features::workflows::{
+    CatalogReader, CatalogView, Workflow, WorkflowStatus, snapshot, validator,
+};
 use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::events::{DomainEvent, Job};
 use crate::shared::ids::{RunId, StepId, StepRunId, WorkflowId};
@@ -32,7 +34,11 @@ pub fn execute_run_job(run: RunId) -> Job {
 }
 
 pub fn execute_step_job(step_run: StepRunId) -> Job {
-    Job::new(EXECUTE_STEP, STEP_QUEUE, json!({ "step_run_id": step_run.to_string() }))
+    Job::new(
+        EXECUTE_STEP,
+        STEP_QUEUE,
+        json!({ "step_run_id": step_run.to_string() }),
+    )
 }
 
 #[derive(Clone)]
@@ -59,7 +65,11 @@ impl From<NotCreated> for DomainError {
             .map(|i| i.message.clone())
             .unwrap_or_else(|| "unspecified reason".into());
         DomainError::Precondition {
-            code: if n.missing_values { "MISSING_VALUES" } else { "VALIDATION_FAILED" },
+            code: if n.missing_values {
+                "MISSING_VALUES"
+            } else {
+                "VALIDATION_FAILED"
+            },
             reason: format!("This workflow cannot run yet: {first}"),
             meta: Vec::new(),
             issues: n.issues,
@@ -146,7 +156,8 @@ impl RunService {
         let snapshot = snapshot::build(workflow, catalog, now);
         let (run, step_runs) = engine::build_run(workflow, snapshot, new, now);
         tx.insert_run(&run, &step_runs).await?;
-        tx.set_workflow_last_run(workflow.id, now, RunStatus::Queued).await?;
+        tx.set_workflow_last_run(workflow.id, now, RunStatus::Queued)
+            .await?;
         workflow.last_run_at = Some(now);
         workflow.last_run_status = Some(RunStatus::Queued.as_str().into());
 
@@ -170,7 +181,11 @@ impl RunService {
     }
 
     /// Manual trigger: values keyed by input name; a draft runs as a test.
-    pub async fn start_run(&self, workflow_id: WorkflowId, values: Map<String, Value>) -> DomainResult<Run> {
+    pub async fn start_run(
+        &self,
+        workflow_id: WorkflowId,
+        values: Map<String, Value>,
+    ) -> DomainResult<Run> {
         let catalog = self.catalog.view().await?;
         let now = self.clock.now();
         let mut tx = self.store.begin().await?;
@@ -207,9 +222,17 @@ impl RunService {
         if !tx.start_run(run_id, now).await? {
             return tx.commit().await;
         }
-        let run = tx.lock_run(run_id).await?.ok_or(DomainError::NotFound("run"))?;
-        tx.append_events(&[ev::run_event(ev::RUN_STARTED, run.workflow_id, run.id, json!({}))])
-            .await?;
+        let run = tx
+            .lock_run(run_id)
+            .await?
+            .ok_or(DomainError::NotFound("run"))?;
+        tx.append_events(&[ev::run_event(
+            ev::RUN_STARTED,
+            run.workflow_id,
+            run.id,
+            json!({}),
+        )])
+        .await?;
         self.advance(tx.as_mut(), run, None, now).await?;
         tx.commit().await
     }
@@ -244,16 +267,36 @@ impl RunService {
                         )
                         .await?
                     {
-                        events.push(ev::step(ev::STEP_CANCELLED, run.workflow_id, run.id, id, Some("cancelled"), Some(&reason)));
+                        events.push(ev::step(
+                            ev::STEP_CANCELLED,
+                            run.workflow_id,
+                            run.id,
+                            id,
+                            Some("cancelled"),
+                            Some(&reason),
+                        ));
                     }
                 } else {
                     let reason = engine::skipped_reason(&failed.step_name);
                     let ids = engine::blocked_descendants(&run.snapshot, &states, &failed);
                     for id in tx
-                        .mark_step_runs(&ids, &[StepRunStatus::Queued], StepRunStatus::Skipped, now, Some(&reason))
+                        .mark_step_runs(
+                            &ids,
+                            &[StepRunStatus::Queued],
+                            StepRunStatus::Skipped,
+                            now,
+                            Some(&reason),
+                        )
                         .await?
                     {
-                        events.push(ev::step(ev::STEP_SKIPPED, run.workflow_id, run.id, id, Some("skipped"), Some(&reason)));
+                        events.push(ev::step(
+                            ev::STEP_SKIPPED,
+                            run.workflow_id,
+                            run.id,
+                            id,
+                            Some("skipped"),
+                            Some(&reason),
+                        ));
                     }
                 }
                 tx.append_events(&events).await?;
@@ -275,11 +318,14 @@ impl RunService {
             run.first_failed_step_run_id = f.first_failed;
             tx.save_run(&run).await?;
             let event = match f.status {
-                RunStatus::Failed => ev::run_status(ev::RUN_FAILED, &run, f.failure_summary.as_deref()),
+                RunStatus::Failed => {
+                    ev::run_status(ev::RUN_FAILED, &run, f.failure_summary.as_deref())
+                }
                 _ => ev::run_status(ev::RUN_SUCCEEDED, &run, None),
             };
             tx.append_events(&[event]).await?;
-            tx.set_workflow_last_run(run.workflow_id, now, run.status).await?;
+            tx.set_workflow_last_run(run.workflow_id, now, run.status)
+                .await?;
         }
         Ok(())
     }
@@ -287,7 +333,10 @@ impl RunService {
     async fn after_step_finished(&self, run_id: RunId, step_run: StepRunId) -> DomainResult<()> {
         let now = self.clock.now();
         let mut tx = self.store.begin().await?;
-        let run = tx.lock_run(run_id).await?.ok_or(DomainError::NotFound("run"))?;
+        let run = tx
+            .lock_run(run_id)
+            .await?
+            .ok_or(DomainError::NotFound("run"))?;
         self.advance(tx.as_mut(), run, Some(step_run), now).await?;
         tx.commit().await
     }
@@ -300,7 +349,10 @@ impl RunService {
         reason: Option<&str>,
     ) -> DomainResult<bool> {
         let mut tx = self.store.begin().await?;
-        if !tx.finish_step_run(step_run, StepRunStatus::Running, &finish).await? {
+        if !tx
+            .finish_step_run(step_run, StepRunStatus::Running, &finish)
+            .await?
+        {
             tx.commit().await?;
             return Ok(false);
         }
@@ -340,8 +392,15 @@ impl RunService {
         if !tx.start_step_run(step_run_id, self.clock.now()).await? {
             return tx.commit().await;
         }
-        tx.append_events(&[ev::step(ev::STEP_STARTED, run.workflow_id, run.id, step_run_id, Some("running"), None)])
-            .await?;
+        tx.append_events(&[ev::step(
+            ev::STEP_STARTED,
+            run.workflow_id,
+            run.id,
+            step_run_id,
+            Some("running"),
+            None,
+        )])
+        .await?;
         let upstreams = tx.upstreams(run.id).await?;
         tx.commit().await?;
 
@@ -363,33 +422,43 @@ impl RunService {
                 technical_error: Some("Step is missing from the run snapshot.".into()),
                 skipped_reason: None,
             };
-            self.finish(&run, step_run_id, finish, Some("The step could not be executed.")).await?;
+            self.finish(
+                &run,
+                step_run_id,
+                finish,
+                Some("The step could not be executed."),
+            )
+            .await?;
             return self.after_step_finished(run.id, step_run_id).await;
         };
 
         let entries = workflow_values::entries(&run.snapshot.inputs, &run.supplied_values);
-        let resolutions = match input_resolver::resolve(&run.snapshot, &step_snapshot, &upstreams, &entries) {
-            Ok(r) => r,
-            Err(missing) => {
-                let reason = format!("A required input was unavailable: {missing}");
-                let finish = StepFinish {
-                    status: StepRunStatus::Skipped,
-                    ended_at: self.clock.now(),
-                    elapsed_ms: None,
-                    output: None,
-                    output_text: None,
-                    messages: None,
-                    session_content: None,
-                    human_error: None,
-                    technical_error: None,
-                    skipped_reason: Some(reason.clone()),
-                };
-                if self.finish(&run, step_run_id, finish, Some(&reason)).await? {
-                    self.after_step_finished(run.id, step_run_id).await?;
+        let resolutions =
+            match input_resolver::resolve(&run.snapshot, &step_snapshot, &upstreams, &entries) {
+                Ok(r) => r,
+                Err(missing) => {
+                    let reason = format!("A required input was unavailable: {missing}");
+                    let finish = StepFinish {
+                        status: StepRunStatus::Skipped,
+                        ended_at: self.clock.now(),
+                        elapsed_ms: None,
+                        output: None,
+                        output_text: None,
+                        messages: None,
+                        session_content: None,
+                        human_error: None,
+                        technical_error: None,
+                        skipped_reason: Some(reason.clone()),
+                    };
+                    if self
+                        .finish(&run, step_run_id, finish, Some(&reason))
+                        .await?
+                    {
+                        self.after_step_finished(run.id, step_run_id).await?;
+                    }
+                    return Ok(());
                 }
-                return Ok(());
-            }
-        };
+            };
         let mut tx = self.store.begin().await?;
         tx.set_resolved_inputs(step_run_id, &input_resolver::evidence(&resolutions))
             .await?;
@@ -444,7 +513,10 @@ impl RunService {
         let finish = StepFinish::from_outcome(&outcome, self.clock.now());
         let reason = finish.human_error.clone();
         // Fail-fast may have cancelled this step meanwhile: never overwrite it.
-        if self.finish(&run, step_run_id, finish, reason.as_deref()).await? {
+        if self
+            .finish(&run, step_run_id, finish, reason.as_deref())
+            .await?
+        {
             self.after_step_finished(run.id, step_run_id).await?;
         }
         Ok(())
@@ -464,13 +536,22 @@ impl RunService {
     pub async fn stop_run(&self, workflow: WorkflowId, run_id: RunId) -> DomainResult<Run> {
         let run = self.run_of(workflow, run_id).await?;
         if !run.status.live() {
-            return Err(DomainError::precondition("RUN_FINISHED", "The run has already finished."));
+            return Err(DomainError::precondition(
+                "RUN_FINISHED",
+                "The run has already finished.",
+            ));
         }
         let now = self.clock.now();
         let mut tx = self.store.begin().await?;
-        let mut run = tx.lock_run(run_id).await?.ok_or(DomainError::NotFound("run"))?;
+        let mut run = tx
+            .lock_run(run_id)
+            .await?
+            .ok_or(DomainError::NotFound("run"))?;
         if !run.status.live() {
-            return Err(DomainError::precondition("RUN_NOT_RUNNING", "The run is no longer running."));
+            return Err(DomainError::precondition(
+                "RUN_NOT_RUNNING",
+                "The run is no longer running.",
+            ));
         }
         run.status = RunStatus::Cancelled;
         run.ended_at = Some(now);
@@ -485,10 +566,23 @@ impl RunService {
             .collect();
         let mut events = Vec::new();
         for id in tx
-            .mark_step_runs(&queued, &[StepRunStatus::Queued], StepRunStatus::Skipped, now, Some(engine::STOPPED_REASON))
+            .mark_step_runs(
+                &queued,
+                &[StepRunStatus::Queued],
+                StepRunStatus::Skipped,
+                now,
+                Some(engine::STOPPED_REASON),
+            )
             .await?
         {
-            events.push(ev::step(ev::STEP_SKIPPED, run.workflow_id, run.id, id, Some("skipped"), Some(engine::STOPPED_REASON)));
+            events.push(ev::step(
+                ev::STEP_SKIPPED,
+                run.workflow_id,
+                run.id,
+                id,
+                Some("skipped"),
+                Some(engine::STOPPED_REASON),
+            ));
         }
         events.push(ev::run_status(ev::RUN_CANCELLED, &run, None));
         tx.append_events(&events).await?;
@@ -497,7 +591,12 @@ impl RunService {
     }
 
     /// Requeues a failed step and its skipped/cancelled descendants in a finished run.
-    pub async fn retry_step(&self, workflow: WorkflowId, run_id: RunId, step_run_id: StepRunId) -> DomainResult<Run> {
+    pub async fn retry_step(
+        &self,
+        workflow: WorkflowId,
+        run_id: RunId,
+        step_run_id: StepRunId,
+    ) -> DomainResult<Run> {
         let run = self.run_of(workflow, run_id).await?;
         let step = self
             .store
@@ -505,9 +604,17 @@ impl RunService {
             .await?
             .filter(|s| s.run_id == run.id);
         match &step {
-            None => return Err(DomainError::precondition("STEP_NOT_FOUND", "Step run not found.")),
+            None => {
+                return Err(DomainError::precondition(
+                    "STEP_NOT_FOUND",
+                    "Step run not found.",
+                ));
+            }
             Some(s) if s.status != StepRunStatus::Failed => {
-                return Err(DomainError::precondition("STEP_NOT_FAILED", "Only failed steps can be retried."));
+                return Err(DomainError::precondition(
+                    "STEP_NOT_FAILED",
+                    "Only failed steps can be retried.",
+                ));
             }
             _ => {}
         }
@@ -519,7 +626,10 @@ impl RunService {
         }
 
         let mut tx = self.store.begin().await?;
-        let mut run = tx.lock_run(run_id).await?.ok_or(DomainError::NotFound("run"))?;
+        let mut run = tx
+            .lock_run(run_id)
+            .await?
+            .ok_or(DomainError::NotFound("run"))?;
         if run.status.terminal() {
             run.status = RunStatus::Running;
             run.ended_at = None;
@@ -534,11 +644,16 @@ impl RunService {
             .find(|s| s.id == step_run_id)
             .cloned()
             .ok_or(DomainError::NotFound("step run"))?;
-        let mut requeued = tx.reset_step_runs(&[step_run_id], &[StepRunStatus::Failed]).await?;
+        let mut requeued = tx
+            .reset_step_runs(&[step_run_id], &[StepRunStatus::Failed])
+            .await?;
         let descendants = engine::retry_targets(&run.snapshot, &states, &failed);
         requeued.extend(
-            tx.reset_step_runs(&descendants, &[StepRunStatus::Skipped, StepRunStatus::Cancelled])
-                .await?,
+            tx.reset_step_runs(
+                &descendants,
+                &[StepRunStatus::Skipped, StepRunStatus::Cancelled],
+            )
+            .await?,
         );
         let events: Vec<DomainEvent> = requeued
             .iter()
@@ -557,20 +672,33 @@ impl RunService {
         let run = self.run_of(workflow, run_id).await?;
         let mut tx = self.store.begin().await?;
         tx.delete_run(run.id).await?;
-        tx.append_events(&[ev::run_event(ev::RUN_DELETED, run.workflow_id, run.id, json!({}))])
-            .await?;
+        tx.append_events(&[ev::run_event(
+            ev::RUN_DELETED,
+            run.workflow_id,
+            run.id,
+            json!({}),
+        )])
+        .await?;
         tx.commit().await
     }
 
     // --- queries ---------------------------------------------------------------
 
-    pub async fn get_run(&self, workflow: WorkflowId, run: RunId) -> DomainResult<(Run, Vec<StepRun>)> {
+    pub async fn get_run(
+        &self,
+        workflow: WorkflowId,
+        run: RunId,
+    ) -> DomainResult<(Run, Vec<StepRun>)> {
         let run = self.run_of(workflow, run).await?;
         let step_runs = self.store.step_runs(run.id).await?;
         Ok((run, step_runs))
     }
 
-    pub async fn list_runs(&self, workflow: WorkflowId, mut filter: RunListFilter) -> DomainResult<Vec<Run>> {
+    pub async fn list_runs(
+        &self,
+        workflow: WorkflowId,
+        mut filter: RunListFilter,
+    ) -> DomainResult<Vec<Run>> {
         if filter.limit <= 0 {
             filter.limit = 20;
         }
@@ -578,7 +706,12 @@ impl RunService {
         self.store.list_runs(workflow, &filter).await
     }
 
-    pub async fn get_step_run(&self, workflow: WorkflowId, run: RunId, step_run: StepRunId) -> DomainResult<(Run, StepRun)> {
+    pub async fn get_step_run(
+        &self,
+        workflow: WorkflowId,
+        run: RunId,
+        step_run: StepRunId,
+    ) -> DomainResult<(Run, StepRun)> {
         let run = self.run_of(workflow, run).await?;
         let step_run = self
             .store

@@ -12,6 +12,20 @@ use crate::features::catalog::{FetchedModel, GatewayError, ModelGateway, Provide
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The error with its cause chain (DNS, TLS, timeout…); the URL is removed
+/// and reqwest errors never contain request headers.
+fn describe(error: reqwest::Error) -> String {
+    let error = error.without_url();
+    let mut text = error.to_string();
+    let mut source = std::error::Error::source(&error);
+    while let Some(cause) = source {
+        text.push_str(": ");
+        text.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    text
+}
+
 pub struct OpenAiCompatibleGateway {
     provider: Provider,
     base_url: String,
@@ -44,7 +58,10 @@ impl OpenAiCompatibleGateway {
             .ok_or_else(|| {
                 GatewayError(format!("{provider} /models returned an unexpected payload"))
             })?;
-        Ok(data.iter().filter_map(|entry| build_model(provider, entry)).collect())
+        Ok(data
+            .iter()
+            .filter_map(|entry| build_model(provider, entry))
+            .collect())
     }
 }
 
@@ -96,9 +113,7 @@ impl ModelGateway for OpenAiCompatibleGateway {
             .as_ref()
             .map(|k| k.expose_secret().trim().to_string())
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| {
-                GatewayError(format!("{} is not configured", provider.api_key_var()))
-            })?;
+            .ok_or_else(|| GatewayError(format!("{} is not configured", provider.api_key_var())))?;
         let mut auth = HeaderValue::from_str(&format!("Bearer {key}"))
             .map_err(|_| GatewayError(format!("{} is invalid", provider.api_key_var())))?;
         auth.set_sensitive(true);
@@ -110,7 +125,7 @@ impl ModelGateway for OpenAiCompatibleGateway {
             .header(ACCEPT, "application/json")
             .send()
             .await
-            .map_err(|e| GatewayError(format!("{provider} /models failed: {}", e.without_url())))?;
+            .map_err(|e| GatewayError(format!("{provider} /models failed: {}", describe(e))))?;
         let status = response.status();
         if !status.is_success() {
             return Err(GatewayError(format!(
@@ -121,7 +136,7 @@ impl ModelGateway for OpenAiCompatibleGateway {
         let body = response
             .text()
             .await
-            .map_err(|e| GatewayError(format!("{provider} /models failed: {}", e.without_url())))?;
+            .map_err(|e| GatewayError(format!("{provider} /models failed: {}", describe(e))))?;
         self.parse(&body)
     }
 }

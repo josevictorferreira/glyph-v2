@@ -15,7 +15,12 @@ pub enum WorkflowStatus {
 }
 
 impl WorkflowStatus {
-    pub const ALL: [Self; 4] = [Self::Draft, Self::Active, Self::Paused, Self::NeedsAttention];
+    pub const ALL: [Self; 4] = [
+        Self::Draft,
+        Self::Active,
+        Self::Paused,
+        Self::NeedsAttention,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -118,7 +123,13 @@ pub struct Step {
 }
 
 impl Step {
-    pub fn new(kind: StepKind, position: i32, canvas_x: i32, canvas_y: i32, now: Timestamp) -> Self {
+    pub fn new(
+        kind: StepKind,
+        position: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+        now: Timestamp,
+    ) -> Self {
         Self {
             id: StepId::new(),
             kind,
@@ -165,7 +176,9 @@ impl Step {
     }
 
     pub fn temperature(&self) -> Option<f64> {
-        self.model_settings.get("temperature").and_then(Value::as_f64)
+        self.model_settings
+            .get("temperature")
+            .and_then(Value::as_f64)
     }
 
     pub fn next_input_position(&self) -> i32 {
@@ -304,9 +317,12 @@ impl Workflow {
     pub fn dag(&self) -> crate::shared::dag::Dag {
         crate::shared::dag::Dag::new(
             self.steps.iter().map(|s| s.id),
-            self.connections
-                .iter()
-                .map(|c| (c.source_step_id.to_string(), c.destination_step_id.to_string())),
+            self.connections.iter().map(|c| {
+                (
+                    c.source_step_id.to_string(),
+                    c.destination_step_id.to_string(),
+                )
+            }),
         )
     }
 }

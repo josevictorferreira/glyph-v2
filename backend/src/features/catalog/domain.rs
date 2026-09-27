@@ -126,7 +126,9 @@ mod tests {
         assert!(!model.capability("temperature"));
         model.capabilities.insert("temperature".into(), json!(true));
         assert!(model.capability("temperature"));
-        model.capabilities.insert("temperature".into(), json!(false));
+        model
+            .capabilities
+            .insert("temperature".into(), json!(false));
         assert!(!model.capability("temperature"));
         assert_eq!(model.full_id(), "omniroute/m");
     }

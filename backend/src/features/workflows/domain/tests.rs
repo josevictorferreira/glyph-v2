@@ -57,7 +57,10 @@ fn complete_step(wf: &mut Workflow, name: &str) -> StepId {
 }
 
 fn messages(wf: &Workflow) -> Vec<String> {
-    validate(wf, &catalog()).into_iter().map(|i| i.message).collect()
+    validate(wf, &catalog())
+        .into_iter()
+        .map(|i| i.message)
+        .collect()
 }
 
 fn input_fields(name: &str) -> WorkflowInputFields {
@@ -115,7 +118,10 @@ fn full_model_ids_are_accepted() {
     let mut wf = workflow();
     let id = complete_step(&mut wf, "Step 1");
     wf.step_mut(id).unwrap().model_id = Some("omniroute/test-model".into());
-    wf.step_mut(id).unwrap().model_settings.insert("temperature".into(), json!(0.5));
+    wf.step_mut(id)
+        .unwrap()
+        .model_settings
+        .insert("temperature".into(), json!(0.5));
     assert!(messages(&wf).is_empty());
 }
 
@@ -123,12 +129,18 @@ fn full_model_ids_are_accepted() {
 fn model_settings_checks() {
     let mut wf = workflow();
     let id = complete_step(&mut wf, "Step 1");
-    wf.step_mut(id).unwrap().model_settings.insert("seed".into(), json!(42));
+    wf.step_mut(id)
+        .unwrap()
+        .model_settings
+        .insert("seed".into(), json!(42));
     assert!(messages(&wf).contains(&"“seed” is not a supported model setting.".into()));
 
     let mut wf = workflow();
     let id = complete_step(&mut wf, "Step 1");
-    wf.step_mut(id).unwrap().model_settings.insert("temperature".into(), json!(0.5));
+    wf.step_mut(id)
+        .unwrap()
+        .model_settings
+        .insert("temperature".into(), json!(0.5));
     assert!(messages(&wf).is_empty(), "supported settings pass");
     let mut cat = catalog();
     cat.models[0].capabilities.clear();
@@ -184,7 +196,8 @@ fn prompt_variables() {
 fn brace_heavy_json_is_not_a_variable() {
     let mut wf = workflow();
     let step = complete_step(&mut wf, "Step 1");
-    wf.step_mut(step).unwrap().prompt = Some(r#"Return {{"name": "Isdin", "tags": [1, 2]}} exactly."#.into());
+    wf.step_mut(step).unwrap().prompt =
+        Some(r#"Return {{"name": "Isdin", "tags": [1, 2]}} exactly."#.into());
     assert!(messages(&wf).is_empty());
 }
 
@@ -201,9 +214,10 @@ fn tools_outside_the_catalog_block() {
     let mut wf = workflow();
     let step = complete_step(&mut wf, "Step 1");
     wf.step_mut(step).unwrap().enabled_tool_ids = vec!["rm_rf".into()];
-    assert!(messages(&wf).contains(
-        &"The tool “rm_rf” enabled for “Step 1” is not available. Remove it.".into()
-    ));
+    assert!(
+        messages(&wf)
+            .contains(&"The tool “rm_rf” enabled for “Step 1” is not available. Remove it.".into())
+    );
     wf.step_mut(step).unwrap().enabled_tool_ids = vec!["read".into()];
     assert!(messages(&wf).is_empty());
 }
@@ -217,7 +231,9 @@ fn input_sources() {
         &"Required input “topic” on “Step 1” needs a connection or a workflow value.".into()
     ));
 
-    let (wi, _) = wf.add_workflow_input(input_fields("value_1"), now()).unwrap();
+    let (wi, _) = wf
+        .add_workflow_input(input_fields("value_1"), now())
+        .unwrap();
     wf.map_step_input(input, Some(wi)).unwrap();
     assert!(messages(&wf).is_empty());
 
@@ -256,9 +272,11 @@ fn connection_problems() {
         destination_input_id: back,
         created_at: now(),
     });
-    assert!(messages(&wf).contains(
-        &"The connections form a cycle. Remove the link that closes the loop.".into()
-    ));
+    assert!(
+        messages(&wf).contains(
+            &"The connections form a cycle. Remove the link that closes the loop.".into()
+        )
+    );
 }
 
 #[test]
@@ -284,7 +302,9 @@ fn schedule_problems() {
     assert!(!messages(&wf).contains(&missing));
 
     wf.schedule.as_mut().unwrap().cron_expression = None;
-    assert!(messages(&wf).contains(&"An enabled schedule needs a recurrence and a timezone.".into()));
+    assert!(
+        messages(&wf).contains(&"An enabled schedule needs a recurrence and a timezone.".into())
+    );
 }
 
 #[test]
@@ -302,7 +322,9 @@ fn helper_steps() {
     assert!(messages(&wf).contains(
         &"Required input “topic” on “Brief” needs a connection or a workflow value.".into()
     ));
-    let (wi, _) = wf.add_workflow_input(input_fields("value_1"), now()).unwrap();
+    let (wi, _) = wf
+        .add_workflow_input(input_fields("value_1"), now())
+        .unwrap();
     wf.map_step_input(input, Some(wi)).unwrap();
     assert!(messages(&wf).is_empty(), "{:?}", messages(&wf));
 
@@ -338,7 +360,10 @@ fn activation() {
     enabled_schedule(&mut wf);
     let events = wf.activate(&catalog(), now()).unwrap();
     assert_eq!(wf.status, WorkflowStatus::Active);
-    assert_eq!(wf.next_run_at, Some("2026-08-04T09:00:00Z".parse().unwrap()));
+    assert_eq!(
+        wf.next_run_at,
+        Some("2026-08-04T09:00:00Z".parse().unwrap())
+    );
     assert_eq!(wf.schedule.as_ref().unwrap().next_run_at, wf.next_run_at);
     assert_eq!(events[0].event_type, "WorkflowActivated");
 }
@@ -353,7 +378,11 @@ fn activation_refuses_invalid_workflows() {
         panic!("expected precondition");
     };
     assert_eq!(code, "VALIDATION_FAILED");
-    assert!(issues.iter().any(|i| i.message == "“Step 1” needs a prompt."));
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.message == "“Step 1” needs a prompt.")
+    );
     assert_eq!(wf.status, WorkflowStatus::Draft);
 }
 
@@ -367,7 +396,10 @@ fn pause_clears_next_run_and_keeps_recurrence() {
     assert_eq!(wf.status, WorkflowStatus::Paused);
     assert!(wf.next_run_at.is_none());
     assert!(wf.schedule.as_ref().unwrap().next_run_at.is_none());
-    assert_eq!(wf.schedule.as_ref().unwrap().cron_expression.as_deref(), Some("0 9 * * *"));
+    assert_eq!(
+        wf.schedule.as_ref().unwrap().cron_expression.as_deref(),
+        Some("0 9 * * *")
+    );
     assert_eq!(events[0].event_type, "WorkflowPaused");
 }
 
@@ -435,7 +467,9 @@ fn snapshot_captures_everything() {
     }
     enabled_schedule(&mut wf);
     let (topic, _) = wf.add_workflow_input(input_fields("topic"), now()).unwrap();
-    let (mapped, _) = wf.add_step_input(research, "topic_in", true, now()).unwrap();
+    let (mapped, _) = wf
+        .add_step_input(research, "topic_in", true, now())
+        .unwrap();
     wf.map_step_input(mapped, Some(topic)).unwrap();
     let write = complete_step(&mut wf, "Write");
     let (_, input, _) = wf.connect_output_to_step(research, write, now()).unwrap();
@@ -459,7 +493,10 @@ fn snapshot_captures_everything() {
     );
     assert_eq!(step["inputs"][0]["workflow_input_id"], topic.to_string());
     assert_eq!(step["inputs"][0]["workflow_input_name"], "topic");
-    assert_eq!(json["connections"][0]["destination_input_id"], input.to_string());
+    assert_eq!(
+        json["connections"][0]["destination_input_id"],
+        input.to_string()
+    );
     assert_eq!(json["connections"][0]["destination_input_name"], "result");
     let back: snapshot::Snapshot = serde_json::from_value(json).unwrap();
     assert_eq!(back, snap);
@@ -473,7 +510,11 @@ fn add_step_positions() {
     for _ in 0..5 {
         wf.add_step(StepKind::Pi, None, now());
     }
-    let coords: Vec<_> = wf.steps.iter().map(|s| (s.canvas_x, s.canvas_y, s.position)).collect();
+    let coords: Vec<_> = wf
+        .steps
+        .iter()
+        .map(|s| (s.canvas_x, s.canvas_y, s.position))
+        .collect();
     assert_eq!(coords[0], (120, 120, 1));
     assert_eq!(coords[3], (1020, 120, 4));
     assert_eq!(coords[4], (120, 340, 5));
@@ -506,7 +547,11 @@ fn duplicate_step() {
     assert_eq!((c.canvas_x, c.canvas_y), (140, 190));
     assert!(c.model_id.is_none() && c.output_name.is_none() && c.enabled_tool_ids.is_empty());
     assert_eq!(c.inputs.len(), 1);
-    assert!(wf.connections.iter().all(|x| x.source_step_id != copy && x.destination_step_id != copy));
+    assert!(
+        wf.connections
+            .iter()
+            .all(|x| x.source_step_id != copy && x.destination_step_id != copy)
+    );
     assert!(matches!(
         wf.duplicate_step(StepId::new(), now()),
         Err(DomainError::NotFound(_))
@@ -519,18 +564,31 @@ fn output_rename_propagates_to_connections() {
     let source = complete_step(&mut wf, "Source");
     let dest = complete_step(&mut wf, "Dest");
     wf.connect_output_to_step(source, dest, now()).unwrap();
-    wf.update_step_output(source, " new_output ", None, Some("x".into()), OutputFileFormat::Html)
-        .unwrap();
+    wf.update_step_output(
+        source,
+        " new_output ",
+        None,
+        Some("x".into()),
+        OutputFileFormat::Html,
+    )
+    .unwrap();
     assert_eq!(wf.connections[0].source_output_name, "new_output");
-    assert_eq!(wf.step(source).unwrap().output_name.as_deref(), Some("new_output"));
-    assert_eq!(wf.step(source).unwrap().output_file_format, OutputFileFormat::Html);
+    assert_eq!(
+        wf.step(source).unwrap().output_name.as_deref(),
+        Some("new_output")
+    );
+    assert_eq!(
+        wf.step(source).unwrap().output_file_format,
+        OutputFileFormat::Html
+    );
 }
 
 #[test]
 fn update_step_model() {
     let mut wf = workflow();
     let step = complete_step(&mut wf, "S");
-    wf.update_step_model(step, "velox/new-model", Some(0.7)).unwrap();
+    wf.update_step_model(step, "velox/new-model", Some(0.7))
+        .unwrap();
     let s = wf.step(step).unwrap();
     assert_eq!(s.model_id.as_deref(), Some("velox/new-model"));
     assert_eq!(s.temperature(), Some(0.7));
@@ -553,7 +611,9 @@ fn toggle_step_tool() {
     wf.toggle_step_tool(step, "read", &catalog()).unwrap();
     assert!(wf.step(step).unwrap().enabled_tool_ids.is_empty());
     assert_eq!(
-        wf.toggle_step_tool(step, "rm", &catalog()).unwrap_err().to_string(),
+        wf.toggle_step_tool(step, "rm", &catalog())
+            .unwrap_err()
+            .to_string(),
         "Unable to save — that tool is not available."
     );
 }
@@ -563,12 +623,16 @@ fn step_inputs() {
     let mut wf = workflow();
     let step = complete_step(&mut wf, "S");
     assert_eq!(
-        wf.add_step_input(step, " ", true, now()).unwrap_err().to_string(),
+        wf.add_step_input(step, " ", true, now())
+            .unwrap_err()
+            .to_string(),
         "Unable to save — name the input."
     );
     wf.add_step_input(step, "Topic", true, now()).unwrap();
     assert_eq!(
-        wf.add_step_input(step, "topic", true, now()).unwrap_err().to_string(),
+        wf.add_step_input(step, "topic", true, now())
+            .unwrap_err()
+            .to_string(),
         "Unable to save — Name has already been taken."
     );
     let wi = WorkflowInputId::new();
@@ -583,11 +647,15 @@ fn step_inputs() {
 fn workflow_input_validation_messages() {
     let mut wf = workflow();
     assert_eq!(
-        wf.add_workflow_input(input_fields(""), now()).unwrap_err().to_string(),
+        wf.add_workflow_input(input_fields(""), now())
+            .unwrap_err()
+            .to_string(),
         "Unable to save — name the workflow value."
     );
     assert_eq!(
-        wf.add_workflow_input(input_fields("1bad"), now()).unwrap_err().to_string(),
+        wf.add_workflow_input(input_fields("1bad"), now())
+            .unwrap_err()
+            .to_string(),
         "Unable to save — Name must start with a letter and use letters, numbers, spaces or underscores."
     );
     wf.add_workflow_input(input_fields("topic"), now()).unwrap();
@@ -659,7 +727,9 @@ fn create_connection_guards() {
     // Already fed → precondition, then replace.
     let c = complete_step(&mut wf, "C");
     let err = wf.create_connection(c, b_in, false, now()).unwrap_err();
-    let DomainError::Precondition { code, meta, .. } = err else { panic!() };
+    let DomainError::Precondition { code, meta, .. } = err else {
+        panic!()
+    };
     assert_eq!(code, "CONNECTION_SOURCE_EXISTS");
     assert!(meta.contains(&("existing_source_label".into(), "A".into())));
     wf.create_connection(c, b_in, true, now()).unwrap();
@@ -686,7 +756,10 @@ fn connect_output_to_step_creates_an_optional_input() {
     assert!(!i.required);
     assert_eq!(wf.connections[0].destination_input_id, input);
     let types: Vec<_> = events.iter().map(|e| e.event_type.as_str()).collect();
-    assert_eq!(types, vec!["WorkflowConnectionCreated", "WorkflowStepUpdated"]);
+    assert_eq!(
+        types,
+        vec!["WorkflowConnectionCreated", "WorkflowStepUpdated"]
+    );
 }
 
 #[test]
@@ -707,8 +780,12 @@ fn delete_step_removes_downstream_inputs_and_own_edges() {
     let target = complete_step(&mut wf, "Target");
     let downstream = complete_step(&mut wf, "Downstream");
     wf.connect_output_to_step(upstream, target, now()).unwrap();
-    let (_, down_in, _) = wf.connect_output_to_step(target, downstream, now()).unwrap();
-    let (own, _) = wf.add_step_input(downstream, "own_input", false, now()).unwrap();
+    let (_, down_in, _) = wf
+        .connect_output_to_step(target, downstream, now())
+        .unwrap();
+    let (own, _) = wf
+        .add_step_input(downstream, "own_input", false, now())
+        .unwrap();
 
     let events = wf.delete_step(target).unwrap();
     assert!(wf.step(target).is_none());
@@ -733,7 +810,8 @@ fn save_schedule() {
     complete_step(&mut wf, "S");
     let daily = Recurrence::Daily { hour: 9, minute: 0 };
     // Draft: stored disabled.
-    wf.save_schedule(Some(daily.clone()), "UTC", true, now()).unwrap();
+    wf.save_schedule(Some(daily.clone()), "UTC", true, now())
+        .unwrap();
     let s = wf.schedule.as_ref().unwrap();
     assert!(!s.enabled && s.next_run_at.is_none());
     assert_eq!(s.human_description.as_deref(), Some("Daily at 09:00 (UTC)"));
@@ -741,13 +819,19 @@ fn save_schedule() {
     wf.status = WorkflowStatus::Active;
     let events = wf.save_schedule(Some(daily), "UTC", true, now()).unwrap();
     assert!(wf.schedule.as_ref().unwrap().enabled);
-    assert_eq!(wf.next_run_at, Some("2026-08-04T09:00:00Z".parse().unwrap()));
+    assert_eq!(
+        wf.next_run_at,
+        Some("2026-08-04T09:00:00Z".parse().unwrap())
+    );
     assert_eq!(events[0].data["mode"], "daily");
     assert_eq!(events[0].data["cron_expression"], "0 9 * * *");
 
     assert_eq!(
         wf.save_schedule(
-            Some(Recurrence::Interval { every: 90, unit: IntervalUnit::Minutes }),
+            Some(Recurrence::Interval {
+                every: 90,
+                unit: IntervalUnit::Minutes
+            }),
             "UTC",
             true,
             now()
@@ -756,9 +840,15 @@ fn save_schedule() {
         .to_string(),
         "Unable to save — the recurrence or timezone is invalid."
     );
-    assert!(wf
-        .save_schedule(Some(Recurrence::Daily { hour: 1, minute: 0 }), "Mars/Olympus", true, now())
-        .is_err());
+    assert!(
+        wf.save_schedule(
+            Some(Recurrence::Daily { hour: 1, minute: 0 }),
+            "Mars/Olympus",
+            true,
+            now()
+        )
+        .is_err()
+    );
 
     let events = wf.save_schedule(None, "", false, now()).unwrap();
     assert!(wf.schedule.is_none() && wf.next_run_at.is_none());
@@ -776,7 +866,8 @@ fn create_defaults_the_name() {
         wf.update_details("", None, false).unwrap_err().to_string(),
         "Unable to save — the workflow needs a name."
     );
-    wf.update_details("  Named  ", Some(String::new()), false).unwrap();
+    wf.update_details("  Named  ", Some(String::new()), false)
+        .unwrap();
     assert_eq!(wf.name, "Named");
     assert!(wf.description.is_none());
 }

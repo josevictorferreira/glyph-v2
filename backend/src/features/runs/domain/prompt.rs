@@ -81,7 +81,10 @@ pub fn user_prompt(
         interpolate(prompt.unwrap_or(""), inputs, values)
     )];
     if let Some(context) = additional_context.filter(|c| !c.trim().is_empty()) {
-        parts.push(format!("Additional context:\n{}", interpolate(context, inputs, values)));
+        parts.push(format!(
+            "Additional context:\n{}",
+            interpolate(context, inputs, values)
+        ));
     }
     if !inputs.is_empty() {
         let rendered: Vec<String> = inputs
@@ -104,21 +107,41 @@ mod tests {
 
     #[test]
     fn interpolates_inputs_then_values() {
-        let inputs = map(json!({"generate_instruction": "the shared style guide", "topic": "nix", "obj": {"a": 1}}));
+        let inputs = map(
+            json!({"generate_instruction": "the shared style guide", "topic": "nix", "obj": {"a": 1}}),
+        );
         let values = map(json!({"brand": "Acme", "topic": "ignored"}));
         assert_eq!(
-            interpolate("Follow {{generate_instruction}} for {{topic}} by {{brand}}; {{obj}}.", &inputs, &values),
+            interpolate(
+                "Follow {{generate_instruction}} for {{topic}} by {{brand}}; {{obj}}.",
+                &inputs,
+                &values
+            ),
             "Follow the shared style guide for nix by Acme; {\"a\":1}."
         );
-        assert_eq!(interpolate("Keep {{missing}} but expand {{ topic }}.", &inputs, &values), "Keep {{missing}} but expand nix.");
+        assert_eq!(
+            interpolate("Keep {{missing}} but expand {{ topic }}.", &inputs, &values),
+            "Keep {{missing}} but expand nix."
+        );
     }
 
     #[test]
     fn user_prompt_sections() {
         let inputs = map(json!({"topic": "nix"}));
-        let p = user_prompt(Some("Do it"), Some("Style: {{topic}}"), &inputs, &Map::new());
-        assert_eq!(p, "Step instructions:\nDo it\n\nAdditional context:\nStyle: nix\n\nInputs:\ntopic:\nnix");
-        assert_eq!(user_prompt(Some("Do it"), Some(" "), &Map::new(), &Map::new()), "Step instructions:\nDo it");
+        let p = user_prompt(
+            Some("Do it"),
+            Some("Style: {{topic}}"),
+            &inputs,
+            &Map::new(),
+        );
+        assert_eq!(
+            p,
+            "Step instructions:\nDo it\n\nAdditional context:\nStyle: nix\n\nInputs:\ntopic:\nnix"
+        );
+        assert_eq!(
+            user_prompt(Some("Do it"), Some(" "), &Map::new(), &Map::new()),
+            "Step instructions:\nDo it"
+        );
     }
 
     #[test]

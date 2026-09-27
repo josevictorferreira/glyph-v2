@@ -132,7 +132,9 @@ pub fn workflow(wf: &Workflow) -> pb::Workflow {
                         required: i.required,
                         position: i.position,
                         workflow_input_id: i.workflow_input_id.map(|w| w.to_string()),
-                        incoming_connection_id: wf.incoming_connection(i.id).map(|c| c.id.to_string()),
+                        incoming_connection_id: wf
+                            .incoming_connection(i.id)
+                            .map(|c| c.id.to_string()),
                     })
                     .collect(),
                 configured: s.configured(),

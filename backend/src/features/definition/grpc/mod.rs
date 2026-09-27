@@ -21,7 +21,10 @@ type Rsp<T> = Result<Response<T>, Status>;
 
 #[tonic::async_trait]
 impl Rpc for DefinitionGrpc {
-    async fn export_definition(&self, r: Request<pb::ExportDefinitionRequest>) -> Rsp<pb::ExportDefinitionResponse> {
+    async fn export_definition(
+        &self,
+        r: Request<pb::ExportDefinitionRequest>,
+    ) -> Rsp<pb::ExportDefinitionResponse> {
         let export = self
             .service
             .export(parse_id(&r.get_ref().workflow_id, "workflow_id")?)
@@ -33,13 +36,19 @@ impl Rpc for DefinitionGrpc {
         }))
     }
 
-    async fn get_schema_url(&self, _r: Request<pb::GetSchemaUrlRequest>) -> Rsp<pb::GetSchemaUrlResponse> {
+    async fn get_schema_url(
+        &self,
+        _r: Request<pb::GetSchemaUrlRequest>,
+    ) -> Rsp<pb::GetSchemaUrlResponse> {
         Ok(Response::new(pb::GetSchemaUrlResponse {
             url: self.service.schema_url(),
         }))
     }
 
-    async fn parse_definition(&self, r: Request<pb::ParseDefinitionRequest>) -> Rsp<pb::ParseDefinitionResponse> {
+    async fn parse_definition(
+        &self,
+        r: Request<pb::ParseDefinitionRequest>,
+    ) -> Rsp<pb::ParseDefinitionResponse> {
         let r = r.into_inner();
         let id = parse_opt_id(r.workflow_id.as_deref(), "workflow_id")?;
         let errors = self.service.parse(id, &r.yaml).await?;
@@ -55,11 +64,18 @@ impl Rpc for DefinitionGrpc {
         }))
     }
 
-    async fn apply_definition(&self, r: Request<pb::ApplyDefinitionRequest>) -> Rsp<pb::ApplyDefinitionResponse> {
+    async fn apply_definition(
+        &self,
+        r: Request<pb::ApplyDefinitionRequest>,
+    ) -> Rsp<pb::ApplyDefinitionResponse> {
         let r = r.into_inner();
         let m = self
             .service
-            .apply(parse_id(&r.workflow_id, "workflow_id")?, &r.yaml, Some(&r.fingerprint))
+            .apply(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                &r.yaml,
+                Some(&r.fingerprint),
+            )
             .await?;
         Ok(Response::new(pb::ApplyDefinitionResponse {
             workflow: Some(workflow_to_pb(&m.workflow)),
@@ -68,7 +84,10 @@ impl Rpc for DefinitionGrpc {
         }))
     }
 
-    async fn import_workflow(&self, r: Request<pb::ImportWorkflowRequest>) -> Rsp<pb::ImportWorkflowResponse> {
+    async fn import_workflow(
+        &self,
+        r: Request<pb::ImportWorkflowRequest>,
+    ) -> Rsp<pb::ImportWorkflowResponse> {
         let m = self.service.import(&r.get_ref().yaml).await?;
         Ok(Response::new(pb::ImportWorkflowResponse {
             workflow: Some(workflow_to_pb(&m.workflow)),

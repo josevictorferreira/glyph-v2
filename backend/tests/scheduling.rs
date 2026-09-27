@@ -22,7 +22,12 @@ const DUE: &str = "2026-08-04T09:00:00Z";
 
 fn dispatcher(pool: &PgPool) -> DispatchDueWorkflows {
     let store = Arc::new(PgStore::new(pool.clone(), Arc::new(AesGcmCipher::dev())));
-    let runs = RunService::new(store.clone(), store.clone(), ScriptedRunner::new(&[]), Arc::new(SystemClock));
+    let runs = RunService::new(
+        store.clone(),
+        store.clone(),
+        ScriptedRunner::new(&[]),
+        Arc::new(SystemClock),
+    );
     DispatchDueWorkflows::new(store, runs)
 }
 
@@ -37,7 +42,9 @@ async fn scheduled(server: &common::TestServer) -> Builder {
     b.client
         .save_schedule(pb::SaveScheduleRequest {
             workflow_id: b.id.clone(),
-            recurrence: Some(pb::save_schedule_request::Recurrence::Daily(pb::ScheduleDaily { hour: 9, minute: 0 })),
+            recurrence: Some(pb::save_schedule_request::Recurrence::Daily(
+                pb::ScheduleDaily { hour: 9, minute: 0 },
+            )),
             timezone: "UTC".into(),
             enabled: true,
         })
@@ -108,10 +115,11 @@ async fn dispatches_a_due_workflow_and_advances(pool: PgPool) {
     assert_eq!(wf_next, next);
 
     // The run is queued with its execution job in the outbox.
-    let jobs: i64 = sqlx::query_scalar("SELECT count(*) FROM jobs WHERE kind = 'execute_workflow_run'")
-        .fetch_one(&server.pool)
-        .await
-        .unwrap();
+    let jobs: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM jobs WHERE kind = 'execute_workflow_run'")
+            .fetch_one(&server.pool)
+            .await
+            .unwrap();
     assert_eq!(jobs, 1);
 }
 
@@ -120,7 +128,17 @@ async fn supplies_scheduled_values_by_name(pool: PgPool) {
     let server = setup(pool).await;
     let mut b = scheduled(&server).await;
     let topic = b.workflow_input("topic", true).await;
-    let step = b.client.get_workflow(pb::GetWorkflowRequest { id: b.id.clone() }).await.unwrap().into_inner().workflow.unwrap().steps[0].id.clone();
+    let step = b
+        .client
+        .get_workflow(pb::GetWorkflowRequest { id: b.id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap()
+        .steps[0]
+        .id
+        .clone();
     b.map(&step, "topic", &topic).await;
     b.client
         .set_schedule_value(pb::SetScheduleValueRequest {
@@ -131,13 +149,20 @@ async fn supplies_scheduled_values_by_name(pool: PgPool) {
         .await
         .unwrap();
     // Adding a required input parked it; the value fixes it, resume re-activates.
-    b.client.resume_workflow(pb::ResumeWorkflowRequest { id: b.id.clone() }).await.unwrap();
+    b.client
+        .resume_workflow(pb::ResumeWorkflowRequest { id: b.id.clone() })
+        .await
+        .unwrap();
     make_due(&server.pool, &b.id).await;
 
     assert_eq!(dispatcher(&server.pool).dispatch(at(NOW)).await.unwrap(), 1);
     let run = common::engine::runs_client(&server)
         .await
-        .list_runs(pb::ListRunsRequest { workflow_id: b.id.clone(), limit: 1, before: None })
+        .list_runs(pb::ListRunsRequest {
+            workflow_id: b.id.clone(),
+            limit: 1,
+            before: None,
+        })
         .await
         .unwrap()
         .into_inner()
@@ -201,11 +226,12 @@ async fn invalid_workflows_need_attention(pool: PgPool) {
     assert_eq!(dispatcher(&server.pool).dispatch(at(NOW)).await.unwrap(), 0);
     assert_eq!(run_count(&server.pool, &b.id).await, 0);
     assert_eq!(status(&server.pool, &b.id).await, "needs_attention");
-    let next: Option<Timestamp> = sqlx::query_scalar("SELECT next_run_at FROM workflows WHERE id = $1::uuid")
-        .bind(&b.id)
-        .fetch_one(&server.pool)
-        .await
-        .unwrap();
+    let next: Option<Timestamp> =
+        sqlx::query_scalar("SELECT next_run_at FROM workflows WHERE id = $1::uuid")
+            .bind(&b.id)
+            .fetch_one(&server.pool)
+            .await
+            .unwrap();
     assert!(next.is_none());
     let issues: serde_json::Value = sqlx::query_scalar(
         "SELECT data->'issues' FROM events WHERE stream = $1 AND event_type = 'WorkflowNeedsAttention'",
@@ -214,7 +240,12 @@ async fn invalid_workflows_need_attention(pool: PgPool) {
     .fetch_one(&server.pool)
     .await
     .unwrap();
-    assert!(issues[0].as_str().unwrap().contains("is no longer available"));
+    assert!(
+        issues[0]
+            .as_str()
+            .unwrap()
+            .contains("is no longer available")
+    );
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
@@ -256,10 +287,25 @@ async fn recurring_ticks_dedupe(pool: PgPool) {
         recurring::tick(&pool, "dispatch_due_workflows", "scheduling"),
     );
     assert_eq!(u8::from(a.unwrap()) + u8::from(b.unwrap()), 1);
-    assert!(!recurring::tick(&pool, "dispatch_due_workflows", "scheduling").await.unwrap(), "pending blocks");
-    sqlx::query("UPDATE jobs SET finished_at = now()").execute(&pool).await.unwrap();
-    assert!(recurring::tick(&pool, "dispatch_due_workflows", "scheduling").await.unwrap());
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM jobs").fetch_one(&pool).await.unwrap();
+    assert!(
+        !recurring::tick(&pool, "dispatch_due_workflows", "scheduling")
+            .await
+            .unwrap(),
+        "pending blocks"
+    );
+    sqlx::query("UPDATE jobs SET finished_at = now()")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        recurring::tick(&pool, "dispatch_due_workflows", "scheduling")
+            .await
+            .unwrap()
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM jobs")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(count, 2);
 }
 
@@ -268,7 +314,11 @@ async fn two_tickers_enqueue_once_per_interval(pool: PgPool) {
     use tokio_util::sync::CancellationToken;
     let stop = CancellationToken::new();
     let every = std::time::Duration::from_millis(300);
-    let spec = || recurring::Recurring { kind: "tick".into(), queue: "q".into(), every };
+    let spec = || recurring::Recurring {
+        kind: "tick".into(),
+        queue: "q".into(),
+        every,
+    };
     let t1 = recurring::spawn(pool.clone(), spec(), stop.clone());
     let t2 = recurring::spawn(pool.clone(), spec(), stop.clone());
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;

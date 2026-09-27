@@ -70,7 +70,11 @@ pub fn parse_events(stdout: &str) -> Option<Vec<Value>> {
 }
 
 fn content(message: &Value) -> &[Value] {
-    message.get("content").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
+    message
+        .get("content")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
 }
 
 fn text_of(message: &Value) -> String {
@@ -119,7 +123,10 @@ pub fn normalize(f: Finished<'_>, redactor: &Redactor) -> StepRunOutcome {
     if f.timed_out {
         return failure(
             OutcomeStatus::Timeout,
-            &format!("The agent did not finish within {} seconds.", f.timeout_seconds),
+            &format!(
+                "The agent did not finish within {} seconds.",
+                f.timeout_seconds
+            ),
             format!(
                 "Process timed out. Partial output: {} {}",
                 tail(redactor, f.stdout),
@@ -169,7 +176,12 @@ pub fn normalize(f: Finished<'_>, redactor: &Redactor) -> StepRunOutcome {
         return failure(
             OutcomeStatus::ModelError,
             "The selected model or provider could not complete the step.",
-            redactor.redact(message.get("errorMessage").and_then(Value::as_str).unwrap_or("")),
+            redactor.redact(
+                message
+                    .get("errorMessage")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            ),
             session,
             messages,
             f.elapsed_ms,
@@ -179,7 +191,11 @@ pub fn normalize(f: Finished<'_>, redactor: &Redactor) -> StepRunOutcome {
         return failure(
             OutcomeStatus::ExitError,
             "The agent process exited with an error.",
-            format!("Exit {}. stderr: {}", exit(f.exit_code), tail(redactor, f.stderr)),
+            format!(
+                "Exit {}. stderr: {}",
+                exit(f.exit_code),
+                tail(redactor, f.stderr)
+            ),
             session,
             messages,
             f.elapsed_ms,
@@ -187,7 +203,10 @@ pub fn normalize(f: Finished<'_>, redactor: &Redactor) -> StepRunOutcome {
     }
     let text = text_of(message).trim().to_string();
     if text.is_empty() {
-        let reason = message.get("stopReason").and_then(Value::as_str).unwrap_or("");
+        let reason = message
+            .get("stopReason")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         return failure(
             OutcomeStatus::MalformedOutput,
             "The agent finished without producing any output.",
@@ -204,7 +223,10 @@ pub fn normalize(f: Finished<'_>, redactor: &Redactor) -> StepRunOutcome {
             return failure(
                 OutcomeStatus::MalformedOutput,
                 human,
-                format!("Output format validation failed for format {}.", f.format.as_str()),
+                format!(
+                    "Output format validation failed for format {}.",
+                    f.format.as_str()
+                ),
                 session,
                 messages,
                 f.elapsed_ms,
@@ -270,7 +292,13 @@ mod tests {
     #[test]
     fn json_output_is_parsed() {
         let stdout = ok_stream(r#"{"key":"value"}"#);
-        let o = normalize(Finished { format: OutputFileFormat::Json, ..finished(&stdout) }, &Redactor::default());
+        let o = normalize(
+            Finished {
+                format: OutputFileFormat::Json,
+                ..finished(&stdout)
+            },
+            &Redactor::default(),
+        );
         assert_eq!(o.output, Some(json!({"key": "value"})));
     }
 
@@ -280,33 +308,84 @@ mod tests {
         let err = json!({"type": "message_end", "message": {"role": "assistant", "content": [], "stopReason": "error", "errorMessage": "400: no such model sk-live-supersecret"}}).to_string();
         let o = normalize(finished(&err), &r);
         assert_eq!(o.status, OutcomeStatus::ModelError);
-        assert_eq!(o.technical_error.as_deref(), Some("400: no such model [redacted]"));
+        assert_eq!(
+            o.technical_error.as_deref(),
+            Some("400: no such model [redacted]")
+        );
 
         let o = normalize(finished("this is not json"), &r);
         assert_eq!(o.status, OutcomeStatus::MalformedOutput);
-        assert_eq!(o.human_error.as_deref(), Some("The agent produced unreadable output."));
+        assert_eq!(
+            o.human_error.as_deref(),
+            Some("The agent produced unreadable output.")
+        );
 
-        let o = normalize(Finished { exit_code: Some(3), stderr: "boom happened", ..finished("") }, &r);
+        let o = normalize(
+            Finished {
+                exit_code: Some(3),
+                stderr: "boom happened",
+                ..finished("")
+            },
+            &r,
+        );
         assert_eq!(o.status, OutcomeStatus::ExitError);
-        assert_eq!(o.human_error.as_deref(), Some("The agent stopped before producing a result."));
+        assert_eq!(
+            o.human_error.as_deref(),
+            Some("The agent stopped before producing a result.")
+        );
         assert!(o.technical_error.unwrap().contains("boom happened"));
 
         let stdout = ok_stream("x");
-        let o = normalize(Finished { exit_code: Some(1), ..finished(&stdout) }, &r);
-        assert_eq!(o.human_error.as_deref(), Some("The agent process exited with an error."));
+        let o = normalize(
+            Finished {
+                exit_code: Some(1),
+                ..finished(&stdout)
+            },
+            &r,
+        );
+        assert_eq!(
+            o.human_error.as_deref(),
+            Some("The agent process exited with an error.")
+        );
 
         let empty = json!({"type": "message_end", "message": {"role": "assistant", "content": [], "stopReason": "stop"}}).to_string();
         let o = normalize(finished(&empty), &r);
-        assert_eq!(o.human_error.as_deref(), Some("The agent finished without producing any output."));
+        assert_eq!(
+            o.human_error.as_deref(),
+            Some("The agent finished without producing any output.")
+        );
 
-        let o = normalize(Finished { timed_out: true, timeout_seconds: 1, ..finished("partial") }, &r);
+        let o = normalize(
+            Finished {
+                timed_out: true,
+                timeout_seconds: 1,
+                ..finished("partial")
+            },
+            &r,
+        );
         assert_eq!(o.status, OutcomeStatus::Timeout);
-        assert_eq!(o.human_error.as_deref(), Some("The agent did not finish within 1 seconds."));
-        assert!(o.technical_error.unwrap().starts_with("Process timed out. Partial output: partial"));
+        assert_eq!(
+            o.human_error.as_deref(),
+            Some("The agent did not finish within 1 seconds.")
+        );
+        assert!(
+            o.technical_error
+                .unwrap()
+                .starts_with("Process timed out. Partial output: partial")
+        );
 
         let stdout = ok_stream("not json at all");
-        let o = normalize(Finished { format: OutputFileFormat::Json, ..finished(&stdout) }, &r);
-        assert_eq!(o.human_error.as_deref(), Some("The agent did not produce valid JSON."));
+        let o = normalize(
+            Finished {
+                format: OutputFileFormat::Json,
+                ..finished(&stdout)
+            },
+            &r,
+        );
+        assert_eq!(
+            o.human_error.as_deref(),
+            Some("The agent did not produce valid JSON.")
+        );
         assert!(!o.technical_error.unwrap().contains("not json at all"));
     }
 

@@ -119,7 +119,9 @@ impl SnapshotStep {
     }
 
     pub fn temperature(&self) -> Option<f64> {
-        self.model_settings.get("temperature").and_then(Value::as_f64)
+        self.model_settings
+            .get("temperature")
+            .and_then(Value::as_f64)
     }
 }
 
@@ -156,9 +158,12 @@ impl Snapshot {
     pub fn dag(&self) -> crate::shared::dag::Dag {
         crate::shared::dag::Dag::new(
             self.steps.iter().map(|s| s.id),
-            self.connections
-                .iter()
-                .map(|c| (c.source_step_id.to_string(), c.destination_step_id.to_string())),
+            self.connections.iter().map(|c| {
+                (
+                    c.source_step_id.to_string(),
+                    c.destination_step_id.to_string(),
+                )
+            }),
         )
     }
 }

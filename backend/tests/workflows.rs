@@ -129,7 +129,10 @@ async fn create_get_update_list(pool: PgPool) {
     let blank = create(&mut client, "  ").await;
     assert_eq!(blank.summary.as_ref().unwrap().name, "Untitled workflow");
     assert_eq!(status(&blank), pb::WorkflowStatus::Draft);
-    assert_eq!(event_types(&server.pool, &wid(&blank)).await, vec!["WorkflowCreated"]);
+    assert_eq!(
+        event_types(&server.pool, &wid(&blank)).await,
+        vec!["WorkflowCreated"]
+    );
 
     let wf = create(&mut client, "Research 50%_off").await;
     let err = client
@@ -158,10 +161,12 @@ async fn create_get_update_list(pool: PgPool) {
     assert_eq!(summary.name, "Research 50%_off");
     assert!(summary.fail_fast);
     // A blank workflow blocks on "no steps".
-    assert!(updated
-        .issues
-        .iter()
-        .any(|i| i.message == "Add at least one step before the workflow can run."));
+    assert!(
+        updated
+            .issues
+            .iter()
+            .any(|i| i.message == "Add at least one step before the workflow can run.")
+    );
 
     let list = |query: &str, status: Option<pb::WorkflowStatus>| {
         let mut client = client.clone();
@@ -181,10 +186,17 @@ async fn create_get_update_list(pool: PgPool) {
     };
     let all = list("", None).await;
     assert_eq!(all.len(), 2);
-    assert_eq!(all[0].name, "Research 50%_off", "most recently updated first");
+    assert_eq!(
+        all[0].name, "Research 50%_off",
+        "most recently updated first"
+    );
     assert_eq!(list("50%", None).await.len(), 1);
     assert_eq!(list("%", None).await.len(), 1, "wildcards are escaped");
-    assert_eq!(list("DESC", None).await.len(), 1, "description matches case-insensitively");
+    assert_eq!(
+        list("DESC", None).await.len(),
+        1,
+        "description matches case-insensitively"
+    );
     assert_eq!(list("", Some(pb::WorkflowStatus::Active)).await.len(), 0);
 
     let got = client
@@ -192,9 +204,19 @@ async fn create_get_update_list(pool: PgPool) {
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(got.workflow.unwrap().summary.unwrap().description.as_deref(), Some("desc"));
+    assert_eq!(
+        got.workflow
+            .unwrap()
+            .summary
+            .unwrap()
+            .description
+            .as_deref(),
+        Some("desc")
+    );
     let missing = client
-        .get_workflow(pb::GetWorkflowRequest { id: uuid::Uuid::new_v4().to_string() })
+        .get_workflow(pb::GetWorkflowRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+        })
         .await
         .unwrap_err();
     assert_eq!(missing.code(), Code::NotFound);
@@ -251,7 +273,10 @@ async fn steps_and_events(pool: PgPool) {
         })
         .await
         .unwrap_err();
-    assert_eq!(err.message(), "Unable to save — that tool is not available.");
+    assert_eq!(
+        err.message(),
+        "Unable to save — that tool is not available."
+    );
     let err = client
         .update_step_model(pb::UpdateStepModelRequest {
             workflow_id: id.clone(),
@@ -261,7 +286,10 @@ async fn steps_and_events(pool: PgPool) {
         })
         .await
         .unwrap_err();
-    assert_eq!(err.message(), "Unable to save — temperature must be a number between 0 and 2.");
+    assert_eq!(
+        err.message(),
+        "Unable to save — temperature must be a number between 0 and 2."
+    );
     let with_temp = client
         .update_step_model(pb::UpdateStepModelRequest {
             workflow_id: id.clone(),
@@ -288,7 +316,10 @@ async fn steps_and_events(pool: PgPool) {
     let copy = step(dup.workflow.as_ref().unwrap(), &dup.new_step_id);
     let original = step(dup.workflow.as_ref().unwrap(), &source);
     assert_eq!(copy.name, "Original Step");
-    assert_eq!((copy.canvas_x, copy.canvas_y), (original.canvas_x + 40, original.canvas_y + 40));
+    assert_eq!(
+        (copy.canvas_x, copy.canvas_y),
+        (original.canvas_x + 40, original.canvas_y + 40)
+    );
     assert!(copy.model_id.is_none());
 
     let moved = client
@@ -301,7 +332,10 @@ async fn steps_and_events(pool: PgPool) {
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(step(moved.workflow.as_ref().unwrap(), &source).canvas_x, 4000);
+    assert_eq!(
+        step(moved.workflow.as_ref().unwrap(), &source).canvas_x,
+        4000
+    );
 
     let deleted = client
         .delete_step(pb::DeleteStepRequest {
@@ -351,8 +385,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         .unwrap()
         .into_inner();
     let topic = added.new_input_id.clone();
-    assert!(added.issues.iter().any(|i| i.message
-        == "Required input “topic” on “Dest” needs a connection or a workflow value."));
+    assert!(
+        added.issues.iter().any(|i| i.message
+            == "Required input “topic” on “Dest” needs a connection or a workflow value.")
+    );
     let dup = client
         .add_step_input(pb::AddStepInputRequest {
             workflow_id: id.clone(),
@@ -362,7 +398,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         })
         .await
         .unwrap_err();
-    assert_eq!(dup.message(), "Unable to save — Name has already been taken.");
+    assert_eq!(
+        dup.message(),
+        "Unable to save — Name has already been taken."
+    );
 
     // Workflow inputs + mapping.
     let wi = client
@@ -415,7 +454,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         .await
         .unwrap_err();
     assert_eq!(err.code(), Code::FailedPrecondition);
-    assert_eq!(err.message(), "“topic” already has a source. Connecting from Source replaces it.");
+    assert_eq!(
+        err.message(),
+        "“topic” already has a source. Connecting from Source replaces it."
+    );
     let info = error_info(&err).unwrap();
     assert_eq!(info.reason, "CONNECTION_SOURCE_EXISTS");
     assert_eq!(info.metadata["existing_source_label"], "subject");
@@ -433,7 +475,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
     let wfp = replaced.workflow.unwrap();
     let input = &step(&wfp, &dest).inputs[0];
     assert!(input.workflow_input_id.is_none());
-    assert_eq!(input.incoming_connection_id.as_deref(), Some(replaced.connection_id.as_str()));
+    assert_eq!(
+        input.incoming_connection_id.as_deref(),
+        Some(replaced.connection_id.as_str())
+    );
 
     // Cycle.
     let err = client
@@ -444,7 +489,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         })
         .await
         .unwrap_err();
-    assert_eq!(err.message(), "Unable to save — that connection would create a cycle.");
+    assert_eq!(
+        err.message(),
+        "Unable to save — that connection would create a cycle."
+    );
 
     // Output rename propagates.
     let renamed = client
@@ -461,7 +509,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         .into_inner();
     let wfp = renamed.workflow.unwrap();
     assert_eq!(wfp.connections[0].source_output_name, "new_output");
-    assert_eq!(step(&wfp, &source).output_file_format(), pb::OutputFileFormat::FreeTextMarkdown);
+    assert_eq!(
+        step(&wfp, &source).output_file_format(),
+        pb::OutputFileFormat::FreeTextMarkdown
+    );
 
     // Drag output onto a card, then remove that connection (input goes too).
     let third = complete_step(&mut client, &id, "Third").await;
@@ -486,7 +537,11 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         .await
         .unwrap()
         .into_inner();
-    assert!(step(removed.workflow.as_ref().unwrap(), &third).inputs.is_empty());
+    assert!(
+        step(removed.workflow.as_ref().unwrap(), &third)
+            .inputs
+            .is_empty()
+    );
 
     // Removing the workflow input unmaps (nothing mapped now) and emits WorkflowUpdated.
     client
@@ -524,7 +579,10 @@ async fn inputs_connections_and_deletion(pool: PgPool) {
         "WorkflowUpdated",
         "WorkflowStepDeleted",
     ] {
-        assert!(types.contains(&expected.to_string()), "{expected} missing from {types:?}");
+        assert!(
+            types.contains(&expected.to_string()),
+            "{expected} missing from {types:?}"
+        );
     }
 }
 
@@ -541,12 +599,15 @@ async fn schedule_and_lifecycle(pool: PgPool) {
         .unwrap_err();
     assert_eq!(err.code(), Code::FailedPrecondition);
     assert_eq!(error_info(&err).unwrap().reason, "VALIDATION_FAILED");
-    assert!(validation_issues(&err)
-        .iter()
-        .any(|i| i.message == "Add at least one step before the workflow can run."));
+    assert!(
+        validation_issues(&err)
+            .iter()
+            .any(|i| i.message == "Add at least one step before the workflow can run.")
+    );
 
     complete_step(&mut client, &id, "Step").await;
-    let daily = pb::save_schedule_request::Recurrence::Daily(pb::ScheduleDaily { hour: 9, minute: 0 });
+    let daily =
+        pb::save_schedule_request::Recurrence::Daily(pb::ScheduleDaily { hour: 9, minute: 0 });
     let saved = client
         .save_schedule(pb::SaveScheduleRequest {
             workflow_id: id.clone(),
@@ -561,7 +622,10 @@ async fn schedule_and_lifecycle(pool: PgPool) {
         .unwrap();
     let schedule = saved.schedule.unwrap();
     assert!(!schedule.enabled, "drafts store schedules disabled");
-    assert_eq!(schedule.human_description.as_deref(), Some("Daily at 09:00 (America/Sao_Paulo)"));
+    assert_eq!(
+        schedule.human_description.as_deref(),
+        Some("Daily at 09:00 (America/Sao_Paulo)")
+    );
 
     let active = client
         .activate_workflow(pb::ActivateWorkflowRequest { id: id.clone() })
@@ -586,23 +650,34 @@ async fn schedule_and_lifecycle(pool: PgPool) {
         .unwrap();
     let summary = scheduled.summary.as_ref().unwrap();
     assert!(summary.next_run_at.is_some());
-    assert_eq!(summary.schedule_summary.as_deref(), Some("Daily at 09:00 (America/Sao_Paulo)"));
-    assert_eq!(scheduled.schedule.as_ref().unwrap().next_run_at, summary.next_run_at);
+    assert_eq!(
+        summary.schedule_summary.as_deref(),
+        Some("Daily at 09:00 (America/Sao_Paulo)")
+    );
+    assert_eq!(
+        scheduled.schedule.as_ref().unwrap().next_run_at,
+        summary.next_run_at
+    );
 
     // Invalid recurrence.
     let err = client
         .save_schedule(pb::SaveScheduleRequest {
             workflow_id: id.clone(),
-            recurrence: Some(pb::save_schedule_request::Recurrence::Interval(pb::ScheduleInterval {
-                every: 90,
-                unit: pb::IntervalUnit::Minutes as i32,
-            })),
+            recurrence: Some(pb::save_schedule_request::Recurrence::Interval(
+                pb::ScheduleInterval {
+                    every: 90,
+                    unit: pb::IntervalUnit::Minutes as i32,
+                },
+            )),
             timezone: "UTC".into(),
             enabled: true,
         })
         .await
         .unwrap_err();
-    assert_eq!(err.message(), "Unable to save — the recurrence or timezone is invalid.");
+    assert_eq!(
+        err.message(),
+        "Unable to save — the recurrence or timezone is invalid."
+    );
 
     // A required input without value makes the active workflow need attention.
     let wi = client
@@ -632,7 +707,18 @@ async fn schedule_and_lifecycle(pool: PgPool) {
         .unwrap()
         .into_inner();
     assert!(fixed.issues.is_empty(), "{:?}", fixed.issues);
-    assert_eq!(fixed.workflow.as_ref().unwrap().schedule.as_ref().unwrap().values[0].value, "secret-value");
+    assert_eq!(
+        fixed
+            .workflow
+            .as_ref()
+            .unwrap()
+            .schedule
+            .as_ref()
+            .unwrap()
+            .values[0]
+            .value,
+        "secret-value"
+    );
     let raw: Vec<u8> = sqlx::query_scalar("SELECT value FROM workflow_schedule_values")
         .fetch_one(&server.pool)
         .await
@@ -645,7 +731,10 @@ async fn schedule_and_lifecycle(pool: PgPool) {
         .unwrap()
         .into_inner();
     assert!(resumed.resumed);
-    assert_eq!(status(resumed.workflow.as_ref().unwrap()), pb::WorkflowStatus::Active);
+    assert_eq!(
+        status(resumed.workflow.as_ref().unwrap()),
+        pb::WorkflowStatus::Active
+    );
 
     let paused = client
         .pause_workflow(pb::PauseWorkflowRequest { id: id.clone() })
@@ -657,13 +746,18 @@ async fn schedule_and_lifecycle(pool: PgPool) {
     assert_eq!(status(&paused), pb::WorkflowStatus::Paused);
     assert!(paused.summary.unwrap().next_run_at.is_none());
     assert!(paused.schedule.as_ref().unwrap().next_run_at.is_none());
-    assert_eq!(paused.schedule.unwrap().cron_expression.as_deref(), Some("0 9 * * *"));
+    assert_eq!(
+        paused.schedule.unwrap().cron_expression.as_deref(),
+        Some("0 9 * * *")
+    );
 
     // Removing the schedule.
     let none = client
         .save_schedule(pb::SaveScheduleRequest {
             workflow_id: id.clone(),
-            recurrence: Some(pb::save_schedule_request::Recurrence::None(pb::ScheduleNone {})),
+            recurrence: Some(pb::save_schedule_request::Recurrence::None(
+                pb::ScheduleNone {},
+            )),
             timezone: String::new(),
             enabled: false,
         })
@@ -682,7 +776,10 @@ async fn schedule_and_lifecycle(pool: PgPool) {
         "WorkflowResumed",
         "WorkflowPaused",
     ] {
-        assert!(types.contains(&expected.to_string()), "{expected} missing from {types:?}");
+        assert!(
+            types.contains(&expected.to_string()),
+            "{expected} missing from {types:?}"
+        );
     }
 
     let resumed_invalid = {
@@ -705,7 +802,10 @@ async fn schedule_and_lifecycle(pool: PgPool) {
     };
     assert!(!resumed_invalid.resumed);
     assert!(!resumed_invalid.issues.is_empty());
-    assert_eq!(status(resumed_invalid.workflow.as_ref().unwrap()), pb::WorkflowStatus::NeedsAttention);
+    assert_eq!(
+        status(resumed_invalid.workflow.as_ref().unwrap()),
+        pb::WorkflowStatus::NeedsAttention
+    );
 }
 
 async fn paused_step(client: &mut Client, id: &str) -> String {
@@ -747,7 +847,10 @@ async fn vanished_models_flag_active_workflows(pool: PgPool) {
     let untouched = create(&mut client, "Draft").await;
 
     omni.set(&["other-model"]);
-    catalog.refresh_models(pb::RefreshModelsRequest {}).await.unwrap();
+    catalog
+        .refresh_models(pb::RefreshModelsRequest {})
+        .await
+        .unwrap();
 
     let got = client
         .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
@@ -757,7 +860,11 @@ async fn vanished_models_flag_active_workflows(pool: PgPool) {
         .workflow
         .unwrap();
     assert_eq!(status(&got), pb::WorkflowStatus::NeedsAttention);
-    assert_eq!(got.steps[0].model_id.as_deref(), Some("omniroute/test-model"), "choice stays visible");
+    assert_eq!(
+        got.steps[0].model_id.as_deref(),
+        Some("omniroute/test-model"),
+        "choice stays visible"
+    );
     let data: serde_json::Value = sqlx::query_scalar(
         "SELECT data FROM events WHERE stream = $1 AND event_type = 'WorkflowNeedsAttention'",
     )
@@ -765,9 +872,14 @@ async fn vanished_models_flag_active_workflows(pool: PgPool) {
     .fetch_one(&server.pool)
     .await
     .unwrap();
-    assert_eq!(data["issues"], serde_json::json!(["A selected model is no longer available."]));
+    assert_eq!(
+        data["issues"],
+        serde_json::json!(["A selected model is no longer available."])
+    );
     let draft = client
-        .get_workflow(pb::GetWorkflowRequest { id: wid(&untouched) })
+        .get_workflow(pb::GetWorkflowRequest {
+            id: wid(&untouched),
+        })
         .await
         .unwrap()
         .into_inner()

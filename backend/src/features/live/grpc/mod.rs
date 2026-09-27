@@ -25,8 +25,16 @@ pub struct LiveGrpc {
 }
 
 impl LiveGrpc {
-    pub fn new(bus: Arc<dyn LiveBus>, heartbeat: Option<Duration>, stop: CancellationToken) -> Self {
-        Self { bus, heartbeat, stop }
+    pub fn new(
+        bus: Arc<dyn LiveBus>,
+        heartbeat: Option<Duration>,
+        stop: CancellationToken,
+    ) -> Self {
+        Self {
+            bus,
+            heartbeat,
+            stop,
+        }
     }
 }
 
@@ -73,7 +81,8 @@ fn synthetic(kind: LiveKind, workflow: &str) -> LiveEvent {
     }
 }
 
-pub type EventStream = Pin<Box<dyn Stream<Item = Result<pb::WatchWorkflowResponse, Status>> + Send>>;
+pub type EventStream =
+    Pin<Box<dyn Stream<Item = Result<pb::WatchWorkflowResponse, Status>> + Send>>;
 
 struct State {
     rx: tokio::sync::broadcast::Receiver<LiveEvent>,
@@ -85,7 +94,12 @@ struct State {
 /// Events for `workflow` (and broadcast RESYNCs); a lagging subscriber gets a
 /// RESYNC instead of the events it missed. Ends when the bus closes or on
 /// server shutdown.
-pub fn watch(bus: &dyn LiveBus, workflow: WorkflowId, heartbeat: Option<Duration>, stop: CancellationToken) -> EventStream {
+pub fn watch(
+    bus: &dyn LiveBus,
+    workflow: WorkflowId,
+    heartbeat: Option<Duration>,
+    stop: CancellationToken,
+) -> EventStream {
     let state = State {
         rx: bus.subscribe(),
         workflow: workflow.to_string(),
@@ -129,6 +143,11 @@ impl LiveService for LiveGrpc {
         request: Request<pb::WatchWorkflowRequest>,
     ) -> Result<Response<EventStream>, Status> {
         let workflow = parse_id(&request.get_ref().workflow_id, "workflow_id")?;
-        Ok(Response::new(watch(self.bus.as_ref(), workflow, self.heartbeat, self.stop.clone())))
+        Ok(Response::new(watch(
+            self.bus.as_ref(),
+            workflow,
+            self.heartbeat,
+            self.stop.clone(),
+        )))
     }
 }

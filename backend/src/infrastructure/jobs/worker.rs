@@ -48,8 +48,10 @@ impl Worker {
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
     {
-        self.handlers
-            .insert(kind.to_string(), Arc::new(move |payload| Box::pin(f(payload))));
+        self.handlers.insert(
+            kind.to_string(),
+            Arc::new(move |payload| Box::pin(f(payload))),
+        );
         self
     }
 
@@ -79,7 +81,8 @@ impl Worker {
                 let wake = wake.clone();
                 let tracker = tracker.clone();
                 tokio::spawn(async move {
-                    this.claim_loop(&queue, concurrency, stop, wake, tracker).await
+                    this.claim_loop(&queue, concurrency, stop, wake, tracker)
+                        .await
                 })
             })
             .collect();
@@ -88,7 +91,10 @@ impl Worker {
         }
         tracker.close();
         if tokio::time::timeout(grace, tracker.wait()).await.is_err() {
-            tracing::warn!(?grace, "jobs still running after the shutdown grace period; aborting them");
+            tracing::warn!(
+                ?grace,
+                "jobs still running after the shutdown grace period; aborting them"
+            );
         }
         listener.abort();
     }
@@ -132,7 +138,8 @@ impl Worker {
     }
 
     async fn execute(&self, job: ClaimedJob) {
-        let span = tracing::info_span!("job", id = job.id, kind = %job.kind, payload = %job.payload);
+        let span =
+            tracing::info_span!("job", id = job.id, kind = %job.kind, payload = %job.payload);
         let result = async {
             let Some(handler) = self.handlers.get(&job.kind).cloned() else {
                 return Err(format!("unknown job kind {}", job.kind));

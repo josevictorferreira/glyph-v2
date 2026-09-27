@@ -85,21 +85,33 @@ mod tests {
     #[test]
     fn supplied_wins() {
         let i = [input("api_key", Some("stored-value"), true)];
-        assert_eq!(values(&i, &supplied(json!({"api_key": "supplied-value"}))), supplied(json!({"api_key": "supplied-value"})));
+        assert_eq!(
+            values(&i, &supplied(json!({"api_key": "supplied-value"}))),
+            supplied(json!({"api_key": "supplied-value"}))
+        );
     }
 
     #[test]
     fn blank_supplied_falls_back() {
         let i = [input("api_key", Some("stored-value"), true)];
-        assert_eq!(values(&i, &supplied(json!({"api_key": "  "}))), supplied(json!({"api_key": "stored-value"})));
+        assert_eq!(
+            values(&i, &supplied(json!({"api_key": "  "}))),
+            supplied(json!({"api_key": "stored-value"}))
+        );
     }
 
     #[test]
     fn stored_constant_and_drops() {
         let i = [input("brand", Some("Acme"), false)];
         assert_eq!(values(&i, &Map::new()), supplied(json!({"brand": "Acme"})));
-        let i = [input("tone", None, true), input("brand", Some("Acme"), false)];
-        assert_eq!(values(&i, &supplied(json!({"tone": ""}))), supplied(json!({"brand": "Acme"})));
+        let i = [
+            input("tone", None, true),
+            input("brand", Some("Acme"), false),
+        ];
+        assert_eq!(
+            values(&i, &supplied(json!({"tone": ""}))),
+            supplied(json!({"brand": "Acme"}))
+        );
     }
 
     #[test]
@@ -110,7 +122,10 @@ mod tests {
             input("tone", Some("formal"), true),
         ];
         let e = entries(&i, &supplied(json!({"brand": "New Co", "tone": ""})));
-        let got: Vec<_> = e.iter().map(|e| (e.name.as_str(), e.value.clone(), e.source)).collect();
+        let got: Vec<_> = e
+            .iter()
+            .map(|e| (e.name.as_str(), e.value.clone(), e.source))
+            .collect();
         assert_eq!(
             got,
             vec![
@@ -119,6 +134,9 @@ mod tests {
                 ("tone", Some(json!("formal")), ValueSource::Stored),
             ]
         );
-        assert_eq!(entries(&[input("brand", Some("Acme"), false)], &Map::new())[0].source, ValueSource::Constant);
+        assert_eq!(
+            entries(&[input("brand", Some("Acme"), false)], &Map::new())[0].source,
+            ValueSource::Constant
+        );
     }
 }

@@ -663,14 +663,14 @@ impl WorkflowTx for PgTx {
     }
 
     async fn active_workflow_ids(&mut self) -> DomainResult<Vec<WorkflowId>> {
-        Ok(
-            sqlx::query_scalar!("SELECT id FROM workflows WHERE status = 'active' ORDER BY created_at")
-                .fetch_all(&mut *self.tx)
-                .await
-                .map_err(db)?
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+        Ok(sqlx::query_scalar!(
+            "SELECT id FROM workflows WHERE status = 'active' ORDER BY created_at"
         )
+        .fetch_all(&mut *self.tx)
+        .await
+        .map_err(db)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
     }
 }

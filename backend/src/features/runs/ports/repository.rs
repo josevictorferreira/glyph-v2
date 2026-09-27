@@ -19,13 +19,23 @@ pub struct RunListFilter {
 pub trait RunStore: Send + Sync {
     async fn find_run(&self, id: RunId) -> DomainResult<Option<Run>>;
     /// Newest first.
-    async fn list_runs(&self, workflow: WorkflowId, filter: &RunListFilter) -> DomainResult<Vec<Run>>;
+    async fn list_runs(
+        &self,
+        workflow: WorkflowId,
+        filter: &RunListFilter,
+    ) -> DomainResult<Vec<Run>>;
     /// Ordered by (position, created_at).
     async fn step_runs(&self, run: RunId) -> DomainResult<Vec<StepRun>>;
     async fn find_step_run(&self, id: StepRunId) -> DomainResult<Option<StepRun>>;
     /// Progress snapshot: writes (encrypted) session content and notifies
     /// `STEP_RUN_PROGRESS`, in its own short transaction.
-    async fn record_progress(&self, workflow: WorkflowId, run: RunId, step_run: StepRunId, session_content: &str) -> DomainResult<()>;
+    async fn record_progress(
+        &self,
+        workflow: WorkflowId,
+        run: RunId,
+        step_run: StepRunId,
+        session_content: &str,
+    ) -> DomainResult<()>;
     async fn begin(&self) -> DomainResult<Box<dyn RunTx>>;
 }
 
@@ -66,8 +76,17 @@ pub trait RunTx: WorkflowTx {
         finish: &StepFinish,
     ) -> DomainResult<bool>;
     /// Back to queued with every evidence field cleared (retry).
-    async fn reset_step_runs(&mut self, ids: &[StepRunId], from: &[StepRunStatus]) -> DomainResult<Vec<StepRunId>>;
-    async fn set_workflow_last_run(&mut self, workflow: WorkflowId, at: Timestamp, status: RunStatus) -> DomainResult<()>;
+    async fn reset_step_runs(
+        &mut self,
+        ids: &[StepRunId],
+        from: &[StepRunStatus],
+    ) -> DomainResult<Vec<StepRunId>>;
+    async fn set_workflow_last_run(
+        &mut self,
+        workflow: WorkflowId,
+        at: Timestamp,
+        status: RunStatus,
+    ) -> DomainResult<()>;
     async fn delete_run(&mut self, id: RunId) -> DomainResult<bool>;
 }
 
@@ -90,15 +109,31 @@ impl StepFinish {
     pub fn from_outcome(outcome: &StepRunOutcome, ended_at: Timestamp) -> Self {
         let success = outcome.success();
         Self {
-            status: if success { StepRunStatus::Succeeded } else { StepRunStatus::Failed },
+            status: if success {
+                StepRunStatus::Succeeded
+            } else {
+                StepRunStatus::Failed
+            },
             ended_at,
             elapsed_ms: Some(outcome.elapsed_ms),
-            output: if success { outcome.output.clone() } else { None },
+            output: if success {
+                outcome.output.clone()
+            } else {
+                None
+            },
             output_text: outcome.output_text.clone(),
             messages: outcome.messages.clone(),
             session_content: outcome.session_content.clone(),
-            human_error: if success { None } else { outcome.human_error.clone() },
-            technical_error: if success { None } else { outcome.technical_error.clone() },
+            human_error: if success {
+                None
+            } else {
+                outcome.human_error.clone()
+            },
+            technical_error: if success {
+                None
+            } else {
+                outcome.technical_error.clone()
+            },
             skipped_reason: None,
         }
     }

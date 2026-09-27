@@ -44,7 +44,12 @@ pub struct NewRun {
 }
 
 /// A queued run and one queued step run per snapshot step.
-pub fn build_run(workflow: &Workflow, snapshot: Snapshot, new: NewRun, now: Timestamp) -> (Run, Vec<StepRun>) {
+pub fn build_run(
+    workflow: &Workflow,
+    snapshot: Snapshot,
+    new: NewRun,
+    now: Timestamp,
+) -> (Run, Vec<StepRun>) {
     let run = Run {
         id: RunId::new(),
         workflow_id: workflow.id,
@@ -131,8 +136,14 @@ pub fn ready_to_dispatch(snapshot: &Snapshot, states: &[StepRunState]) -> Vec<St
 }
 
 /// Queued transitive descendants of `failed` — skipped after a failure.
-pub fn blocked_descendants(snapshot: &Snapshot, states: &[StepRunState], failed: &StepRunState) -> Vec<StepRunId> {
-    let blocked = snapshot.dag().transitive_downstream(&failed.snapshot_step_id);
+pub fn blocked_descendants(
+    snapshot: &Snapshot,
+    states: &[StepRunState],
+    failed: &StepRunState,
+) -> Vec<StepRunId> {
+    let blocked = snapshot
+        .dag()
+        .transitive_downstream(&failed.snapshot_step_id);
     states
         .iter()
         .filter(|s| s.status == StepRunStatus::Queued && blocked.contains(&s.snapshot_step_id))
@@ -144,7 +155,9 @@ pub fn blocked_descendants(snapshot: &Snapshot, states: &[StepRunState], failed:
 pub fn to_cancel(states: &[StepRunState], failed: StepRunId) -> Vec<StepRunId> {
     states
         .iter()
-        .filter(|s| s.id != failed && matches!(s.status, StepRunStatus::Queued | StepRunStatus::Running))
+        .filter(|s| {
+            s.id != failed && matches!(s.status, StepRunStatus::Queued | StepRunStatus::Running)
+        })
         .map(|s| s.id)
         .collect()
 }
@@ -194,8 +207,14 @@ pub fn finalization(run: &Run, states: &[StepRunState]) -> Option<Finalization> 
 }
 
 /// Retry resets the failed step plus its skipped/cancelled descendants.
-pub fn retry_targets(snapshot: &Snapshot, states: &[StepRunState], failed: &StepRunState) -> Vec<StepRunId> {
-    let blocked = snapshot.dag().transitive_downstream(&failed.snapshot_step_id);
+pub fn retry_targets(
+    snapshot: &Snapshot,
+    states: &[StepRunState],
+    failed: &StepRunState,
+) -> Vec<StepRunId> {
+    let blocked = snapshot
+        .dag()
+        .transitive_downstream(&failed.snapshot_step_id);
     states
         .iter()
         .filter(|s| {
@@ -250,7 +269,10 @@ mod tests {
     #[test]
     fn dispatches_roots_then_dependents() {
         let (snap, mut states) = setup();
-        assert_eq!(ready_to_dispatch(&snap, &states), vec![states[0].id, states[1].id]);
+        assert_eq!(
+            ready_to_dispatch(&snap, &states),
+            vec![states[0].id, states[1].id]
+        );
         states[0].status = StepRunStatus::Running;
         assert_eq!(ready_to_dispatch(&snap, &states), vec![states[1].id]);
         states[0].status = StepRunStatus::Succeeded;
@@ -267,8 +289,14 @@ mod tests {
         let (snap, mut states) = setup();
         states[0].status = StepRunStatus::Failed;
         states[1].status = StepRunStatus::Running;
-        assert_eq!(blocked_descendants(&snap, &states, &states[0]), vec![states[2].id]);
-        assert_eq!(to_cancel(&states, states[0].id), vec![states[1].id, states[2].id]);
+        assert_eq!(
+            blocked_descendants(&snap, &states, &states[0]),
+            vec![states[2].id]
+        );
+        assert_eq!(
+            to_cancel(&states, states[0].id),
+            vec![states[1].id, states[2].id]
+        );
     }
 
     #[test]
@@ -290,15 +318,24 @@ mod tests {
         for s in &mut states {
             s.status = StepRunStatus::Succeeded;
         }
-        assert_eq!(finalization(&run, &states).unwrap().status, RunStatus::Succeeded);
+        assert_eq!(
+            finalization(&run, &states).unwrap().status,
+            RunStatus::Succeeded
+        );
         states[1].status = StepRunStatus::Failed;
         states[1].human_error = Some("boom".into());
         let f = finalization(&run, &states).unwrap();
         assert_eq!(f.status, RunStatus::Failed);
-        assert_eq!(f.failure_summary.as_deref(), Some("The B step could not complete: boom"));
+        assert_eq!(
+            f.failure_summary.as_deref(),
+            Some("The B step could not complete: boom")
+        );
         assert_eq!(f.first_failed, Some(states[1].id));
         states[1].allow_failure = true;
-        assert_eq!(finalization(&run, &states).unwrap().status, RunStatus::Succeeded);
+        assert_eq!(
+            finalization(&run, &states).unwrap().status,
+            RunStatus::Succeeded
+        );
         assert!(finalization(&run, &[]).is_none());
     }
 }

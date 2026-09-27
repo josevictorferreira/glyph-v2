@@ -19,6 +19,9 @@ nix run .#test -- workflows   # filtered
 nix run .#check               # buf lint/breaking, fmt, clippy -D warnings, tests
 nix run .#seed                # import the sample "Design POC Tournament" workflow (server must run)
 nix run .#reset               # stop Postgres and wipe .dev
+nix build .#glyph             # release binary
+nix build .#image             # OCI image (binary + Pi 0.83), `podman load < result`
+GLYPH_STEP_RUNNER=fake nix run .#web   # deterministic runner, no provider keys needed
 nix develop                   # shell with db_start/db_stop/db_psql/db_migrate/sqlx_prepare
 ```
 
@@ -35,7 +38,9 @@ Feature-first modular monolith; ports & adapters where an external system exists
 - Features talk to each other only through `features/<x>/mod.rs` re-exports.
 - `app/bootstrap.rs` is the only place that names concrete adapters.
 
-`backend/tests/architecture.rs` enforces these rules.
+`backend/tests/architecture.rs` enforces these rules (and checks itself against deliberate violations).
+
+Specs, the parity audit and the cutover runbook live in `.agents/specs/` (`0012-hardening-deploy-cutover/{parity,cutover}.md`).
 
 ## Execution and sensitive data (safety-critical)
 

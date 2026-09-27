@@ -54,13 +54,20 @@ async fn grpc_web_status(router: &axum::Router, service: &str, method: &str) -> 
 async fn every_rpc_is_routed(pool: PgPool) {
     let server = common::spawn(pool).await;
     let methods = methods();
-    assert!(methods.len() > 40, "expected the full contract, got {}", methods.len());
+    assert!(
+        methods.len() > 40,
+        "expected the full contract, got {}",
+        methods.len()
+    );
     let services: std::collections::BTreeSet<_> = methods.iter().map(|(s, _)| s.clone()).collect();
     assert_eq!(services.len(), 5, "{services:?}");
 
     for (service, method) in &methods {
         let status = grpc_web_status(&server.router, service, method).await;
         // Handlers are UNIMPLEMENTED (12) until their feature spec lands.
-        assert!(status.is_some(), "{service}/{method} returned no grpc-status");
+        assert!(
+            status.is_some(),
+            "{service}/{method} returned no grpc-status"
+        );
     }
 }

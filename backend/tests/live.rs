@@ -19,9 +19,7 @@ use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 
-async fn next_event(
-    stream: &mut tonic::Streaming<pb::WatchWorkflowResponse>,
-) -> pb::WorkflowEvent {
+async fn next_event(stream: &mut tonic::Streaming<pb::WatchWorkflowResponse>) -> pb::WorkflowEvent {
     tokio::time::timeout(Duration::from_secs(5), stream.message())
         .await
         .expect("event within 5s")
@@ -51,10 +49,21 @@ async fn listener_delivers_after_commit_and_resyncs_on_reconnect(pool: PgPool) {
     };
     // Uncommitted NOTIFYs are never delivered.
     let mut tx = pool.begin().await.unwrap();
-    sqlx::query("SELECT pg_notify('glyph_events', $1)").bind(payload("rolled-back")).execute(&mut *tx).await.unwrap();
+    sqlx::query("SELECT pg_notify('glyph_events', $1)")
+        .bind(payload("rolled-back"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     tx.rollback().await.unwrap();
-    sqlx::query("SELECT pg_notify('glyph_events', $1)").bind(payload("w1")).execute(&pool).await.unwrap();
-    let e = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+    sqlx::query("SELECT pg_notify('glyph_events', $1)")
+        .bind(payload("w1"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let e = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(e.workflow_id, "w1");
 
     // Kill the LISTEN connection: the hub reconnects and broadcasts RESYNC.
@@ -62,12 +71,22 @@ async fn listener_delivers_after_commit_and_resyncs_on_reconnect(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    let e = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+    let e = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(e.kind, LiveKind::Resync);
     assert!(e.workflow_id.is_empty());
     tokio::time::sleep(Duration::from_millis(200)).await;
-    sqlx::query("SELECT pg_notify('glyph_events', $1)").bind(payload("w2")).execute(&pool).await.unwrap();
-    let e = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+    sqlx::query("SELECT pg_notify('glyph_events', $1)")
+        .bind(payload("w2"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let e = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(e.workflow_id, "w2");
     stop.cancel();
     task.await.unwrap();
@@ -86,7 +105,9 @@ async fn watch_workflow_streams_a_run(pool: PgPool) {
 
     let mut live = LiveServiceClient::new(server.channel().await);
     let mut stream = live
-        .watch_workflow(pb::WatchWorkflowRequest { workflow_id: b.id.clone() })
+        .watch_workflow(pb::WatchWorkflowRequest {
+            workflow_id: b.id.clone(),
+        })
         .await
         .unwrap()
         .into_inner();
@@ -108,7 +129,11 @@ async fn watch_workflow_streams_a_run(pool: PgPool) {
         }
     }
     use pb::EventType::*;
-    let pos = |t: pb::EventType| seen.iter().position(|s| *s == t).unwrap_or_else(|| panic!("{t:?} missing in {seen:?}"));
+    let pos = |t: pb::EventType| {
+        seen.iter()
+            .position(|s| *s == t)
+            .unwrap_or_else(|| panic!("{t:?} missing in {seen:?}"))
+    };
     assert!(pos(StepRunQueued) < pos(RunQueued));
     assert!(pos(RunQueued) < pos(RunStarted));
     assert!(pos(RunStarted) < pos(StepRunStarted));
@@ -140,15 +165,29 @@ async fn lagging_subscribers_get_a_resync_and_heartbeats_flow() {
     let first = stream.next().await.unwrap().unwrap().event.unwrap();
     assert_eq!(first.r#type(), pb::EventType::Resync);
 
-    let mut beating = watch(&hub, workflow, Some(Duration::from_millis(100)), CancellationToken::new());
-    let beat = tokio::time::timeout(Duration::from_millis(500), beating.next()).await.unwrap().unwrap().unwrap();
+    let mut beating = watch(
+        &hub,
+        workflow,
+        Some(Duration::from_millis(100)),
+        CancellationToken::new(),
+    );
+    let beat = tokio::time::timeout(Duration::from_millis(500), beating.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
     assert_eq!(beat.event.unwrap().r#type(), pb::EventType::Heartbeat);
 
     // Shutdown ends open streams.
     let stop = CancellationToken::new();
     let mut ending = watch(&hub, workflow, None, stop.clone());
     stop.cancel();
-    assert!(tokio::time::timeout(Duration::from_secs(1), ending.next()).await.unwrap().is_none());
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), ending.next())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
@@ -156,7 +195,10 @@ async fn grpc_web_streaming(pool: PgPool) {
     let runner = ScriptedRunner::new(&[]);
     let server = server(pool, runner).await;
     let mut b = Builder::new(&server, "Web", false).await;
-    let request = pb::WatchWorkflowRequest { workflow_id: b.id.clone() }.encode_to_vec();
+    let request = pb::WatchWorkflowRequest {
+        workflow_id: b.id.clone(),
+    }
+    .encode_to_vec();
     let mut frame = vec![0u8];
     frame.extend_from_slice(&(request.len() as u32).to_be_bytes());
     frame.extend_from_slice(&request);
@@ -194,5 +236,8 @@ async fn grpc_web_streaming(pool: PgPool) {
     })
     .await
     .unwrap();
-    assert_eq!(event.event.unwrap().r#type(), pb::EventType::WorkflowUpdated);
+    assert_eq!(
+        event.event.unwrap().r#type(),
+        pb::EventType::WorkflowUpdated
+    );
 }

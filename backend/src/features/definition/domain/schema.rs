@@ -51,14 +51,20 @@ fn push(error: &ValidationError<'_>, out: &mut Vec<SchemaError>) {
     let path = pointer(error);
     let message = match error.kind() {
         ValidationErrorKind::Required { property } => {
-            let key = property.as_str().map(str::to_string).unwrap_or_else(|| property.to_string());
+            let key = property
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| property.to_string());
             format!("Add the required key \"{key}\".")
         }
         ValidationErrorKind::AdditionalProperties { unexpected } => {
             for key in unexpected {
                 out.push(SchemaError {
                     path: path.clone(),
-                    message: format!("{} is not a known key here.", inspect(&Value::String(key.clone()))),
+                    message: format!(
+                        "{} is not a known key here.",
+                        inspect(&Value::String(key.clone()))
+                    ),
                 });
             }
             return;
@@ -81,7 +87,11 @@ fn push(error: &ValidationError<'_>, out: &mut Vec<SchemaError>) {
                 .as_array()
                 .map(|o| {
                     o.iter()
-                        .map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))
+                        .map(|v| {
+                            v.as_str()
+                                .map(str::to_string)
+                                .unwrap_or_else(|| v.to_string())
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                 })
@@ -129,7 +139,10 @@ mod tests {
         let errors = validate(&fixture("helper_with_prompt"));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert_eq!(errors[0].path, "/steps/0");
-        assert_eq!(errors[0].message, "\"prompt\" is not allowed on a helper step.");
+        assert_eq!(
+            errors[0].message,
+            "\"prompt\" is not allowed on a helper step."
+        );
     }
 
     #[test]
@@ -143,10 +156,16 @@ mod tests {
     #[test]
     fn rewrites_messages() {
         let v = |s: &str| validate(&yaml::load(s).unwrap().value);
-        assert_eq!(v("steps: [{name: a}]")[0].message, "Add the required key \"name\".");
+        assert_eq!(
+            v("steps: [{name: a}]")[0].message,
+            "Add the required key \"name\"."
+        );
         assert_eq!(
             v("name: w\nsteps:\n- name: a\n  temperature: 5\n")[0],
-            SchemaError { path: "/steps/0/temperature".into(), message: "temperature must be between 0 and 2.".into() }
+            SchemaError {
+                path: "/steps/0/temperature".into(),
+                message: "temperature must be between 0 and 2.".into()
+            }
         );
         assert_eq!(
             v("name: w\nsteps:\n- name: a\n  format: pdf\n")[0].message,
@@ -160,6 +179,9 @@ mod tests {
 
     #[test]
     fn url_for_host() {
-        assert_eq!(url("https://glyph.example"), "https://glyph.example/schemas/workflow.json");
+        assert_eq!(
+            url("https://glyph.example"),
+            "https://glyph.example/schemas/workflow.json"
+        );
     }
 }

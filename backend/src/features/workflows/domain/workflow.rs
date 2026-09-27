@@ -80,7 +80,11 @@ impl Workflow {
         let id = WorkflowId::new();
         let workflow = Self {
             id,
-            name: if blank(name) { UNTITLED.into() } else { name.to_string() },
+            name: if blank(name) {
+                UNTITLED.into()
+            } else {
+                name.to_string()
+            },
             description: opt(description),
             status: WorkflowStatus::Draft,
             fail_fast,
@@ -94,7 +98,10 @@ impl Workflow {
             connections: Vec::new(),
             schedule: None,
         };
-        (workflow, vec![event(events::WORKFLOW_CREATED, id, json!({}))])
+        (
+            workflow,
+            vec![event(events::WORKFLOW_CREATED, id, json!({}))],
+        )
     }
 
     fn ev(&self, event_type: &str, extra: Value) -> DomainEvent {
@@ -144,7 +151,11 @@ impl Workflow {
 
     /// Copies kind, name, description, prompt, context, allow_failure and the
     /// inputs (unconnected). Model, tools and output fields are not copied.
-    pub fn duplicate_step(&mut self, step_id: StepId, now: Timestamp) -> DomainResult<(StepId, Events)> {
+    pub fn duplicate_step(
+        &mut self,
+        step_id: StepId,
+        now: Timestamp,
+    ) -> DomainResult<(StepId, Events)> {
         let source = self.step(step_id).ok_or_else(not_found_step)?.clone();
         let mut step = Step::new(
             source.kind,
@@ -361,7 +372,10 @@ impl Workflow {
             created_at: now,
         };
         let id = input.id;
-        self.step_mut(step_id).ok_or_else(not_found_step)?.inputs.push(input);
+        self.step_mut(step_id)
+            .ok_or_else(not_found_step)?
+            .inputs
+            .push(input);
         Ok((id, vec![self.step_updated(step_id)]))
     }
 
@@ -374,7 +388,8 @@ impl Workflow {
         for s in &mut self.steps {
             s.inputs.retain(|i| i.id != input_id);
         }
-        self.connections.retain(|c| c.destination_input_id != input_id);
+        self.connections
+            .retain(|c| c.destination_input_id != input_id);
         Ok(vec![self.step_updated(step_id)])
     }
 
@@ -681,7 +696,10 @@ impl Workflow {
             created_at: now,
         };
         let input_id = input.id;
-        self.step_mut(target_id).ok_or_else(not_found_step)?.inputs.push(input);
+        self.step_mut(target_id)
+            .ok_or_else(not_found_step)?
+            .inputs
+            .push(input);
         let (connection_id, created) = self.build_connection(source_id, input_id, now);
         Ok((
             connection_id,
@@ -722,10 +740,9 @@ impl Workflow {
         let Some(recurrence) = recurrence else {
             self.schedule = None;
             self.next_run_at = None;
-            return Ok(vec![self.ev(
-                events::WORKFLOW_SCHEDULE_CHANGED,
-                json!({ "mode": "none" }),
-            )]);
+            return Ok(vec![
+                self.ev(events::WORKFLOW_SCHEDULE_CHANGED, json!({ "mode": "none" })),
+            ]);
         };
         let timezone = timezone.trim();
         let cron = schedule_calculator::cron_for(&recurrence)
@@ -743,8 +760,10 @@ impl Workflow {
         schedule.enabled = enabled;
         schedule.cron_expression = Some(cron.clone());
         schedule.timezone = Some(timezone.to_string());
-        schedule.human_description =
-            Some(schedule_calculator::human_description_for(&recurrence, timezone));
+        schedule.human_description = Some(schedule_calculator::human_description_for(
+            &recurrence,
+            timezone,
+        ));
         schedule.next_run_at = next;
         self.next_run_at = if self.status == WorkflowStatus::Active {
             next

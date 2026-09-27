@@ -87,7 +87,10 @@ mod tests {
         assert_eq!(live.step_run_id.as_deref(), Some("sr"));
 
         let e = DomainEvent::workflow("WorkflowStepAdded", "wf", json!({}));
-        assert_eq!(LiveEvent::from_domain(&e, now).unwrap().kind, LiveKind::WorkflowUpdated);
+        assert_eq!(
+            LiveEvent::from_domain(&e, now).unwrap().kind,
+            LiveKind::WorkflowUpdated
+        );
 
         let e = DomainEvent {
             event_type: "ModelsRefreshed".into(),

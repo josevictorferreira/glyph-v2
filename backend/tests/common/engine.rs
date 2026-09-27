@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use glyph_backend::app::bootstrap::Overrides;
-use glyph_backend::features::runs::{OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner};
+use glyph_backend::features::runs::{
+    OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner,
+};
 use glyph_backend::proto::pb;
 use glyph_backend::proto::pb::run_service_client::RunServiceClient;
 use glyph_backend::proto::pb::workflow_service_client::WorkflowServiceClient;
@@ -40,7 +42,10 @@ pub struct ScriptedRunner {
 impl ScriptedRunner {
     pub fn new(scripts: &[(&str, Script)]) -> Arc<Self> {
         let runner = Self::default();
-        *runner.scripts.lock().unwrap() = scripts.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+        *runner.scripts.lock().unwrap() = scripts
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
         Arc::new(runner)
     }
 
@@ -153,7 +158,11 @@ pub struct Builder {
 
 impl Builder {
     pub async fn new(server: &TestServer, name: &str, fail_fast: bool) -> Self {
-        let mut client = WorkflowServiceClient::new(server.channel().await);
+        Self::with_channel(server.channel().await, name, fail_fast).await
+    }
+
+    pub async fn with_channel(channel: Channel, name: &str, fail_fast: bool) -> Self {
+        let mut client = WorkflowServiceClient::new(channel);
         let wf = client
             .create_workflow(pb::CreateWorkflowRequest {
                 name: name.into(),
@@ -306,6 +315,18 @@ impl Builder {
             .new_input_id
     }
 
+    pub async fn set_prompt(&mut self, step: &str, prompt: &str) {
+        self.client
+            .update_step_prompt(pb::UpdateStepPromptRequest {
+                workflow_id: self.id.clone(),
+                step_id: step.into(),
+                prompt: Some(prompt.into()),
+                additional_context: None,
+            })
+            .await
+            .unwrap();
+    }
+
     /// Adds a required step input mapped to a workflow input.
     pub async fn map(&mut self, step: &str, input: &str, workflow_input: &str) {
         let input_id = self
@@ -340,7 +361,10 @@ pub async fn start(server: &TestServer, workflow: &str, values: &[(&str, &str)])
         .await
         .start_run(pb::StartRunRequest {
             workflow_id: workflow.into(),
-            values: values.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            values: values
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
         })
         .await
         .unwrap()
@@ -385,7 +409,10 @@ pub async fn settle(server: &TestServer, workflow: &str, run: &str) -> pb::Run {
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    panic!("run {run} did not settle: {:?}", get(server, workflow, run).await);
+    panic!(
+        "run {run} did not settle: {:?}",
+        get(server, workflow, run).await
+    );
 }
 
 pub fn step<'a>(run: &'a pb::Run, name: &str) -> &'a pb::StepRunSummary {

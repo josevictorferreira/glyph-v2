@@ -66,8 +66,14 @@ mod tests {
 
     #[test]
     fn table() {
-        assert_eq!(OutputFileFormat::parse("html"), Some(OutputFileFormat::Html));
-        assert_eq!(OutputFileFormat::parse_or_default("pdf"), OutputFileFormat::FreeTextMarkdown);
+        assert_eq!(
+            OutputFileFormat::parse("html"),
+            Some(OutputFileFormat::Html)
+        );
+        assert_eq!(
+            OutputFileFormat::parse_or_default("pdf"),
+            OutputFileFormat::FreeTextMarkdown
+        );
         assert_eq!(OutputFileFormat::Zip.mime_type(), "application/zip");
         assert_eq!(OutputFileFormat::FreeTextMarkdown.extension(), "md");
         assert_eq!(OutputFileFormat::Json.label(), "JSON file");

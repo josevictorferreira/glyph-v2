@@ -94,14 +94,23 @@ mod tests {
         let mut blob = cipher.encrypt(b"secret");
         let last = blob.len() - 1;
         blob[last] ^= 1;
-        assert!(matches!(cipher.decrypt(&blob), Err(CryptoError::Authentication)));
-        assert!(matches!(cipher.decrypt(b"short"), Err(CryptoError::TooShort)));
+        assert!(matches!(
+            cipher.decrypt(&blob),
+            Err(CryptoError::Authentication)
+        ));
+        assert!(matches!(
+            cipher.decrypt(b"short"),
+            Err(CryptoError::TooShort)
+        ));
     }
 
     #[test]
     fn nonces_are_distinct() {
         let cipher = AesGcmCipher::dev();
-        assert_ne!(cipher.encrypt(b"x")[..NONCE_LEN], cipher.encrypt(b"x")[..NONCE_LEN]);
+        assert_ne!(
+            cipher.encrypt(b"x")[..NONCE_LEN],
+            cipher.encrypt(b"x")[..NONCE_LEN]
+        );
     }
 
     #[test]

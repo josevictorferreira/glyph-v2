@@ -2,6 +2,7 @@
 name = "glyph-backend"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [lib]
 name = "glyph_backend"
@@ -65,6 +66,7 @@ base64 = "0.23.1"
 chrono = "0.4.45"
 futures-util = "0.3.34"
 http-body-util = "0.1.5"
+nix = { version = "0.31.3", features = ["signal"] }
 prost = "0.14.4"
 prost-types = "0.14.4"
 secrecy = "0.10.3"

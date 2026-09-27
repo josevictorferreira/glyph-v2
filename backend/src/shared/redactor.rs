@@ -67,9 +67,19 @@ mod tests {
 
     #[test]
     fn redacts_secret_values() {
-        let r = Redactor::new(["super-secret-test-key-123".to_string(), "velox-secret-key-456".into(), "  ".into()]);
-        assert_eq!(r.redact("the key is super-secret-test-key-123 ok"), "the key is [redacted] ok");
-        assert_eq!(r.redact("leaked velox-secret-key-456 here"), "leaked [redacted] here");
+        let r = Redactor::new([
+            "super-secret-test-key-123".to_string(),
+            "velox-secret-key-456".into(),
+            "  ".into(),
+        ]);
+        assert_eq!(
+            r.redact("the key is super-secret-test-key-123 ok"),
+            "the key is [redacted] ok"
+        );
+        assert_eq!(
+            r.redact("leaked velox-secret-key-456 here"),
+            "leaked [redacted] here"
+        );
     }
 
     #[test]
@@ -95,7 +105,10 @@ mod tests {
 
     #[test]
     fn database_url_password() {
-        assert_eq!(database_password("postgres://u:p%40ss@h:5432/db").as_deref(), Some("p%40ss"));
+        assert_eq!(
+            database_password("postgres://u:p%40ss@h:5432/db").as_deref(),
+            Some("p%40ss")
+        );
         assert_eq!(database_password("postgres://u@h/db"), None);
         assert_eq!(database_password("postgres://u:@h/db"), None);
     }

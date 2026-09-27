@@ -101,12 +101,18 @@ impl DefinitionService {
     }
 
     /// Dry run: every error the document has, nothing written.
-    pub async fn parse(&self, id: Option<WorkflowId>, yaml: &str) -> DomainResult<Vec<DefinitionError>> {
+    pub async fn parse(
+        &self,
+        id: Option<WorkflowId>,
+        yaml: &str,
+    ) -> DomainResult<Vec<DefinitionError>> {
         let existing = match id {
             Some(id) => Some(existing_steps(&self.workflow(id).await?)),
             None => None,
         };
-        Ok(parser::parse(yaml, existing.as_deref()).err().unwrap_or_default())
+        Ok(parser::parse(yaml, existing.as_deref())
+            .err()
+            .unwrap_or_default())
     }
 
     /// Stale fingerprint → Conflict before any change; errors roll back.
@@ -128,8 +134,7 @@ impl DefinitionService {
         {
             return Err(DomainError::Conflict);
         }
-        let document =
-            parser::parse(yaml, Some(&existing_steps(&workflow))).map_err(violations)?;
+        let document = parser::parse(yaml, Some(&existing_steps(&workflow))).map_err(violations)?;
         let mut events = applier::apply(&mut workflow, &document, now);
         let (issues, more) = workflow.revalidate(&catalog);
         events.extend(more);

@@ -84,11 +84,19 @@ impl Dag {
 
     /// Steps whose upstreams are all in `completed` and which are neither
     /// completed nor in flight, in step order.
-    pub fn ready_ids(&self, completed: &HashSet<String>, inflight: &HashSet<String>) -> Vec<String> {
+    pub fn ready_ids(
+        &self,
+        completed: &HashSet<String>,
+        inflight: &HashSet<String>,
+    ) -> Vec<String> {
         self.step_ids
             .iter()
             .filter(|id| !completed.contains(*id) && !inflight.contains(*id))
-            .filter(|id| self.upstreams_of(id).iter().all(|up| completed.contains(up)))
+            .filter(|id| {
+                self.upstreams_of(id)
+                    .iter()
+                    .all(|up| completed.contains(up))
+            })
             .cloned()
             .collect()
     }

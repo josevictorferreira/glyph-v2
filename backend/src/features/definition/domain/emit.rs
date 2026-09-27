@@ -106,7 +106,8 @@ fn string(s: &str, indent: usize, allow_block: bool) -> String {
 }
 
 fn block_safe(s: &str) -> bool {
-    !s.chars().any(|c| (c.is_control() && c != '\n' && c != '\t') || c == '\u{feff}')
+    !s.chars()
+        .any(|c| (c.is_control() && c != '\n' && c != '\t') || c == '\u{feff}')
         && !s.contains('\r')
         && !s.starts_with([' ', '\t', '\n'])
         && !s.lines().any(|l| l.ends_with([' ', '\t']))
@@ -169,10 +170,19 @@ mod tests {
 
     #[test]
     fn quotes_ambiguous_scalars() {
-        for s in ["42", "true", "yes", "null", "~", "", " lead", "a: b", "# c", "- x", "0.5", "'q'", "x #y", "@x"] {
+        for s in [
+            "42", "true", "yes", "null", "~", "", " lead", "a: b", "# c", "- x", "0.5", "'q'",
+            "x #y", "@x",
+        ] {
             assert!(!plain_safe(s), "{s:?} should be quoted");
         }
-        for s in ["hello", "openai/gpt-5", "Weekly competitor digest", "0 9 * * 1", "a-b"] {
+        for s in [
+            "hello",
+            "openai/gpt-5",
+            "Weekly competitor digest",
+            "0 9 * * 1",
+            "a-b",
+        ] {
             assert!(plain_safe(s), "{s:?} should be plain");
         }
     }
@@ -194,8 +204,13 @@ mod tests {
 
     #[test]
     fn literal_blocks_and_style() {
-        let text = to_yaml(&json!({ "steps": [{ "name": "a", "prompt": "Summarize.\n\nKeep it short: three bullets." }] }));
-        assert_eq!(text, "steps:\n- name: a\n  prompt: |-\n    Summarize.\n\n    Keep it short: three bullets.\n");
+        let text = to_yaml(
+            &json!({ "steps": [{ "name": "a", "prompt": "Summarize.\n\nKeep it short: three bullets." }] }),
+        );
+        assert_eq!(
+            text,
+            "steps:\n- name: a\n  prompt: |-\n    Summarize.\n\n    Keep it short: three bullets.\n"
+        );
     }
 
     #[test]

@@ -45,7 +45,11 @@ fn step_run_detail(run: &Run, s: &StepRun) -> pb::StepRun {
         expected_output: s.expected_output.clone(),
         model_id: s.model_id.clone(),
         temperature: s.model_settings.get("temperature").and_then(Value::as_f64),
-        enabled_tool_names: s.enabled_tools.iter().map(|t| t.pi_tool_name.clone()).collect(),
+        enabled_tool_names: s
+            .enabled_tools
+            .iter()
+            .map(|t| t.pi_tool_name.clone())
+            .collect(),
         resolved_inputs: convert::resolved_inputs(s.resolved_inputs.as_ref()),
         output_text: s.output_text.clone(),
         output_json: s.output.as_ref().map(json_to_value),
@@ -61,7 +65,11 @@ fn step_run_detail(run: &Run, s: &StepRun) -> pb::StepRun {
 impl Rpc for RunGrpc {
     async fn start_run(&self, r: Request<pb::StartRunRequest>) -> Rsp<pb::StartRunResponse> {
         let r = r.into_inner();
-        let values: Map<String, Value> = r.values.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+        let values: Map<String, Value> = r
+            .values
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect();
         let run = self
             .service
             .start_run(parse_id(&r.workflow_id, "workflow_id")?, values)
@@ -85,7 +93,10 @@ impl Rpc for RunGrpc {
             )
             .await?;
         Ok(Response::new(pb::ListRunsResponse {
-            runs: runs.iter().map(|run| convert::run(run, &[], false)).collect(),
+            runs: runs
+                .iter()
+                .map(|run| convert::run(run, &[], false))
+                .collect(),
         }))
     }
 
@@ -93,7 +104,10 @@ impl Rpc for RunGrpc {
         let r = r.into_inner();
         let (run, step_runs) = self
             .service
-            .get_run(parse_id(&r.workflow_id, "workflow_id")?, parse_id(&r.run_id, "run_id")?)
+            .get_run(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.run_id, "run_id")?,
+            )
             .await?;
         Ok(Response::new(pb::GetRunResponse {
             run: Some(convert::run(&run, &step_runs, true)),
@@ -118,7 +132,10 @@ impl Rpc for RunGrpc {
     async fn stop_run(&self, r: Request<pb::StopRunRequest>) -> Rsp<pb::StopRunResponse> {
         let r = r.into_inner();
         let workflow = parse_id(&r.workflow_id, "workflow_id")?;
-        let run = self.service.stop_run(workflow, parse_id(&r.run_id, "run_id")?).await?;
+        let run = self
+            .service
+            .stop_run(workflow, parse_id(&r.run_id, "run_id")?)
+            .await?;
         let (run, step_runs) = self.service.get_run(workflow, run.id).await?;
         Ok(Response::new(pb::StopRunResponse {
             run: Some(convert::run(&run, &step_runs, true)),
@@ -130,7 +147,11 @@ impl Rpc for RunGrpc {
         let workflow = parse_id(&r.workflow_id, "workflow_id")?;
         let run = self
             .service
-            .retry_step(workflow, parse_id(&r.run_id, "run_id")?, parse_id(&r.step_run_id, "step_run_id")?)
+            .retry_step(
+                workflow,
+                parse_id(&r.run_id, "run_id")?,
+                parse_id(&r.step_run_id, "step_run_id")?,
+            )
             .await?;
         let (run, step_runs) = self.service.get_run(workflow, run.id).await?;
         Ok(Response::new(pb::RetryStepResponse {
@@ -141,7 +162,10 @@ impl Rpc for RunGrpc {
     async fn delete_run(&self, r: Request<pb::DeleteRunRequest>) -> Rsp<pb::DeleteRunResponse> {
         let r = r.into_inner();
         self.service
-            .delete_run(parse_id(&r.workflow_id, "workflow_id")?, parse_id(&r.run_id, "run_id")?)
+            .delete_run(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.run_id, "run_id")?,
+            )
             .await?;
         Ok(Response::new(pb::DeleteRunResponse {}))
     }

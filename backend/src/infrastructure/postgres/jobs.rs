@@ -12,7 +12,11 @@ pub struct ClaimedJob {
     pub payload: Value,
 }
 
-pub async fn claim(pool: &PgPool, queue: &str, worker: &str) -> Result<Option<ClaimedJob>, sqlx::Error> {
+pub async fn claim(
+    pool: &PgPool,
+    queue: &str,
+    worker: &str,
+) -> Result<Option<ClaimedJob>, sqlx::Error> {
     let row = sqlx::query!(
         "UPDATE jobs SET locked_at = now(), locked_by = $2
          WHERE id = (

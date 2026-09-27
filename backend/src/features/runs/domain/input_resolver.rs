@@ -173,10 +173,10 @@ fn resolve_one(
 mod tests {
     use super::*;
     use crate::features::runs::domain::workflow_values;
+    use crate::features::workflows::WorkflowInputFields;
     use crate::features::workflows::catalog_view::CatalogView;
     use crate::features::workflows::model::{StepKind, Workflow};
     use crate::features::workflows::snapshot;
-    use crate::features::workflows::WorkflowInputFields;
     use chrono::Utc;
 
     struct Fixture {
@@ -221,7 +221,12 @@ mod tests {
         workflow_values::entries(&f.snapshot.inputs, supplied.as_object().unwrap())
     }
 
-    fn upstream(f: &Fixture, status: StepRunStatus, output: Option<Value>, text: Option<&str>) -> Upstream {
+    fn upstream(
+        f: &Fixture,
+        status: StepRunStatus,
+        output: Option<Value>,
+        text: Option<&str>,
+    ) -> Upstream {
         Upstream {
             id: StepRunId::new(),
             snapshot_step_id: f.a.id.to_string(),
@@ -251,10 +256,21 @@ mod tests {
         assert_eq!(r[0].value, Some(json!("facts here")));
         assert_eq!(r[0].source["label"], "Output from A");
 
-        let up = upstream(&f, StepRunStatus::Succeeded, Some(json!({"topic": "nix"})), Some("raw"));
-        assert_eq!(resolve(&f.snapshot, &f.b, &[up], &v).unwrap()[0].value, Some(json!({"topic": "nix"})));
+        let up = upstream(
+            &f,
+            StepRunStatus::Succeeded,
+            Some(json!({"topic": "nix"})),
+            Some("raw"),
+        );
+        assert_eq!(
+            resolve(&f.snapshot, &f.b, &[up], &v).unwrap()[0].value,
+            Some(json!({"topic": "nix"}))
+        );
         let up = upstream(&f, StepRunStatus::Succeeded, Some(json!({})), None);
-        assert_eq!(resolve(&f.snapshot, &f.b, &[up], &v).unwrap()[0].value, Some(json!({})));
+        assert_eq!(
+            resolve(&f.snapshot, &f.b, &[up], &v).unwrap()[0].value,
+            Some(json!({}))
+        );
     }
 
     #[test]
@@ -269,10 +285,16 @@ mod tests {
         assert!(r[0].value.is_none());
 
         let failed = upstream(&f, StepRunStatus::Failed, None, None);
-        assert!(resolve(&f.snapshot, &f.b, &[failed.clone()], &[]).is_err());
-        let waived = Upstream { allow_failure: true, ..failed };
+        assert!(resolve(&f.snapshot, &f.b, std::slice::from_ref(&failed), &[]).is_err());
+        let waived = Upstream {
+            allow_failure: true,
+            ..failed
+        };
         let r = resolve(&f.snapshot, &f.b, &[waived], &[]).unwrap();
-        assert_eq!(r[0].source["label"], "Output from A (failed — continuing without it)");
+        assert_eq!(
+            r[0].source["label"],
+            "Output from A (failed — continuing without it)"
+        );
         assert!(!r[0].required);
     }
 }

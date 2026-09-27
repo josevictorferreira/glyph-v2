@@ -43,7 +43,11 @@ fn dec(cipher: &dyn Cipher, blob: Option<Vec<u8>>, what: &str) -> DomainResult<O
     .transpose()
 }
 
-fn dec_text(cipher: &dyn Cipher, blob: Option<Vec<u8>>, what: &str) -> DomainResult<Option<String>> {
+fn dec_text(
+    cipher: &dyn Cipher,
+    blob: Option<Vec<u8>>,
+    what: &str,
+) -> DomainResult<Option<String>> {
     Ok(dec(cipher, blob, what)?.map(|b| String::from_utf8_lossy(&b).into_owned()))
 }
 
@@ -145,7 +149,12 @@ macro_rules! step_run_from {
     }};
 }
 
-async fn load_run(conn: &mut PgConnection, cipher: &dyn Cipher, id: RunId, lock: bool) -> DomainResult<Option<Run>> {
+async fn load_run(
+    conn: &mut PgConnection,
+    cipher: &dyn Cipher,
+    id: RunId,
+    lock: bool,
+) -> DomainResult<Option<Run>> {
     let row = if lock {
         sqlx::query_as!(
             RunRow,
@@ -173,7 +182,12 @@ async fn load_run(conn: &mut PgConnection, cipher: &dyn Cipher, id: RunId, lock:
     row.map(|r| run_from(cipher, r)).transpose()
 }
 
-async fn load_step_runs(conn: &mut PgConnection, cipher: &dyn Cipher, run: Option<RunId>, one: Option<StepRunId>) -> DomainResult<Vec<StepRun>> {
+async fn load_step_runs(
+    conn: &mut PgConnection,
+    cipher: &dyn Cipher,
+    run: Option<RunId>,
+    one: Option<StepRunId>,
+) -> DomainResult<Vec<StepRun>> {
     let rows = sqlx::query!(
         "SELECT id, workflow_run_id, snapshot_step_id, step_name, step_kind, status, position,
                 allow_failure, prompt, additional_context, expected_output, model_id, model_settings,
@@ -203,7 +217,11 @@ impl RunStore for PgStore {
         load_run(&mut conn, self.cipher.as_ref(), id, false).await
     }
 
-    async fn list_runs(&self, workflow: WorkflowId, filter: &RunListFilter) -> DomainResult<Vec<Run>> {
+    async fn list_runs(
+        &self,
+        workflow: WorkflowId,
+        filter: &RunListFilter,
+    ) -> DomainResult<Vec<Run>> {
         let rows = sqlx::query_as!(
             RunRow,
             "SELECT id, workflow_id, status, trigger, draft_test, snapshot, supplied_values,
@@ -220,7 +238,9 @@ impl RunStore for PgStore {
         .fetch_all(&self.pool)
         .await
         .map_err(db)?;
-        rows.into_iter().map(|r| run_from(self.cipher.as_ref(), r)).collect()
+        rows.into_iter()
+            .map(|r| run_from(self.cipher.as_ref(), r))
+            .collect()
     }
 
     async fn step_runs(&self, run: RunId) -> DomainResult<Vec<StepRun>> {
@@ -230,13 +250,21 @@ impl RunStore for PgStore {
 
     async fn find_step_run(&self, id: StepRunId) -> DomainResult<Option<StepRun>> {
         let mut conn = self.pool.acquire().await.map_err(db)?;
-        Ok(load_step_runs(&mut conn, self.cipher.as_ref(), None, Some(id))
-            .await?
-            .into_iter()
-            .next())
+        Ok(
+            load_step_runs(&mut conn, self.cipher.as_ref(), None, Some(id))
+                .await?
+                .into_iter()
+                .next(),
+        )
     }
 
-    async fn record_progress(&self, workflow: WorkflowId, run: RunId, step_run: StepRunId, session_content: &str) -> DomainResult<()> {
+    async fn record_progress(
+        &self,
+        workflow: WorkflowId,
+        run: RunId,
+        step_run: StepRunId,
+        session_content: &str,
+    ) -> DomainResult<()> {
         let mut tx = self.pool.begin().await.map_err(db)?;
         let updated = sqlx::query!(
             "UPDATE step_runs SET session_content = $2, updated_at = now() WHERE id = $1 AND status = 'running'",
@@ -283,7 +311,10 @@ impl RunTx for PgTx {
             run.trigger.as_str(),
             run.draft_test,
             serde_json::to_value(&run.snapshot).map_err(DomainError::internal)?,
-            enc_json(cipher.as_ref(), &Some(Value::Object(run.supplied_values.clone()))),
+            enc_json(
+                cipher.as_ref(),
+                &Some(Value::Object(run.supplied_values.clone()))
+            ),
             run.schedule_occurrence_key,
             run.queued_at,
             run.created_at,
@@ -343,7 +374,8 @@ impl RunTx for PgTx {
                     id: r.id.into(),
                     snapshot_step_id: r.snapshot_step_id.to_string(),
                     step_name: r.step_name,
-                    status: StepRunStatus::parse(&r.status).ok_or_else(|| corrupt("step run status"))?,
+                    status: StepRunStatus::parse(&r.status)
+                        .ok_or_else(|| corrupt("step run status"))?,
                     allow_failure: r.allow_failure,
                     human_error: r.human_error,
                     started_at: r.started_at,
@@ -369,7 +401,8 @@ impl RunTx for PgTx {
                     id: r.id.into(),
                     snapshot_step_id: r.snapshot_step_id.to_string(),
                     step_name: r.step_name,
-                    status: StepRunStatus::parse(&r.status).ok_or_else(|| corrupt("step run status"))?,
+                    status: StepRunStatus::parse(&r.status)
+                        .ok_or_else(|| corrupt("step run status"))?,
                     allow_failure: r.allow_failure,
                     output: dec_json(cipher, r.output, "output")?,
                     output_text: dec_text(cipher, r.output_text, "output text")?,
@@ -467,7 +500,12 @@ impl RunTx for PgTx {
         .collect())
     }
 
-    async fn finish_step_run(&mut self, id: StepRunId, from: StepRunStatus, f: &StepFinish) -> DomainResult<bool> {
+    async fn finish_step_run(
+        &mut self,
+        id: StepRunId,
+        from: StepRunStatus,
+        f: &StepFinish,
+    ) -> DomainResult<bool> {
         let cipher = self.cipher.clone();
         Ok(sqlx::query!(
             "UPDATE step_runs SET status = $3, ended_at = $4, elapsed_ms = $5, output = $6, output_text = $7,
@@ -494,7 +532,11 @@ impl RunTx for PgTx {
             == 1)
     }
 
-    async fn reset_step_runs(&mut self, ids: &[StepRunId], from: &[StepRunStatus]) -> DomainResult<Vec<StepRunId>> {
+    async fn reset_step_runs(
+        &mut self,
+        ids: &[StepRunId],
+        from: &[StepRunStatus],
+    ) -> DomainResult<Vec<StepRunId>> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -515,7 +557,12 @@ impl RunTx for PgTx {
         .collect())
     }
 
-    async fn set_workflow_last_run(&mut self, workflow: WorkflowId, at: Timestamp, status: RunStatus) -> DomainResult<()> {
+    async fn set_workflow_last_run(
+        &mut self,
+        workflow: WorkflowId,
+        at: Timestamp,
+        status: RunStatus,
+    ) -> DomainResult<()> {
         sqlx::query!(
             "UPDATE workflows SET last_run_at = $2, last_run_status = $3, updated_at = now() WHERE id = $1",
             workflow.as_uuid(),
@@ -529,23 +576,29 @@ impl RunTx for PgTx {
     }
 
     async fn delete_run(&mut self, id: RunId) -> DomainResult<bool> {
-        Ok(sqlx::query!("DELETE FROM workflow_runs WHERE id = $1", id.as_uuid())
-            .execute(&mut *self.tx)
-            .await
-            .map_err(db)?
-            .rows_affected()
-            == 1)
+        Ok(
+            sqlx::query!("DELETE FROM workflow_runs WHERE id = $1", id.as_uuid())
+                .execute(&mut *self.tx)
+                .await
+                .map_err(db)?
+                .rows_affected()
+                == 1,
+        )
     }
 }
 
 /// A duplicate occurrence key means the occurrence was already dispatched.
-pub const OCCURRENCE_TAKEN: &str = crate::features::scheduling::application::dispatch_due::OCCURRENCE_TAKEN;
+pub const OCCURRENCE_TAKEN: &str =
+    crate::features::scheduling::application::dispatch_due::OCCURRENCE_TAKEN;
 
 pub(crate) fn insert_error(error: sqlx::Error) -> DomainError {
     if let sqlx::Error::Database(e) = &error
         && e.constraint() == Some("index_workflow_runs_on_schedule_occurrence_key")
     {
-        return DomainError::precondition(OCCURRENCE_TAKEN, "This occurrence was already dispatched.");
+        return DomainError::precondition(
+            OCCURRENCE_TAKEN,
+            "This occurrence was already dispatched.",
+        );
     }
     db(error)
 }

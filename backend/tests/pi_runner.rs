@@ -4,10 +4,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use glyph_backend::features::runs::{OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner};
-use glyph_backend::features::workflows::{CatalogReader, CatalogView};
+use glyph_backend::features::runs::{
+    OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner,
+};
 use glyph_backend::features::workflows::catalog_view::CatalogModel;
 use glyph_backend::features::workflows::snapshot::SnapshotTool;
+use glyph_backend::features::workflows::{CatalogReader, CatalogView};
 use glyph_backend::infrastructure::pi::runner::{PI_MAX_OUTPUT_TOKENS, PiConfig, PiStepRunner};
 use glyph_backend::shared::error::DomainResult;
 use glyph_backend::shared::ids::{RunId, StepRunId, WorkflowId};
@@ -94,8 +96,19 @@ async fn success_and_evidence() {
     assert_eq!(o.status, OutcomeStatus::Success, "{o:?}");
     assert_eq!(o.output_text.as_deref(), Some("the answer"));
     assert_eq!(o.messages.as_ref().unwrap().as_array().unwrap().len(), 2);
-    assert!(o.session_content.as_deref().unwrap().contains("agent_start"));
-    assert!(o.session_content.as_deref().unwrap().contains("\"env_has_key\":\"\""), "key not in env");
+    assert!(
+        o.session_content
+            .as_deref()
+            .unwrap()
+            .contains("agent_start")
+    );
+    assert!(
+        o.session_content
+            .as_deref()
+            .unwrap()
+            .contains("\"env_has_key\":\"\""),
+        "key not in env"
+    );
     assert_eq!(o.usage, Some(json!({ "totalTokens": 12 })));
     assert_eq!(o.exit_status, Some(0));
 }
@@ -105,12 +118,18 @@ async fn outcome_branches() {
     let o = run("error-model", md()).await;
     assert_eq!(o.status, OutcomeStatus::ModelError);
     assert!(o.technical_error.unwrap().contains("no such model"));
-    assert_eq!(run("garbage-model", md()).await.status, OutcomeStatus::MalformedOutput);
+    assert_eq!(
+        run("garbage-model", md()).await.status,
+        OutcomeStatus::MalformedOutput
+    );
     let o = run("exit-model", md()).await;
     assert_eq!(o.status, OutcomeStatus::ExitError);
     assert!(o.technical_error.unwrap().contains("boom happened"));
     let o = run("empty-model", md()).await;
-    assert_eq!(o.human_error.as_deref(), Some("The agent finished without producing any output."));
+    assert_eq!(
+        o.human_error.as_deref(),
+        Some("The agent finished without producing any output.")
+    );
     let o = run("utf8-model", md()).await;
     assert_eq!(o.output_text.as_deref(), Some("café → 日本語"));
 }
@@ -120,39 +139,96 @@ async fn output_formats() {
     let o = run("json-model", OutputFileFormat::Json).await;
     assert_eq!(o.output, Some(json!({ "key": "value" })));
     let o = run("bad-json-model", OutputFileFormat::Json).await;
-    assert_eq!(o.human_error.as_deref(), Some("The agent did not produce valid JSON."));
+    assert_eq!(
+        o.human_error.as_deref(),
+        Some("The agent did not produce valid JSON.")
+    );
     assert!(!o.technical_error.unwrap().contains("not json at all"));
-    assert_eq!(run("html-model", OutputFileFormat::Html).await.status, OutcomeStatus::Success);
+    assert_eq!(
+        run("html-model", OutputFileFormat::Html).await.status,
+        OutcomeStatus::Success
+    );
     let o = run("fenced-html-model", OutputFileFormat::Html).await;
-    assert_eq!(o.output_text.as_deref(), Some("<!doctype html>\n<html><body>Hi</body></html>"));
+    assert_eq!(
+        o.output_text.as_deref(),
+        Some("<!doctype html>\n<html><body>Hi</body></html>")
+    );
     let o = run("fragment-model", OutputFileFormat::Html).await;
-    assert_eq!(o.human_error.as_deref(), Some("The agent did not produce a complete HTML document."));
-    assert_eq!(run("zip-model", OutputFileFormat::Zip).await.status, OutcomeStatus::Success);
+    assert_eq!(
+        o.human_error.as_deref(),
+        Some("The agent did not produce a complete HTML document.")
+    );
+    assert_eq!(
+        run("zip-model", OutputFileFormat::Zip).await.status,
+        OutcomeStatus::Success
+    );
     let o = run("bad-zip-model", OutputFileFormat::Zip).await;
-    assert_eq!(o.human_error.as_deref(), Some("The agent did not produce valid base64 ZIP data."));
+    assert_eq!(
+        o.human_error.as_deref(),
+        Some("The agent did not produce valid base64 ZIP data.")
+    );
 }
 
 #[tokio::test]
 async fn argv_env_models_json_and_cleanup() {
     let capture = tempfile::tempdir().unwrap();
     let mut ctx = context("velox/ok-model", OutputFileFormat::Html);
-    ctx.prompt = Some(format!("Follow {{{{style}}}} for {{{{topic}}}}.\nCAPTURE_DIR={}", capture.path().display()));
+    ctx.prompt = Some(format!(
+        "Follow {{{{style}}}} for {{{{topic}}}}.\nCAPTURE_DIR={}",
+        capture.path().display()
+    ));
     ctx.inputs.insert("style".into(), json!("the guide"));
     ctx.additional_context = Some("Style: {{style}}".into());
     ctx.enabled_tools = vec![
-        SnapshotTool { key: "read".into(), display_name: "Read".into(), pi_tool_name: "read".into() },
-        SnapshotTool { key: "bash".into(), display_name: "Bash".into(), pi_tool_name: "bash".into() },
+        SnapshotTool {
+            key: "read".into(),
+            display_name: "Read".into(),
+            pi_tool_name: "read".into(),
+        },
+        SnapshotTool {
+            key: "bash".into(),
+            display_name: "Bash".into(),
+            pi_tool_name: "bash".into(),
+        },
     ];
-    let o = runner(Duration::from_secs(10)).run(ctx, Arc::new(Progress::default())).await;
+    let o = runner(Duration::from_secs(10))
+        .run(ctx, Arc::new(Progress::default()))
+        .await;
     // HTML was requested (to check the directive) but the fake answers prose.
     assert_eq!(o.status, OutcomeStatus::MalformedOutput, "{o:?}");
 
     let read = |f: &str| std::fs::read_to_string(capture.path().join(f)).unwrap();
-    let argv: Vec<String> = read("argv").split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect();
+    let argv: Vec<String> = read("argv")
+        .split('\0')
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
     let workdir = PathBuf::from(read("workdir"));
-    assert_eq!(&argv[..9], &["--print", "--mode", "json", "--provider", "velox", "--model", "ok-model", "--api-key", KEY]);
+    assert_eq!(
+        &argv[..9],
+        &[
+            "--print",
+            "--mode",
+            "json",
+            "--provider",
+            "velox",
+            "--model",
+            "ok-model",
+            "--api-key",
+            KEY
+        ]
+    );
     assert_eq!(&argv[9..11], &["--tools", "read,bash"]);
-    assert_eq!(&argv[11..16], &["--no-session", "--no-extensions", "--no-skills", "--no-context-files", "--system-prompt"]);
+    assert_eq!(
+        &argv[11..16],
+        &[
+            "--no-session",
+            "--no-extensions",
+            "--no-skills",
+            "--no-context-files",
+            "--system-prompt"
+        ]
+    );
     assert!(argv[16].starts_with("You are executing one step of an automated workflow."));
     assert!(argv[16].contains("single complete HTML document"));
     assert_eq!(argv[17], format!("@{}/prompt.md", workdir.display()));
@@ -164,9 +240,23 @@ async fn argv_env_models_json_and_cleanup() {
         .filter_map(|l| l.strip_prefix("declare -x "))
         .map(|l| l.split('=').next().unwrap().to_string())
         .collect();
-    let allowed = ["HOME", "PATH", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "PWD", "SHLVL", "OLDPWD", "_"];
+    let allowed = [
+        "HOME",
+        "PATH",
+        "TZ",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "NODE_EXTRA_CA_CERTS",
+        "PWD",
+        "SHLVL",
+        "OLDPWD",
+        "_",
+    ];
     for name in &names {
-        assert!(allowed.contains(&name.as_str()), "unexpected env var {name}");
+        assert!(
+            allowed.contains(&name.as_str()),
+            "unexpected env var {name}"
+        );
     }
     assert!(names.contains(&"HOME".to_string()) && names.contains(&"PATH".to_string()));
     assert_eq!(read("cwd"), workdir.join("work").display().to_string());
@@ -193,18 +283,32 @@ async fn no_tools_flag_provider_resolution_and_missing_keys() {
     let capture = tempfile::tempdir().unwrap();
     let mut ctx = context("ok-model", md());
     ctx.prompt = Some(format!("x\nCAPTURE_DIR={}", capture.path().display()));
-    runner(Duration::from_secs(10)).run(ctx, Arc::new(Progress::default())).await;
+    runner(Duration::from_secs(10))
+        .run(ctx, Arc::new(Progress::default()))
+        .await;
     let argv = std::fs::read_to_string(capture.path().join("argv")).unwrap();
     assert!(argv.contains("\0--no-tools\0"));
-    assert!(argv.contains("--provider\0velox\0"), "bare ids default to velox");
+    assert!(
+        argv.contains("--provider\0velox\0"),
+        "bare ids default to velox"
+    );
 
     // A bare id the catalog knows resolves to its provider; omniroute has no key.
     let o = run("omni-only", md()).await;
     assert_eq!(o.status, OutcomeStatus::InternalError);
-    assert_eq!(o.human_error.as_deref(), Some("The step could not be executed."));
-    assert_eq!(o.technical_error.as_deref(), Some("Runner internal error: OMNIROUTE_API_KEY is not configured"));
+    assert_eq!(
+        o.human_error.as_deref(),
+        Some("The step could not be executed.")
+    );
+    assert_eq!(
+        o.technical_error.as_deref(),
+        Some("Runner internal error: OMNIROUTE_API_KEY is not configured")
+    );
     let o = run("openai/gpt-5", md()).await;
-    assert_eq!(o.technical_error.as_deref(), Some("Runner internal error: OPENAI_API_KEY is not configured"));
+    assert_eq!(
+        o.technical_error.as_deref(),
+        Some("Runner internal error: OPENAI_API_KEY is not configured")
+    );
 }
 
 #[tokio::test]
@@ -218,22 +322,31 @@ async fn secrets_are_redacted() {
 #[tokio::test]
 async fn huge_prompts_travel_as_a_file() {
     let mut ctx = context("ok-model", md());
-    ctx.inputs.insert("documents".into(), json!(["x".repeat(70_000), "y".repeat(70_000), "z".repeat(70_000)]));
-    let o = runner(Duration::from_secs(10)).run(ctx, Arc::new(Progress::default())).await;
+    ctx.inputs.insert(
+        "documents".into(),
+        json!(["x".repeat(70_000), "y".repeat(70_000), "z".repeat(70_000)]),
+    );
+    let o = runner(Duration::from_secs(10))
+        .run(ctx, Arc::new(Progress::default()))
+        .await;
     assert_eq!(o.status, OutcomeStatus::Success, "{:?}", o.technical_error);
 }
 
 #[tokio::test]
 async fn tool_calls_and_progress() {
     let progress = Arc::new(Progress::default());
-    let o = runner(Duration::from_secs(10)).run(context("tools-model", md()), progress.clone()).await;
+    let o = runner(Duration::from_secs(10))
+        .run(context("tools-model", md()), progress.clone())
+        .await;
     assert_eq!(o.output_text.as_deref(), Some("listed"));
     let messages = o.messages.unwrap();
     assert_eq!(messages[1]["tool_calls"], 1);
     assert!(!progress.0.lock().unwrap().is_empty());
 
     let progress = Arc::new(Progress::default());
-    let o = runner(Duration::from_secs(10)).run(context("slow-model", md()), progress.clone()).await;
+    let o = runner(Duration::from_secs(10))
+        .run(context("slow-model", md()), progress.clone())
+        .await;
     assert_eq!(o.output_text.as_deref(), Some("slow answer"));
     let reports = progress.0.lock().unwrap().clone();
     assert!(reports.len() >= 2, "{reports:?}");
@@ -244,17 +357,37 @@ async fn tool_calls_and_progress() {
 #[tokio::test]
 async fn timeouts_terminate_then_kill() {
     let started = Instant::now();
-    let o = runner(Duration::from_secs(1)).run(context("hang-model", md()), Arc::new(Progress::default())).await;
+    let o = runner(Duration::from_secs(1))
+        .run(context("hang-model", md()), Arc::new(Progress::default()))
+        .await;
     assert_eq!(o.status, OutcomeStatus::Timeout);
-    assert_eq!(o.human_error.as_deref(), Some("The agent did not finish within 1 seconds."));
-    assert!(o.technical_error.unwrap().starts_with("Process timed out. Partial output:"));
+    assert_eq!(
+        o.human_error.as_deref(),
+        Some("The agent did not finish within 1 seconds.")
+    );
+    assert!(
+        o.technical_error
+            .unwrap()
+            .starts_with("Process timed out. Partial output:")
+    );
     assert!(o.session_content.unwrap().contains("agent_start"));
-    assert!(started.elapsed() < Duration::from_secs(3), "SIGTERM ends it promptly");
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "SIGTERM ends it promptly"
+    );
 
     // A process ignoring SIGTERM is killed after the 3s grace.
     let started = Instant::now();
-    let o = runner(Duration::from_secs(1)).run(context("stubborn-model", md()), Arc::new(Progress::default())).await;
+    let o = runner(Duration::from_secs(1))
+        .run(
+            context("stubborn-model", md()),
+            Arc::new(Progress::default()),
+        )
+        .await;
     assert_eq!(o.status, OutcomeStatus::Timeout);
     let elapsed = started.elapsed();
-    assert!(elapsed >= Duration::from_secs(4) && elapsed < Duration::from_secs(7), "{elapsed:?}");
+    assert!(
+        elapsed >= Duration::from_secs(4) && elapsed < Duration::from_secs(7),
+        "{elapsed:?}"
+    );
 }

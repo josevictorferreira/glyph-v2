@@ -189,7 +189,14 @@ pub fn run(r: &Run, step_runs: &[StepRun], full: bool) -> pb::Run {
         supplied_values: r
             .supplied_values
             .iter()
-            .map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())))
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    v.as_str()
+                        .map(str::to_string)
+                        .unwrap_or_else(|| v.to_string()),
+                )
+            })
             .collect(),
         snapshot: Some(snapshot(&r.snapshot, full)),
         step_runs: step_runs.iter().map(step_summary).collect(),
@@ -214,12 +221,21 @@ pub fn resolved_inputs(value: Option<&serde_json::Value>) -> Vec<pb::ResolvedInp
     map.iter()
         .map(|(name, entry)| {
             let source = entry.get("source");
-            let str_of = |k: &str| source.and_then(|s| s.get(k)).and_then(|v| v.as_str()).map(str::to_string);
+            let str_of = |k: &str| {
+                source
+                    .and_then(|s| s.get(k))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            };
             pb::ResolvedInput {
                 name: name.clone(),
-                value: entry.get("value").filter(|v| !v.is_null()).map(json_to_value),
+                value: entry
+                    .get("value")
+                    .filter(|v| !v.is_null())
+                    .map(json_to_value),
                 source: Some(pb::InputSource {
-                    kind: source_kind(source.and_then(|s| s.get("kind")).and_then(|v| v.as_str())) as i32,
+                    kind: source_kind(source.and_then(|s| s.get("kind")).and_then(|v| v.as_str()))
+                        as i32,
                     step_run_id: str_of("step_run_id"),
                     workflow_input_id: str_of("workflow_input_id"),
                     label: str_of("label").unwrap_or_default(),
@@ -236,10 +252,21 @@ pub fn messages(value: Option<&serde_json::Value>) -> Vec<pb::AgentMessage> {
             items
                 .iter()
                 .map(|m| pb::AgentMessage {
-                    role: m.get("role").and_then(|v| v.as_str()).unwrap_or_default().into(),
-                    text: m.get("text").and_then(|v| v.as_str()).unwrap_or_default().into(),
+                    role: m
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .into(),
+                    text: m
+                        .get("text")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .into(),
                     tool_calls: m.get("tool_calls").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-                    stop_reason: m.get("stop_reason").and_then(|v| v.as_str()).map(str::to_string),
+                    stop_reason: m
+                        .get("stop_reason")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string),
                     error: m.get("error").and_then(|v| v.as_str()).map(str::to_string),
                 })
                 .collect()
@@ -250,14 +277,20 @@ pub fn messages(value: Option<&serde_json::Value>) -> Vec<pb::AgentMessage> {
 pub fn transcript(session_content: Option<&str>) -> Vec<pb::TranscriptBlock> {
     use crate::features::runs::domain::session_transcript::{Block, ToolState, blocks};
     use pb::transcript_block::Block as B;
-    let Some(content) = session_content else { return Vec::new() };
+    let Some(content) = session_content else {
+        return Vec::new();
+    };
     blocks(content)
         .into_iter()
         .map(|b| pb::TranscriptBlock {
             block: Some(match b {
                 Block::Text(text) => B::Text(pb::TranscriptText { text }),
                 Block::Thinking(text) => B::Thinking(pb::TranscriptThinking { text }),
-                Block::Tool { name, summary, state } => B::Tool(pb::TranscriptTool {
+                Block::Tool {
+                    name,
+                    summary,
+                    state,
+                } => B::Tool(pb::TranscriptTool {
                     name,
                     summary,
                     state: match state {

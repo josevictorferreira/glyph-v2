@@ -17,11 +17,27 @@ pub enum IntervalUnit {
 /// The recurrence builder shapes the editor offers, plus a raw cron escape hatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Recurrence {
-    Interval { every: i32, unit: IntervalUnit },
-    Daily { hour: i32, minute: i32 },
-    Weekly { weekday: i32, hour: i32, minute: i32 },
-    Monthly { day: i32, hour: i32, minute: i32 },
-    Cron { expression: String },
+    Interval {
+        every: i32,
+        unit: IntervalUnit,
+    },
+    Daily {
+        hour: i32,
+        minute: i32,
+    },
+    Weekly {
+        weekday: i32,
+        hour: i32,
+        minute: i32,
+    },
+    Monthly {
+        day: i32,
+        hour: i32,
+        minute: i32,
+    },
+    Cron {
+        expression: String,
+    },
 }
 
 impl Recurrence {
@@ -38,7 +54,13 @@ impl Recurrence {
 }
 
 const WEEKDAYS: [&str; 7] = [
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
 ];
 
 /// Serializes a builder shape to cron; `None` when out of range.
@@ -60,9 +82,9 @@ pub fn cron_for(recurrence: &Recurrence) -> Option<String> {
             hour,
             minute,
         } => Some(format!("{minute} {hour} * * {weekday}")),
-        Recurrence::Monthly { day, hour, minute } => {
-            (1..=31).contains(day).then(|| format!("{minute} {hour} {day} * *"))
-        }
+        Recurrence::Monthly { day, hour, minute } => (1..=31)
+            .contains(day)
+            .then(|| format!("{minute} {hour} {day} * *")),
         Recurrence::Cron { expression } => {
             let expression = expression.trim();
             parse_cron(expression).map(|_| expression.to_string())
@@ -80,7 +102,9 @@ pub fn human_description_for(recurrence: &Recurrence, timezone: &str) -> String 
             let plural = if *every == 1 { "" } else { "s" };
             format!("Every {every} {unit}{plural} ({timezone})")
         }
-        Recurrence::Daily { hour, minute } => format!("Daily at {hour:02}:{minute:02} ({timezone})"),
+        Recurrence::Daily { hour, minute } => {
+            format!("Daily at {hour:02}:{minute:02} ({timezone})")
+        }
         Recurrence::Weekly {
             weekday,
             hour,
@@ -145,15 +169,46 @@ mod tests {
     #[test]
     fn serializes_builder_shapes() {
         use IntervalUnit::*;
-        assert_eq!(cron_for(&Recurrence::Interval { every: 15, unit: Minutes }).unwrap(), "*/15 * * * *");
-        assert_eq!(cron_for(&Recurrence::Interval { every: 6, unit: Hours }).unwrap(), "7 */6 * * *");
-        assert_eq!(cron_for(&Recurrence::Daily { hour: 9, minute: 30 }).unwrap(), "30 9 * * *");
         assert_eq!(
-            cron_for(&Recurrence::Weekly { weekday: 1, hour: 9, minute: 0 }).unwrap(),
+            cron_for(&Recurrence::Interval {
+                every: 15,
+                unit: Minutes
+            })
+            .unwrap(),
+            "*/15 * * * *"
+        );
+        assert_eq!(
+            cron_for(&Recurrence::Interval {
+                every: 6,
+                unit: Hours
+            })
+            .unwrap(),
+            "7 */6 * * *"
+        );
+        assert_eq!(
+            cron_for(&Recurrence::Daily {
+                hour: 9,
+                minute: 30
+            })
+            .unwrap(),
+            "30 9 * * *"
+        );
+        assert_eq!(
+            cron_for(&Recurrence::Weekly {
+                weekday: 1,
+                hour: 9,
+                minute: 0
+            })
+            .unwrap(),
             "0 9 * * 1"
         );
         assert_eq!(
-            cron_for(&Recurrence::Monthly { day: 3, hour: 8, minute: 0 }).unwrap(),
+            cron_for(&Recurrence::Monthly {
+                day: 3,
+                hour: 8,
+                minute: 0
+            })
+            .unwrap(),
             "0 8 3 * *"
         );
     }
@@ -161,13 +216,46 @@ mod tests {
     #[test]
     fn rejects_invalid_shapes() {
         use IntervalUnit::*;
-        assert!(cron_for(&Recurrence::Interval { every: 0, unit: Minutes }).is_none());
-        assert!(cron_for(&Recurrence::Interval { every: 90, unit: Minutes }).is_none());
-        assert!(cron_for(&Recurrence::Interval { every: 24, unit: Hours }).is_none());
-        assert!(cron_for(&Recurrence::Monthly { day: 40, hour: 1, minute: 1 }).is_none());
-        assert!(cron_for(&Recurrence::Cron { expression: "nope".into() }).is_none());
+        assert!(
+            cron_for(&Recurrence::Interval {
+                every: 0,
+                unit: Minutes
+            })
+            .is_none()
+        );
+        assert!(
+            cron_for(&Recurrence::Interval {
+                every: 90,
+                unit: Minutes
+            })
+            .is_none()
+        );
+        assert!(
+            cron_for(&Recurrence::Interval {
+                every: 24,
+                unit: Hours
+            })
+            .is_none()
+        );
+        assert!(
+            cron_for(&Recurrence::Monthly {
+                day: 40,
+                hour: 1,
+                minute: 1
+            })
+            .is_none()
+        );
+        assert!(
+            cron_for(&Recurrence::Cron {
+                expression: "nope".into()
+            })
+            .is_none()
+        );
         assert_eq!(
-            cron_for(&Recurrence::Cron { expression: " 0 9 * * 1-5 ".into() }).unwrap(),
+            cron_for(&Recurrence::Cron {
+                expression: " 0 9 * * 1-5 ".into()
+            })
+            .unwrap(),
             "0 9 * * 1-5"
         );
     }
@@ -195,14 +283,16 @@ mod tests {
 
     #[test]
     fn honours_the_timezone_offset() {
-        let next = next_run_at("0 9 * * *", "America/Sao_Paulo", at("2026-08-04T11:30:00Z")).unwrap();
+        let next =
+            next_run_at("0 9 * * *", "America/Sao_Paulo", at("2026-08-04T11:30:00Z")).unwrap();
         assert_eq!(next, at("2026-08-04T12:00:00Z"));
     }
 
     #[test]
     fn handles_spring_forward_gap() {
         // 02:30 does not exist in New York on 2026-03-08.
-        let next = next_run_at("30 2 * * *", "America/New_York", at("2026-03-07T12:00:00Z")).unwrap();
+        let next =
+            next_run_at("30 2 * * *", "America/New_York", at("2026-03-07T12:00:00Z")).unwrap();
         let local = next.with_timezone(&chrono_tz::America::New_York);
         assert_eq!(local.offset().fix().local_minus_utc(), -4 * 3600);
     }
@@ -214,7 +304,10 @@ mod tests {
         let first = next_run_at("30 1 * * *", "Europe/London", from).unwrap();
         let second = next_run_at("30 1 * * *", "Europe/London", first).unwrap();
         assert_eq!(first.date_naive().to_string(), "2026-10-25");
-        assert!(second - first >= chrono::Duration::hours(23), "{first} {second}");
+        assert!(
+            second - first >= chrono::Duration::hours(23),
+            "{first} {second}"
+        );
         let _ = chrono_tz::Europe::London.from_utc_datetime(&first.naive_utc());
     }
 
@@ -228,11 +321,23 @@ mod tests {
     fn describes_each_shape() {
         use IntervalUnit::*;
         assert_eq!(
-            human_description_for(&Recurrence::Interval { every: 15, unit: Minutes }, "UTC"),
+            human_description_for(
+                &Recurrence::Interval {
+                    every: 15,
+                    unit: Minutes
+                },
+                "UTC"
+            ),
             "Every 15 minutes (UTC)"
         );
         assert_eq!(
-            human_description_for(&Recurrence::Interval { every: 1, unit: Hours }, "UTC"),
+            human_description_for(
+                &Recurrence::Interval {
+                    every: 1,
+                    unit: Hours
+                },
+                "UTC"
+            ),
             "Every 1 hour (UTC)"
         );
         assert_eq!(
@@ -240,15 +345,34 @@ mod tests {
             "Daily at 09:05 (UTC)"
         );
         assert_eq!(
-            human_description_for(&Recurrence::Weekly { weekday: 1, hour: 9, minute: 0 }, "UTC"),
+            human_description_for(
+                &Recurrence::Weekly {
+                    weekday: 1,
+                    hour: 9,
+                    minute: 0
+                },
+                "UTC"
+            ),
             "Mondays at 09:00 (UTC)"
         );
         assert_eq!(
-            human_description_for(&Recurrence::Monthly { day: 2, hour: 8, minute: 0 }, "UTC"),
+            human_description_for(
+                &Recurrence::Monthly {
+                    day: 2,
+                    hour: 8,
+                    minute: 0
+                },
+                "UTC"
+            ),
             "Monthly on day 2 at 08:00 (UTC)"
         );
         assert_eq!(
-            human_description_for(&Recurrence::Cron { expression: "0 9 * * 1-5".into() }, "UTC"),
+            human_description_for(
+                &Recurrence::Cron {
+                    expression: "0 9 * * 1-5".into()
+                },
+                "UTC"
+            ),
             "0 9 * * 1-5 (UTC)"
         );
     }

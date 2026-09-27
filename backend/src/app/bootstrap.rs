@@ -22,18 +22,17 @@ use crate::features::catalog::{
 use crate::features::definition::DefinitionService;
 use crate::features::definition::grpc::DefinitionGrpc;
 use crate::features::live::grpc::LiveGrpc;
-use crate::features::runs::{self, RunService, StepRunner};
 use crate::features::runs::grpc::RunGrpc;
+use crate::features::runs::{self, RunService, StepRunner};
+use crate::features::scheduling::{DISPATCH_DUE, DispatchDueWorkflows, SCHEDULING_QUEUE};
 use crate::features::workflows::WorkflowService;
 use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
 use crate::infrastructure::fake_runner::FakeStepRunner;
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
-use crate::features::scheduling::{DISPATCH_DUE, DispatchDueWorkflows, SCHEDULING_QUEUE};
 use crate::infrastructure::jobs::recurring::{self, Recurring};
 use crate::infrastructure::jobs::worker::Worker;
 use crate::infrastructure::pi::runner::{PiConfig, PiStepRunner};
-use crate::shared::redactor::Redactor;
 use crate::infrastructure::postgres::listener::{self, LiveHub};
 use crate::infrastructure::postgres::{self, PgStore};
 use crate::proto;
@@ -43,6 +42,7 @@ use crate::proto::pb::live_service_server::LiveServiceServer;
 use crate::proto::pb::run_service_server::RunServiceServer;
 use crate::proto::pb::workflow_service_server::WorkflowServiceServer;
 use crate::shared::error::DomainResult;
+use crate::shared::redactor::Redactor;
 use crate::shared::time::{Clock, SystemClock};
 
 /// Adapters that tests replace. `None` → the production adapter from config.
@@ -87,11 +87,20 @@ impl WorkflowFlagger for WorkflowsFlagger {
 }
 
 pub fn redactor(config: &Config) -> Redactor {
-    Redactor::new(config.secret_values.iter().map(|s| s.expose_secret().to_string()))
+    Redactor::new(
+        config
+            .secret_values
+            .iter()
+            .map(|s| s.expose_secret().to_string()),
+    )
 }
 
 /// Composition root: the only place that names concrete adapters.
-pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> anyhow::Result<App> {
+pub async fn build_with(
+    config: &Config,
+    pool: PgPool,
+    overrides: Overrides,
+) -> anyhow::Result<App> {
     postgres::migrate::run(&pool)
         .await
         .context("running migrations")?;
@@ -100,7 +109,10 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         AesGcmCipher::from_config(config.encryption_key.as_ref().map(|k| k.expose_secret()))
             .map_err(anyhow::Error::msg)?,
     );
-    let clock: Arc<dyn Clock> = overrides.clock.clone().unwrap_or_else(|| Arc::new(SystemClock));
+    let clock: Arc<dyn Clock> = overrides
+        .clock
+        .clone()
+        .unwrap_or_else(|| Arc::new(SystemClock));
     let store = PgStore::new(pool.clone(), cipher.clone());
 
     // --- workflows ---------------------------------------------------------
@@ -182,7 +194,16 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         cipher,
         runs: runs.clone(),
     };
-    let (_health_reporter, health_service) = tonic_health::server::health_reporter();
+    let (health_reporter, health_service) = tonic_health::server::health_reporter();
+    background.push(tokio::spawn({
+        let stop = stop.clone();
+        async move {
+            stop.cancelled().await;
+            health_reporter
+                .set_service_status("", tonic_health::ServingStatus::NotServing)
+                .await;
+        }
+    }));
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
@@ -194,8 +215,12 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
             list_models,
             refresh_models.clone(),
         )))
-        .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(workflows.clone())))
-        .add_service(DefinitionServiceServer::new(DefinitionGrpc::new(definitions)))
+        .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(
+            workflows.clone(),
+        )))
+        .add_service(DefinitionServiceServer::new(DefinitionGrpc::new(
+            definitions,
+        )))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
         .add_service(LiveServiceServer::new(LiveGrpc::new(
             Arc::new(hub),

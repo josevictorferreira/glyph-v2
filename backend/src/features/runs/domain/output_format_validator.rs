@@ -18,7 +18,8 @@ const BAD_JSON: &str = "The agent did not produce valid JSON.";
 const BAD_HTML: &str = "The agent did not produce a complete HTML document.";
 const BAD_ZIP: &str = "The agent did not produce valid base64 ZIP data.";
 
-static FENCE_OPEN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^```[A-Za-z0-9_-]*[ \t]*\r?\n?").unwrap());
+static FENCE_OPEN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^```[A-Za-z0-9_-]*[ \t]*\r?\n?").unwrap());
 static HTML_DOCUMENT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?is)(<!doctype\s+html[^>]*>.*?</html>|<html[^>]*>.*?</html>)").unwrap()
 });
@@ -41,7 +42,11 @@ pub fn validate(format: OutputFileFormat, text: &str) -> Result<String, &'static
 fn extract_html(text: &str) -> Option<String> {
     let mut s = text.trim().to_string();
     if s.contains("```") {
-        s = FENCE_OPEN.replace_all(&s, "").replace("```", "").trim().to_string();
+        s = FENCE_OPEN
+            .replace_all(&s, "")
+            .replace("```", "")
+            .trim()
+            .to_string();
     }
     HTML_DOCUMENT.find(&s).map(|m| m.as_str().to_string())
 }
@@ -87,7 +92,8 @@ pub(crate) mod tests {
         {
             let mut w = zip::ZipWriter::new(&mut buf);
             for (name, bytes) in entries {
-                w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+                w.start_file(*name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
                 w.write_all(bytes).unwrap();
             }
             w.finish().unwrap();
@@ -110,21 +116,48 @@ pub(crate) mod tests {
 
     #[test]
     fn html() {
-        assert!(validate(OutputFileFormat::Html, "<!doctype html><html><body>Hi</body></html>").is_ok());
-        assert!(validate(OutputFileFormat::Html, "<html><head></head><body></body></html>").is_ok());
+        assert!(
+            validate(
+                OutputFileFormat::Html,
+                "<!doctype html><html><body>Hi</body></html>"
+            )
+            .is_ok()
+        );
+        assert!(
+            validate(
+                OutputFileFormat::Html,
+                "<html><head></head><body></body></html>"
+            )
+            .is_ok()
+        );
         let wrapped = "Here is a self-contained HTML document.\n\n```html\n<!doctype html>\n<html><body>Hi</body></html>\n```\n";
         assert_eq!(
             validate(OutputFileFormat::Html, wrapped).unwrap(),
             "<!doctype html>\n<html><body>Hi</body></html>"
         );
-        assert_eq!(validate(OutputFileFormat::Html, "just some text"), Err(BAD_HTML));
-        assert_eq!(validate(OutputFileFormat::Html, "<div>fragment</div>"), Err(BAD_HTML));
+        assert_eq!(
+            validate(OutputFileFormat::Html, "just some text"),
+            Err(BAD_HTML)
+        );
+        assert_eq!(
+            validate(OutputFileFormat::Html, "<div>fragment</div>"),
+            Err(BAD_HTML)
+        );
     }
 
     #[test]
     fn zip() {
-        assert!(validate(OutputFileFormat::Zip, &zip_b64(&[("file.txt", b"hello world")])).is_ok());
-        assert_eq!(validate(OutputFileFormat::Zip, "not base64!!!"), Err(BAD_ZIP));
+        assert!(
+            validate(
+                OutputFileFormat::Zip,
+                &zip_b64(&[("file.txt", b"hello world")])
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            validate(OutputFileFormat::Zip, "not base64!!!"),
+            Err(BAD_ZIP)
+        );
         let not_zip = base64::engine::general_purpose::STANDARD.encode("just a string");
         assert_eq!(validate(OutputFileFormat::Zip, &not_zip), Err(BAD_ZIP));
         assert_eq!(validate(OutputFileFormat::Zip, ""), Err(BAD_ZIP));
@@ -134,8 +167,13 @@ pub(crate) mod tests {
 
     #[test]
     fn zip_bomb_caps() {
-        let many: Vec<(String, Vec<u8>)> = (0..=ZIP_MAX_ENTRIES).map(|i| (format!("f{i}"), Vec::new())).collect();
-        let refs: Vec<(&str, &[u8])> = many.iter().map(|(n, b)| (n.as_str(), b.as_slice())).collect();
+        let many: Vec<(String, Vec<u8>)> = (0..=ZIP_MAX_ENTRIES)
+            .map(|i| (format!("f{i}"), Vec::new()))
+            .collect();
+        let refs: Vec<(&str, &[u8])> = many
+            .iter()
+            .map(|(n, b)| (n.as_str(), b.as_slice()))
+            .collect();
         assert_eq!(
             validate(OutputFileFormat::Zip, &zip_b64(&refs)),
             Err("The ZIP archive exceeds the entry count limit.")
@@ -143,11 +181,16 @@ pub(crate) mod tests {
 
         // A tiny archive whose central directory declares a 2 GiB entry.
         let b64 = zip_b64(&[("big", b"x")]);
-        let mut bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        let mut bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
         let cd = bytes.windows(4).position(|w| w == b"PK\x01\x02").unwrap();
         bytes[cd + 24..cd + 28].copy_from_slice(&0x7FFF_FFFFu32.to_le_bytes());
         let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-        assert_eq!(validate(OutputFileFormat::Zip, &b64), Err("The ZIP archive exceeds the size limit."));
+        assert_eq!(
+            validate(OutputFileFormat::Zip, &b64),
+            Err("The ZIP archive exceeds the size limit.")
+        );
 
         let empty = zip_b64(&[]);
         // An empty archive has no local header; it is rejected as not-a-zip.

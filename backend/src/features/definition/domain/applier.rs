@@ -9,10 +9,10 @@ use serde_json::{Map, Value, json};
 
 use crate::features::definition::domain::layout;
 use crate::features::definition::domain::types::*;
+use crate::features::workflows::Events;
 use crate::features::workflows::events::{self, event};
 use crate::features::workflows::model::*;
 use crate::features::workflows::schedule_calculator;
-use crate::features::workflows::Events;
 use crate::shared::ids::*;
 use crate::shared::time::Timestamp;
 
@@ -85,7 +85,10 @@ impl Applier<'_> {
                     && c.destination_step_id != id
                     && !inputs.contains(&c.destination_input_id)
             });
-            self.publish(events::WORKFLOW_STEP_DELETED, json!({ "step_id": id.to_string() }));
+            self.publish(
+                events::WORKFLOW_STEP_DELETED,
+                json!({ "step_id": id.to_string() }),
+            );
         }
     }
 
@@ -163,7 +166,10 @@ impl Applier<'_> {
             .iter()
             .flat_map(|def| {
                 def.inputs.iter().filter_map(move |i| match &i.source {
-                    Some(Source { kind: SourceKind::Step, name }) => {
+                    Some(Source {
+                        kind: SourceKind::Step,
+                        name,
+                    }) => {
                         let lower = name.to_lowercase();
                         let source = self
                             .doc
@@ -203,7 +209,10 @@ impl Applier<'_> {
             if let Some(t) = def.temperature {
                 settings.insert("temperature".into(), json!(t));
             }
-            match def.id.and_then(|id| self.wf.steps.iter().position(|s| s.id == id)) {
+            match def
+                .id
+                .and_then(|id| self.wf.steps.iter().position(|s| s.id == id))
+            {
                 Some(i) => {
                     let before = self.wf.steps[i].clone();
                     let step = &mut self.wf.steps[i];
@@ -213,12 +222,20 @@ impl Applier<'_> {
                     let new_output = step.output_name.clone().unwrap_or_default();
                     let changed = *step != before;
                     if before.output_name != step.output_name {
-                        for c in self.wf.connections.iter_mut().filter(|c| c.source_step_id == id) {
+                        for c in self
+                            .wf
+                            .connections
+                            .iter_mut()
+                            .filter(|c| c.source_step_id == id)
+                        {
                             c.source_output_name = new_output.clone();
                         }
                     }
                     if changed {
-                        self.publish(events::WORKFLOW_STEP_UPDATED, json!({ "step_id": id.to_string() }));
+                        self.publish(
+                            events::WORKFLOW_STEP_UPDATED,
+                            json!({ "step_id": id.to_string() }),
+                        );
                     }
                     ids.push(id);
                 }
@@ -245,9 +262,16 @@ impl Applier<'_> {
 
     fn workflow_input_for(&self, input: &StepInputDef) -> Option<WorkflowInputId> {
         match &input.source {
-            Some(Source { kind: SourceKind::WorkflowInput, name }) => {
+            Some(Source {
+                kind: SourceKind::WorkflowInput,
+                name,
+            }) => {
                 let lower = name.to_lowercase();
-                self.wf.inputs.iter().find(|i| i.name.to_lowercase() == lower).map(|i| i.id)
+                self.wf
+                    .inputs
+                    .iter()
+                    .find(|i| i.name.to_lowercase() == lower)
+                    .map(|i| i.id)
             }
             _ => None,
         }
@@ -255,11 +279,16 @@ impl Applier<'_> {
 
     fn step_inputs(&mut self, step_ids: &[StepId]) {
         for (def, step_id) in self.doc.steps.iter().zip(step_ids) {
-            let mapped: Vec<Option<WorkflowInputId>> =
-                def.inputs.iter().map(|i| self.workflow_input_for(i)).collect();
+            let mapped: Vec<Option<WorkflowInputId>> = def
+                .inputs
+                .iter()
+                .map(|i| self.workflow_input_for(i))
+                .collect();
             let now = self.now;
             let mut new_events = Vec::new();
-            let Some(step) = self.wf.step_mut(*step_id) else { continue };
+            let Some(step) = self.wf.step_mut(*step_id) else {
+                continue;
+            };
             let mut remaining: Vec<StepInputId> = step.inputs.iter().map(|i| i.id).collect();
             let mut changed = false;
             for (index, (input, workflow_input_id)) in def.inputs.iter().zip(mapped).enumerate() {
@@ -333,7 +362,10 @@ impl Applier<'_> {
 
     fn step_by_name(&self, name: &str) -> Option<&Step> {
         let lower = name.to_lowercase();
-        self.wf.steps.iter().find(|s| s.name.to_lowercase() == lower)
+        self.wf
+            .steps
+            .iter()
+            .find(|s| s.name.to_lowercase() == lower)
     }
 
     fn connections(&mut self, step_ids: &[StepId]) {
@@ -341,8 +373,16 @@ impl Applier<'_> {
         let mut desired: Vec<((StepId, StepInputId), String)> = Vec::new();
         for (def, step_id) in self.doc.steps.iter().zip(step_ids) {
             for input in &def.inputs {
-                let Some(Source { kind: SourceKind::Step, name }) = &input.source else { continue };
-                let Some(source) = self.step_by_name(name) else { continue };
+                let Some(Source {
+                    kind: SourceKind::Step,
+                    name,
+                }) = &input.source
+                else {
+                    continue;
+                };
+                let Some(source) = self.step_by_name(name) else {
+                    continue;
+                };
                 let lower = input.name.to_lowercase();
                 let Some(destination) = self
                     .wf
@@ -357,7 +397,8 @@ impl Applier<'_> {
                 desired.push((key, output));
             }
         }
-        let mut desired_map: HashMap<(StepId, StepInputId), String> = desired.iter().cloned().collect();
+        let mut desired_map: HashMap<(StepId, StepInputId), String> =
+            desired.iter().cloned().collect();
 
         let existing: Vec<(ConnectionId, StepId, StepInputId)> = self
             .wf
@@ -382,9 +423,13 @@ impl Applier<'_> {
             }
         }
         for (key, output) in desired {
-            let Some(output) = desired_map.remove(&key).map(|_| output) else { continue };
+            let Some(output) = desired_map.remove(&key).map(|_| output) else {
+                continue;
+            };
             let (source, input) = key;
-            let Some(destination) = self.wf.step_input(input).map(|(s, _)| s.id) else { continue };
+            let Some(destination) = self.wf.step_input(input).map(|(s, _)| s.id) else {
+                continue;
+            };
             self.wf.connections.push(Connection {
                 id: ConnectionId::new(),
                 source_step_id: source,
@@ -459,7 +504,11 @@ impl Applier<'_> {
             .values
             .retain(|v| desired.iter().any(|(id, _)| *id == v.workflow_input_id));
         for (input, value) in &desired {
-            match schedule.values.iter_mut().find(|v| v.workflow_input_id == *input) {
+            match schedule
+                .values
+                .iter_mut()
+                .find(|v| v.workflow_input_id == *input)
+            {
                 Some(existing) => existing.value = Some(value.clone()),
                 None => schedule.values.push(ScheduleValue {
                     id: ScheduleValueId::new(),

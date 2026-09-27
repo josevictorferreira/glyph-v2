@@ -14,11 +14,7 @@ async fn up_returns_ok(pool: PgPool) {
     let response = server
         .router
         .clone()
-        .oneshot(
-            axum::http::Request::get("/up")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(axum::http::Request::get("/up").body(Body::empty()).unwrap())
         .await
         .unwrap();
     assert_eq!(response.status(), 200);

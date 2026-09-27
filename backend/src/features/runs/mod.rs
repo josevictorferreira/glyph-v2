@@ -11,6 +11,8 @@ pub use application::{NotCreated, RunService};
 pub use domain::engine::NewRun;
 pub use domain::model::{Run, RunStatus, RunTrigger, StepRun, StepRunStatus};
 pub use ports::repository::{RunStore, RunTx};
-pub use ports::step_runner::{OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner};
+pub use ports::step_runner::{
+    OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner,
+};
 
 pub use grpc::convert::transcript as transcript_blocks;
