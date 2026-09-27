@@ -1,0 +1,1 @@
+export { CatalogPlaceholder } from "./Catalog";

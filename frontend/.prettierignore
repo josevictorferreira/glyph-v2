@@ -1,0 +1,7 @@
+dist
+node_modules
+src/gen
+src/routeTree.gen.ts
+pnpm-lock.yaml
+test-results
+playwright-report

@@ -1,0 +1,160 @@
+@import "./tokens.css";
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  /* Motion: 150ms ease-out everywhere, off entirely for reduced-motion users. */
+  * {
+    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Skipped status gets a striped fill (spec: neutral striped). */
+.status-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, currentColor 30%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+/* Radix portals render outside the app tree; keep them on our tokens. */
+[data-slot="portal-root"] {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+}
+
+/* ── DAG canvas (spec 0017) ─────────────────────────────────────────────── */
+
+.glyph-canvas-wrapper .react-flow__attribution {
+  display: none;
+}
+
+/* Nodes */
+.glyph-node {
+  border-color: var(--c-border);
+  border-width: 1px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.glyph-node.glyph-node-selected {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-accent) 35%, transparent);
+}
+.glyph-node.glyph-node-first-failed {
+  border-color: var(--c-failed);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-failed) 40%, transparent);
+}
+
+/* Lens status painting */
+.glyph-node-succeeded {
+  border-color: color-mix(in srgb, var(--c-succeeded) 55%, var(--c-border));
+}
+.glyph-node-failed {
+  border-color: var(--c-failed);
+}
+.glyph-node-running {
+  border-color: var(--c-running);
+  animation: status-running 1.6s ease-in-out infinite;
+}
+.glyph-node-queued {
+  border-color: var(--c-border-strong);
+}
+.glyph-node-skipped,
+.glyph-node-cancelled {
+  opacity: 0.65;
+}
+
+/* Handles */
+.glyph-handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--c-surface);
+  background: var(--c-ink-subtle);
+}
+.glyph-handle-source {
+  width: 12px;
+  height: 12px;
+  background: var(--c-accent);
+}
+.glyph-handle-required {
+  background: var(--c-attention);
+}
+.glyph-handle.react-flow__handle-connectingvalid {
+  background: var(--c-succeeded);
+}
+.glyph-handle.react-flow__handle-connectinginvalid,
+.glyph-handle.connectableinvalid {
+  opacity: 0.35;
+}
+
+/* Edges: lens paints by source status. */
+.glyph-edge-pending .react-flow__edge-path {
+  stroke: var(--c-border-strong);
+  stroke-dasharray: 5 4;
+}
+.glyph-edge-succeeded .react-flow__edge-path {
+  stroke: var(--c-succeeded);
+}
+.glyph-edge-failed .react-flow__edge-path {
+  stroke: var(--c-failed);
+}
+.glyph-edge-cancelled .react-flow__edge-path {
+  stroke: var(--c-cancelled);
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--c-accent);
+  stroke-width: 2.5;
+}
+
+/* The connection-line svg overlays the pane while dragging; it must not
+   intercept elementFromPoint when dropping a connection on a card body. */
+svg.react-flow__connectionline {
+  pointer-events: none;
+}
+
+/* Canvas overlay chrome */
+.glyph-canvas-toolbar {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}
+.glyph-canvas-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+}

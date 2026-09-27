@@ -1,0 +1,116 @@
+/* Design tokens (spec 0014).
+   - One neutral scale, one accent, one shared status scale.
+   - Light and dark themes via [data-theme]; default follows prefers-color-scheme
+     (applied before paint in index.html, toggle persisted in localStorage).
+   - Compact density: 14px root font size.
+   - Concrete values live in --c-* variables; @theme maps them to Tailwind
+     utilities so theme switching swaps values at use time. */
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Neutral surfaces */
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+  --color-border: var(--c-border);
+  --color-border-strong: var(--c-border-strong);
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-ink-subtle: var(--c-ink-subtle);
+
+  /* Accent */
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-on-accent: var(--c-on-accent);
+
+  /* Run/step status scale (shared by list, badges, canvas, timeline) */
+  --color-status-queued: var(--c-queued);
+  --color-status-running: var(--c-running);
+  --color-status-succeeded: var(--c-succeeded);
+  --color-status-failed: var(--c-failed);
+  --color-status-skipped: var(--c-skipped);
+  --color-status-cancelled: var(--c-cancelled);
+
+  /* Workflow status scale */
+  --color-status-draft: var(--c-draft);
+  --color-status-active: var(--c-active);
+  --color-status-paused: var(--c-paused);
+  --color-status-attention: var(--c-attention);
+
+  --radius-card: 10px;
+  --animate-status-running: status-running 1.6s ease-in-out infinite;
+}
+
+:root {
+  font-size: 14px;
+  color-scheme: light;
+  --c-canvas: #f6f6f7;
+  --c-surface: #ffffff;
+  --c-surface-2: #efeff1;
+  --c-surface-3: #e6e6e9;
+  --c-border: #e2e2e6;
+  --c-border-strong: #c9c9d0;
+  --c-ink: #1c1c21;
+  --c-ink-muted: #5f5f6b;
+  --c-ink-subtle: #8b8b98;
+  --c-accent: #5b5bd6;
+  --c-accent-hover: #4c4cc4;
+  --c-accent-soft: #ececfb;
+  --c-on-accent: #ffffff;
+  --c-queued: #6f6f7c;
+  --c-running: #5b5bd6;
+  --c-succeeded: #15803d;
+  --c-failed: #dc2626;
+  --c-skipped: #9c9ca8;
+  --c-cancelled: #8b8b98;
+  --c-draft: #6f6f7c;
+  --c-active: #15803d;
+  --c-paused: #b45309;
+  --c-attention: #ea580c;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --c-canvas: #101014;
+  --c-surface: #17181d;
+  --c-surface-2: #1e1f25;
+  --c-surface-3: #26272f;
+  --c-border: #2a2b33;
+  --c-border-strong: #3a3b45;
+  --c-ink: #e8e8ec;
+  --c-ink-muted: #a2a3af;
+  --c-ink-subtle: #6f7080;
+  --c-accent: #7b7bee;
+  --c-accent-hover: #8f8ff2;
+  --c-accent-soft: #242449;
+  --c-on-accent: #101014;
+  --c-queued: #8b8c9a;
+  --c-running: #8f8ff2;
+  --c-succeeded: #4ade80;
+  --c-failed: #f87171;
+  --c-skipped: #6f7080;
+  --c-cancelled: #6f7080;
+  --c-draft: #8b8c9a;
+  --c-active: #4ade80;
+  --c-paused: #fbbf24;
+  --c-attention: #fb923c;
+}
+
+@keyframes status-running {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

@@ -271,7 +271,7 @@
           pg_start
           db_prepare
 
-          (cd "$ROOT/backend" && exec cargo run --bin glyph) &
+          (cd "$ROOT/backend" && SQLX_OFFLINE=true exec cargo run --bin glyph) &
           PIDS+=($!)
 
           if [ -f "$ROOT/frontend/package.json" ]; then
@@ -285,6 +285,7 @@
 
               http://localhost:$PORT/up      health
               localhost:$PORT                gRPC + gRPC-Web (grpcurl -plaintext localhost:$PORT list)
+              http://localhost:5173         web UI (Vite dev server, proxies API calls to :$PORT)
 
             Ctrl-C stops the server and PostgreSQL.
 
@@ -319,6 +320,19 @@
           cargo clippy --all-targets -- -D warnings
           cargo deny check
           cargo test
+
+          if [ -f "$ROOT/frontend/package.json" ]; then
+            cd "$ROOT/frontend"
+            pnpm install --frozen-lockfile
+            pnpm gen
+            if ! git -C "$ROOT" diff --exit-code -- frontend/src/gen; then
+              echo "frontend/src/gen is stale: commit the output of 'pnpm gen'" >&2
+              exit 1
+            fi
+            pnpm lint
+            pnpm typecheck
+            pnpm test
+          fi
         '';
 
         seed = mkApp "seed" ''
