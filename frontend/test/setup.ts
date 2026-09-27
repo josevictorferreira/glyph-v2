@@ -42,16 +42,20 @@ if (typeof window !== "undefined" && !("DOMMatrixReadOnly" in window)) {
 }
 
 if (typeof window !== "undefined" && !("ResizeObserver" in window)) {
+  const entry = (target: Element): ResizeObserverEntry =>
+    ({
+      target,
+      contentRect: { x: 0, y: 0, width: 240, height: 88, top: 0, left: 0, right: 240, bottom: 88 },
+      // react-resizable-panels v4 reads the boxed sizes (arrays in the spec).
+      contentBoxSize: [{ inlineSize: 240, blockSize: 88 }],
+      borderBoxSize: [{ inlineSize: 240, blockSize: 88 }],
+      devicePixelContentBoxSize: [{ inlineSize: 240, blockSize: 88 }],
+    }) as unknown as ResizeObserverEntry;
   class ResizeObserverStub {
     observe(target: Element) {
       // React Flow needs a measured size before it renders edges; jsdom has no
       // layout, so report a card-sized rect immediately.
-      queueMicrotask(() =>
-        this.callback(
-          [{ target, contentRect: { x: 0, y: 0, width: 240, height: 88, top: 0, left: 0, right: 240, bottom: 88 } }] as ResizeObserverEntry[],
-          this as unknown as ResizeObserver,
-        ),
-      );
+      queueMicrotask(() => this.callback([entry(target)], this as unknown as ResizeObserver));
     }
     unobserve() {}
     disconnect() {}

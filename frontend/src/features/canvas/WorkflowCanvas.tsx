@@ -67,6 +67,8 @@ export interface WorkflowCanvasBuildProps extends SelectionProps {
   workflow: Workflow;
   issues: readonly Issue[];
   onImportYaml?: () => void;
+  /** Center the viewport on this step (readiness deep links). */
+  panToStepId?: string;
 }
 
 export interface WorkflowCanvasLensProps extends SelectionProps {
@@ -154,13 +156,13 @@ function useDerivedNodes(
   return [nodes, setNodes, onNodesChange] as const;
 }
 
-function BuildCanvas({ workflow, issues, onImportYaml, ...selection }: WorkflowCanvasBuildProps) {
+function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection }: WorkflowCanvasBuildProps) {
   const workflowId = workflow.summary?.id ?? "";
   const { selectedStepId, onSelectStep, onOpenStep } = selection;
   const [menu, setMenu] = useState<{ x: number; y: number; stepId?: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  const { screenToFlowPosition, fitView, setViewport, getViewport } = useReactFlow();
+  const { screenToFlowPosition, fitView, setViewport, getViewport, setCenter } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const interactingRef = useRef(false);
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,8 +213,7 @@ function BuildCanvas({ workflow, issues, onImportYaml, ...selection }: WorkflowC
   }, [version]);
 
   // Viewport persistence (per workflow).
-  const storageKey = `glyph.canvas.viewport.${workflowId}`;
-  useEffect(() => {
+  const storageKey = `glyph.canvas.viewport.${workflowId}`;  useEffect(() => {
     const raw = localStorage.getItem(storageKey);
     if (raw) {
       try {
@@ -225,6 +226,20 @@ function BuildCanvas({ workflow, issues, onImportYaml, ...selection }: WorkflowC
     void fitView({ padding: 0.2, duration: 200 });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per workflow
   }, [workflowId]);
+
+  // Center the requested step when a deep link arrives (spec 0018 readiness).
+  useEffect(() => {
+    if (!panToStepId) return;
+    const node = nodes.find((n) => n.id === panToStepId);
+    const step = workflow.steps.find((s) => s.id === panToStepId);
+    if (!node && !step) return;
+    const width = node?.measured?.width ?? 200;
+    const height = node?.measured?.height ?? 80;
+    const x = (node?.position.x ?? step?.canvasX ?? 0) + width / 2;
+    const y = (node?.position.y ?? step?.canvasY ?? 0) + height / 2;
+    void setCenter(x, y, { zoom: getViewport().zoom, duration: 300 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pan once per request
+  }, [panToStepId]);
 
   const addAt = useCallback(
     (kind: StepKindEnum, flow?: { x: number; y: number }) => {
