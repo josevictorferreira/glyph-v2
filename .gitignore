@@ -1,2 +1,14 @@
+# Local environment
+.dev/
+.env
+.env*.local
+
+# Rust
+backend/target/
+
+# Node
+node_modules/
+
+# Tooling state
 .omc/
 .omo/
