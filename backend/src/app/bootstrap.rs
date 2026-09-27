@@ -31,6 +31,8 @@ use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
 use crate::infrastructure::fake_runner::FakeStepRunner;
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
 use crate::infrastructure::jobs::worker::Worker;
+use crate::infrastructure::pi::runner::{PiConfig, PiStepRunner};
+use crate::shared::redactor::Redactor;
 use crate::infrastructure::postgres::{self, PgStore};
 use crate::proto;
 use crate::proto::pb::catalog_service_server::CatalogServiceServer;
@@ -77,6 +79,10 @@ impl WorkflowFlagger for WorkflowsFlagger {
     async fn flag_workflows_using_models(&self, model_ids: &[String]) -> DomainResult<usize> {
         self.0.flag_workflows_using_models(model_ids).await
     }
+}
+
+pub fn redactor(config: &Config) -> Redactor {
+    Redactor::new(config.secret_values.iter().map(|s| s.expose_secret().to_string()))
 }
 
 /// Composition root: the only place that names concrete adapters.
@@ -139,7 +145,18 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         Some(runner) => runner,
         None => match config.step_runner {
             StepRunnerKind::Fake => Arc::new(FakeStepRunner),
-            StepRunnerKind::Pi => Arc::new(FakeStepRunner),
+            StepRunnerKind::Pi => Arc::new(PiStepRunner::new(
+                PiConfig {
+                    pi_bin: config.pi_bin.clone(),
+                    timeout: config.pi_timeout,
+                    velox_base_url: config.velox_base_url.clone(),
+                    omniroute_base_url: config.omniroute_base_url.clone(),
+                    velox_api_key: config.velox_api_key.clone(),
+                    omniroute_api_key: config.omniroute_api_key.clone(),
+                },
+                Arc::new(store.clone()),
+                redactor(config),
+            )),
         },
     };
     let runs = RunService::new(

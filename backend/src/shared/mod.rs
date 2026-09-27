@@ -4,5 +4,6 @@ pub mod events;
 pub mod ids;
 pub mod issue;
 pub mod output_format;
+pub mod redactor;
 pub mod time;
 pub mod uow;

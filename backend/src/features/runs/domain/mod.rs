@@ -2,4 +2,8 @@ pub mod engine;
 pub mod events;
 pub mod input_resolver;
 pub mod model;
+pub mod output_format_validator;
+pub mod pi_events;
+pub mod prompt;
+pub mod session_transcript;
 pub mod workflow_values;

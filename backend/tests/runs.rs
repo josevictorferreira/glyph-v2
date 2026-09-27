@@ -606,3 +606,96 @@ async fn duplicate_deliveries_are_no_ops(pool: PgPool) {
         .count();
     assert_eq!(succeeded, 1);
 }
+
+#[derive(Clone, Default)]
+struct LogBuffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogBuffer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn engine_runs_real_pi_runner_without_leaking_keys(pool: PgPool) {
+    use glyph_backend::app::bootstrap::Overrides;
+    use glyph_backend::infrastructure::pi::runner::{PiConfig, PiStepRunner};
+    use glyph_backend::infrastructure::postgres::PgStore;
+    use glyph_backend::infrastructure::crypto::AesGcmCipher;
+    use glyph_backend::shared::redactor::Redactor;
+    use secrecy::SecretString;
+    use std::sync::Arc;
+
+    let key = "sk-live-9f8e7d6c5b4a3210";
+    let buffer = LogBuffer::default();
+    let writer = buffer.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .with_writer(move || writer.clone())
+        .finish();
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    sqlx::query("INSERT INTO available_models (provider, model_id, available, fetched_at) VALUES ('velox', 'tools-model', true, now())")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = PgStore::new(pool.clone(), Arc::new(AesGcmCipher::dev()));
+    let pi = PiStepRunner::new(
+        PiConfig {
+            pi_bin: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_pi.sh").into(),
+            timeout: std::time::Duration::from_secs(10),
+            velox_base_url: "https://velox.test/v1".into(),
+            omniroute_base_url: "https://omniroute.test/v1".into(),
+            velox_api_key: Some(SecretString::from(key.to_string())),
+            omniroute_api_key: None,
+        },
+        Arc::new(store),
+        Redactor::new([key.to_string()]),
+    );
+    common::engine::seed_model(&pool).await;
+    let server = common::spawn_with(
+        pool,
+        common::test_config(),
+        Overrides {
+            step_runner: Some(Arc::new(pi)),
+            gateways: Some(Vec::new()),
+            background: Some(true),
+            ..Overrides::default()
+        },
+    )
+    .await;
+    let mut b = Builder::new(&server, "Real runner", false).await;
+    let a = b.pi("A").await;
+    b.client
+        .update_step_model(pb::UpdateStepModelRequest {
+            workflow_id: b.id.clone(),
+            step_id: a,
+            model_id: "velox/tools-model".into(),
+            temperature: None,
+        })
+        .await
+        .unwrap();
+    let run = settle(&server, &b.id, &start(&server, &b.id, &[]).await.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Succeeded);
+    let detail = step_detail(&server, &run, "A").await;
+    assert_eq!(detail.output_text.as_deref(), Some("listed"));
+    use pb::transcript_block::Block;
+    let kinds: Vec<_> = detail.transcript.iter().map(|b| match b.block.as_ref().unwrap() {
+        Block::Text(t) => format!("text:{}", t.text),
+        Block::Thinking(_) => "thinking".into(),
+        Block::Tool(t) => format!("tool:{}:{}", t.name, t.summary),
+    }).collect();
+    assert_eq!(kinds, vec!["tool:bash:ls -la", "text:listed"]);
+
+    let logs = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    assert!(!logs.contains(key), "API key leaked into logs");
+    let evidence: Vec<Option<Vec<u8>>> = sqlx::query_scalar("SELECT session_content FROM step_runs")
+        .fetch_all(&server.pool)
+        .await
+        .unwrap();
+    assert!(evidence.iter().flatten().all(|b| !String::from_utf8_lossy(b).contains(key)));
+}

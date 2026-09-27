@@ -246,3 +246,27 @@ pub fn messages(value: Option<&serde_json::Value>) -> Vec<pb::AgentMessage> {
         })
         .unwrap_or_default()
 }
+
+pub fn transcript(session_content: Option<&str>) -> Vec<pb::TranscriptBlock> {
+    use crate::features::runs::domain::session_transcript::{Block, ToolState, blocks};
+    use pb::transcript_block::Block as B;
+    let Some(content) = session_content else { return Vec::new() };
+    blocks(content)
+        .into_iter()
+        .map(|b| pb::TranscriptBlock {
+            block: Some(match b {
+                Block::Text(text) => B::Text(pb::TranscriptText { text }),
+                Block::Thinking(text) => B::Thinking(pb::TranscriptThinking { text }),
+                Block::Tool { name, summary, state } => B::Tool(pb::TranscriptTool {
+                    name,
+                    summary,
+                    state: match state {
+                        ToolState::Running => pb::ToolState::Running,
+                        ToolState::Done => pb::ToolState::Done,
+                        ToolState::Error => pb::ToolState::Error,
+                    } as i32,
+                }),
+            }),
+        })
+        .collect()
+}

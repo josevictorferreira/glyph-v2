@@ -36,6 +36,11 @@ pub struct Config {
     pub step_concurrency: usize,
     /// Worker drain time on shutdown (GLYPH_SHUTDOWN_GRACE seconds).
     pub shutdown_grace: Duration,
+    pub pi_bin: String,
+    /// Per-step agent timeout (GLYPH_PI_TIMEOUT_SECONDS).
+    pub pi_timeout: Duration,
+    /// Secret values the redactor scrubs (API keys, DB password, encryption key).
+    pub secret_values: Vec<SecretString>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +60,16 @@ impl std::str::FromStr for StepRunnerKind {
         }
     }
 }
+
+/// Environment variables whose values are always redacted from agent output.
+pub const SECRET_ENV_KEYS: &[&str] = &[
+    "VELOX_API_KEY",
+    "OMNIROUTE_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GLYPH_DATABASE_PASSWORD",
+    "GLYPH_ENCRYPTION_KEY",
+];
 
 impl Config {
     /// Reads the process environment. `.env` loading happens in `main`.
@@ -89,6 +104,14 @@ impl Config {
             step_runner: parse(&var, "GLYPH_STEP_RUNNER", "pi")?,
             step_concurrency: parse(&var, "GLYPH_STEP_CONCURRENCY", "5")?,
             shutdown_grace: Duration::from_secs(parse(&var, "GLYPH_SHUTDOWN_GRACE", "30")?),
+            pi_bin: var("GLYPH_PI_BIN").unwrap_or_else(|| "pi".into()),
+            pi_timeout: Duration::from_secs(parse(&var, "GLYPH_PI_TIMEOUT_SECONDS", "900")?),
+            secret_values: SECRET_ENV_KEYS
+                .iter()
+                .filter_map(|k| var(k))
+                .chain(var("DATABASE_URL").and_then(|u| crate::shared::redactor::database_password(&u)))
+                .map(SecretString::from)
+                .collect(),
         })
     }
 }
