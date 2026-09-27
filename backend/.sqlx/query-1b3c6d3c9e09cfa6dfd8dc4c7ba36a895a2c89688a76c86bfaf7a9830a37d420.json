@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT w.id FROM workflows w JOIN workflow_schedules s ON s.workflow_id = w.id\n             WHERE w.status = 'active' AND s.enabled AND s.next_run_at <= $1\n             ORDER BY s.next_run_at, w.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1b3c6d3c9e09cfa6dfd8dc4c7ba36a895a2c89688a76c86bfaf7a9830a37d420"
+}

@@ -15,7 +15,6 @@ use tonic_web::GrpcWebLayer;
 
 use crate::app::{router, state::AppState};
 use crate::config::{Config, StepRunnerKind};
-use crate::features::catalog::application::refresh_job;
 use crate::features::catalog::grpc::CatalogGrpc;
 use crate::features::catalog::{
     CatalogStore, ListModels, ModelGateway, Provider, RefreshModels, WorkflowFlagger,
@@ -30,6 +29,8 @@ use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
 use crate::infrastructure::fake_runner::FakeStepRunner;
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
+use crate::features::scheduling::{DISPATCH_DUE, DispatchDueWorkflows, SCHEDULING_QUEUE};
+use crate::infrastructure::jobs::recurring::{self, Recurring};
 use crate::infrastructure::jobs::worker::Worker;
 use crate::infrastructure::pi::runner::{PiConfig, PiStepRunner};
 use crate::shared::redactor::Redactor;
@@ -70,6 +71,9 @@ pub async fn build(config: &Config) -> anyhow::Result<App> {
 pub async fn build_with_pool(config: &Config, pool: PgPool) -> anyhow::Result<App> {
     build_with(config, pool, Overrides::default()).await
 }
+
+pub const REFRESH_MODELS: &str = "refresh_models";
+pub const MAINTENANCE_QUEUE: &str = "maintenance";
 
 /// Catalog → workflows: vanished models flag active workflows.
 struct WorkflowsFlagger(WorkflowService);
@@ -193,21 +197,57 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         .layer(GrpcWebLayer::new());
 
     // --- background --------------------------------------------------------
+    let scheduling = DispatchDueWorkflows::new(Arc::new(store.clone()), runs.clone());
     let stop = CancellationToken::new();
     let mut background = Vec::new();
     if overrides.background.unwrap_or(config.worker_enabled) {
-        background.push(worker(pool.clone(), config, &runs).spawn(stop.clone(), config.shutdown_grace));
-        let refresh = refresh_models.clone();
-        background.push(tokio::spawn(refresh_job::run_periodically(
-            refresh_job::REFRESH_EVERY,
-            stop.clone(),
-            move || {
-                let refresh = refresh.clone();
-                async move {
-                    refresh.refresh_all().await;
+        let worker = worker(pool.clone(), config, &runs)
+            .queue(SCHEDULING_QUEUE, 1)
+            .queue(MAINTENANCE_QUEUE, 1)
+            .handle(DISPATCH_DUE, {
+                let (scheduling, clock) = (scheduling.clone(), clock.clone());
+                move |_| {
+                    let (scheduling, clock) = (scheduling.clone(), clock.clone());
+                    async move {
+                        let dispatched = scheduling.dispatch(clock.now()).await?;
+                        if dispatched > 0 {
+                            tracing::info!(dispatched, "scheduled runs created");
+                        }
+                        Ok(())
+                    }
                 }
+            })
+            .handle(REFRESH_MODELS, {
+                let refresh = refresh_models.clone();
+                move |_| {
+                    let refresh = refresh.clone();
+                    async move {
+                        refresh.refresh_all().await;
+                        Ok(())
+                    }
+                }
+            });
+        background.push(worker.spawn(stop.clone(), config.shutdown_grace));
+        background.push(recurring::spawn(
+            pool.clone(),
+            Recurring {
+                kind: REFRESH_MODELS.into(),
+                queue: MAINTENANCE_QUEUE.into(),
+                every: Duration::from_secs(5 * 60),
             },
-        )));
+            stop.clone(),
+        ));
+        if config.scheduler_enabled {
+            background.push(recurring::spawn(
+                pool.clone(),
+                Recurring {
+                    kind: DISPATCH_DUE.into(),
+                    queue: SCHEDULING_QUEUE.into(),
+                    every: Duration::from_secs(60),
+                },
+                stop.clone(),
+            ));
+        }
     }
 
     Ok(App {

@@ -539,7 +539,7 @@ impl RunTx for PgTx {
 }
 
 /// A duplicate occurrence key means the occurrence was already dispatched.
-pub const OCCURRENCE_TAKEN: &str = "OCCURRENCE_ALREADY_DISPATCHED";
+pub const OCCURRENCE_TAKEN: &str = crate::features::scheduling::application::dispatch_due::OCCURRENCE_TAKEN;
 
 pub(crate) fn insert_error(error: sqlx::Error) -> DomainError {
     if let sqlx::Error::Database(e) = &error
@@ -548,4 +548,26 @@ pub(crate) fn insert_error(error: sqlx::Error) -> DomainError {
         return DomainError::precondition(OCCURRENCE_TAKEN, "This occurrence was already dispatched.");
     }
     db(error)
+}
+
+#[async_trait]
+impl crate::features::scheduling::SchedulingStore for PgStore {
+    async fn due_workflow_ids(&self, now: Timestamp) -> DomainResult<Vec<WorkflowId>> {
+        Ok(sqlx::query_scalar!(
+            "SELECT w.id FROM workflows w JOIN workflow_schedules s ON s.workflow_id = w.id
+             WHERE w.status = 'active' AND s.enabled AND s.next_run_at <= $1
+             ORDER BY s.next_run_at, w.id",
+            now
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+    }
+
+    async fn begin(&self) -> DomainResult<Box<dyn RunTx>> {
+        Ok(Box::new(self.tx().await?))
+    }
 }

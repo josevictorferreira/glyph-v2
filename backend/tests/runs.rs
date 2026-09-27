@@ -332,7 +332,9 @@ async fn start_run_preconditions(pool: PgPool) {
     assert_eq!(error_info(&blank).unwrap().reason, "MISSING_VALUES");
 
     // Nothing was written by the refused attempts: no runs, no jobs.
-    let (runs, jobs): (i64, i64) = sqlx::query_as("SELECT (SELECT count(*) FROM workflow_runs), (SELECT count(*) FROM jobs)")
+    let (runs, jobs): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM workflow_runs), (SELECT count(*) FROM jobs WHERE kind LIKE 'execute_%')",
+    )
         .fetch_one(&server.pool)
         .await
         .unwrap();
