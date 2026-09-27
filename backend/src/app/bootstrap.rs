@@ -20,6 +20,7 @@ use crate::features::catalog::grpc::CatalogGrpc;
 use crate::features::catalog::{
     CatalogStore, ListModels, ModelGateway, Provider, RefreshModels, WorkflowFlagger,
 };
+use crate::features::definition::DefinitionService;
 use crate::features::definition::grpc::DefinitionGrpc;
 use crate::features::live::grpc::LiveGrpc;
 use crate::features::runs::grpc::RunGrpc;
@@ -94,6 +95,13 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         clock.clone(),
     );
 
+    let definitions = DefinitionService::new(
+        Arc::new(store.clone()),
+        Arc::new(store.clone()),
+        clock.clone(),
+        config.public_url.clone(),
+    );
+
     // --- catalog -----------------------------------------------------------
     let gateways = overrides.gateways.clone().unwrap_or_else(|| {
         vec![
@@ -137,7 +145,7 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
             refresh_models.clone(),
         )))
         .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(workflows.clone())))
-        .add_service(DefinitionServiceServer::new(DefinitionGrpc))
+        .add_service(DefinitionServiceServer::new(DefinitionGrpc::new(definitions)))
         .add_service(RunServiceServer::new(RunGrpc))
         .add_service(LiveServiceServer::new(LiveGrpc))
         .prepare()

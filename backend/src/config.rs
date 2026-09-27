@@ -28,6 +28,8 @@ pub struct Config {
     pub models_cache_ttl: Duration,
     /// Runs the job worker and recurring tickers in this process.
     pub worker_enabled: bool,
+    /// Public base URL (schema header in exported YAML), e.g. https://glyph.example.
+    pub public_url: Option<String>,
 }
 
 impl Config {
@@ -59,6 +61,7 @@ impl Config {
             omniroute_api_key: var("OMNIROUTE_API_KEY").map(SecretString::from),
             models_cache_ttl: Duration::from_secs(parse(&var, "GLYPH_MODELS_CACHE_TTL", "300")?),
             worker_enabled: parse_bool(&var, "GLYPH_WORKER_ENABLED", true)?,
+            public_url: var("GLYPH_PUBLIC_URL"),
         })
     }
 }

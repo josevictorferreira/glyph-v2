@@ -5,12 +5,13 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::app::state::AppState;
-use crate::features::health;
+use crate::features::{definition, health};
 
 /// One router, one port: plain HTTP routes + gRPC (native h2 and gRPC-Web).
 pub fn build(state: AppState, grpc: Router, cors: CorsLayer) -> Router {
     Router::new()
         .route("/up", get(health::http::up))
+        .route(definition::SCHEMA_ROUTE, get(definition::http::schema))
         .with_state(state)
         .merge(grpc)
         .layer(cors)

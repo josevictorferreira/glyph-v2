@@ -1,0 +1,5 @@
+name: Helper with prompt
+steps:
+ - name: Do the work
+   kind: helper
+   prompt: Do the thing

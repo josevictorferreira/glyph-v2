@@ -1,0 +1,242 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "/schemas/workflow.json",
+ "title": "Glyph workflow definition",
+ "description": "A complete Glyph workflow written as YAML. Keys left out take the documented default. The schema checks structure, types, and allowed values; readiness (a step without a prompt, a model that is no longer available) is reported by the workflow validator after the document is applied.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["name", "steps"],
+ "properties": {
+  "name": {
+   "type": "string",
+   "minLength": 1,
+   "description": "Workflow name shown in the panel."
+  },
+  "description": {
+   "type": "string",
+   "description": "Free text describing what the workflow does."
+  },
+  "fail_fast": {
+   "type": "boolean",
+   "default": false,
+   "description": "When true, the first failed step cancels every step that is still queued or running."
+  },
+  "defaults": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "Values inherited by every Pi step that omits the same key. Applied at import time; each step is stored with its resolved value.",
+   "properties": {
+    "model": { "$ref": "#/$defs/model" },
+    "tools": { "$ref": "#/$defs/tools" },
+    "temperature": { "$ref": "#/$defs/temperature" },
+    "format": { "$ref": "#/$defs/format" }
+   }
+  },
+  "inputs": {
+   "type": "object",
+   "description": "Workflow inputs keyed by name. Map order is the display order. A scalar value declares a constant: stored once, never asked at run time. An object declares an input asked at run time unless it carries a value.",
+   "propertyNames": { "$ref": "#/$defs/inputName" },
+   "additionalProperties": {
+    "oneOf": [
+     { "$ref": "#/$defs/scalar" },
+     { "$ref": "#/$defs/workflowInput" }
+    ]
+   }
+  },
+  "schedule": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["cron", "timezone"],
+   "description": "Recurring execution. Present means the workflow has a schedule; absent means it has none.",
+   "properties": {
+    "cron": {
+     "type": "string",
+     "minLength": 1,
+     "description": "Five-field cron expression, for example \"0 9 * * 1\" for Mondays at 09:00."
+    },
+    "timezone": {
+     "type": "string",
+     "minLength": 1,
+     "description": "IANA timezone the cron expression is evaluated in, for example America/Sao_Paulo."
+    },
+    "enabled": {
+     "type": "boolean",
+     "default": true,
+     "description": "Whether scheduled runs are dispatched once the workflow is active."
+    },
+    "description": {
+     "type": "string",
+     "description": "Human wording of the recurrence shown next to the cron expression."
+    },
+    "values": {
+     "type": "object",
+     "description": "Values the schedule supplies for workflow inputs that are asked at run time, keyed by input name.",
+     "propertyNames": { "$ref": "#/$defs/inputName" },
+     "additionalProperties": { "$ref": "#/$defs/scalar" }
+    }
+   }
+  },
+  "steps": {
+   "type": "array",
+   "minItems": 1,
+   "description": "Steps in display order. Dependencies come from step inputs, never from list order.",
+   "items": { "$ref": "#/$defs/step" }
+  }
+ },
+ "$defs": {
+  "scalar": {
+   "type": ["string", "number", "boolean"],
+   "description": "A literal value. Numbers and booleans are stored as text."
+  },
+  "inputName": {
+   "type": "string",
+   "pattern": "^[A-Za-z][A-Za-z0-9_ ]*$",
+   "description": "Starts with a letter; letters, digits, spaces, and underscores."
+  },
+  "stepInputName": {
+   "type": "string",
+   "pattern": "^[A-Za-z][A-Za-z0-9_ -]*$",
+   "description": "Starts with a letter; letters, digits, spaces, underscores, and hyphens. Referenced in prompts as {{name}}."
+  },
+  "model": {
+   "type": "string",
+   "minLength": 1,
+   "description": "Model in provider/model_id form, for example openai/gpt-5. Must be in Glyph's available-model catalog for the workflow to run."
+  },
+  "tools": {
+   "type": "array",
+   "uniqueItems": true,
+   "items": { "type": "string", "minLength": 1 },
+   "description": "Tool keys the step may use, from the server catalog: read, bash, edit, write."
+  },
+  "temperature": {
+   "type": "number",
+   "minimum": 0,
+   "maximum": 2,
+   "description": "Sampling temperature. Only valid for models whose capabilities include temperature."
+  },
+  "format": {
+   "type": "string",
+   "enum": ["markdown", "html", "json", "zip"],
+   "default": "markdown",
+   "description": "File format of the step output. markdown is free text."
+  },
+  "workflowInput": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "description": {
+     "type": "string",
+     "description": "Shown when the value is asked for."
+    },
+    "value": {
+     "$ref": "#/$defs/scalar",
+     "description": "Stored value. With ask true it is the default offered at run time; with ask false it is the constant."
+    },
+    "required": {
+     "type": "boolean",
+     "default": true,
+     "description": "Whether a run needs a value for this input."
+    },
+    "ask": {
+     "type": "boolean",
+     "description": "Ask for the value at run time. Defaults to true when no value is given and false when one is."
+    }
+   }
+  },
+  "stepInput": {
+   "description": "Where a step input gets its value. A bare name refers to a step (its output) or to a workflow input; the object form adds required and description. An object without from is an unconnected input.",
+   "oneOf": [
+    { "type": "string", "minLength": 1 },
+    {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "from": {
+       "type": "string",
+       "minLength": 1,
+       "description": "Name of the source step or workflow input. A name that exists as both is an error."
+      },
+      "required": {
+       "type": "boolean",
+       "default": true,
+       "description": "When true the step is skipped if the source produced nothing."
+      },
+      "description": {
+       "type": "string",
+       "description": "What this input carries; shown in the step inspector."
+      }
+     }
+    }
+   ]
+  },
+  "step": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["name"],
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "Stable identity written by export. Optional by hand. When applying onto an existing workflow it must match one of its steps; when creating a new workflow it is ignored."
+    },
+    "name": {
+     "type": "string",
+     "minLength": 1,
+     "description": "Step name, unique within the workflow ignoring case. Used to match existing steps when id is absent and to reference the step from other steps' inputs."
+    },
+    "kind": {
+     "type": "string",
+     "enum": ["pi", "helper"],
+     "default": "pi",
+     "description": "pi runs a prompt through the Pi agent. helper is deterministic: it gathers its inputs into one structured output without calling a model."
+    },
+    "description": { "type": "string", "description": "Notes for the author; not sent to the model." },
+    "model": { "$ref": "#/$defs/model" },
+    "temperature": { "$ref": "#/$defs/temperature" },
+    "tools": { "$ref": "#/$defs/tools" },
+    "prompt": {
+     "type": "string",
+     "description": "Instructions for the agent. {{name}} interpolates a workflow value or one of this step's inputs."
+    },
+    "context": {
+     "type": "string",
+     "description": "Additional context appended to the prompt. Supports the same {{name}} tokens."
+    },
+    "expect": {
+     "type": "string",
+     "description": "What a correct output looks like. Used to check and guide the agent."
+    },
+    "output": {
+     "type": "string",
+     "minLength": 1,
+     "description": "Name of the output this step exposes. Defaults to the step name."
+    },
+    "output_description": {
+     "type": "string",
+     "description": "What downstream steps can expect in the output."
+    },
+    "format": { "$ref": "#/$defs/format" },
+    "allow_failure": {
+     "type": "boolean",
+     "default": false,
+     "description": "When true a failure does not skip downstream steps; they run with this input absent."
+    },
+    "inputs": {
+     "type": "object",
+     "description": "Step inputs keyed by name. Map order is the display order.",
+     "propertyNames": { "$ref": "#/$defs/stepInputName" },
+     "additionalProperties": { "$ref": "#/$defs/stepInput" }
+    }
+   },
+   "if": {
+    "required": ["kind"],
+    "properties": { "kind": { "const": "helper" } }
+   },
+   "then": {
+    "propertyNames": {
+     "enum": ["id", "name", "kind", "description", "output", "output_description", "allow_failure", "inputs"]
+    }
+   }
+  }
+ }
+}

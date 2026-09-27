@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://<host>/schemas/workflow.json
+name: Weekly competitor digest
+description: Summarise competitor moves every Monday.
+
+schedule:
+ cron: "0 9 * * 1"
+ timezone: America/Sao_Paulo
+
+defaults:
+ model: openai/gpt-5
+ tools: [read, bash]
+
+inputs:
+ company:
+  ask: true
+  description: Company to research
+ region: LATAM # a constant
+
+steps:
+ - name: research
+   prompt: |
+     Research {{company}} in {{region}} and list the top five competitor
+     moves from the last seven days with sources.
+   expect: A bullet list, one move per line, each with a source URL.
+
+ - name: digest
+   model: anthropic/claude-sonnet-5 # overrides defaults.model
+   inputs:
+     notes: research # fed by the "research" step
+   prompt: |
+     Write a short digest for the leadership team from {{notes}}.
+   expect: A 200 word Markdown digest with a headline and three sections.
+
+ - name: package
+   kind: helper
+   inputs:
+     digest: digest
+     company: company # fed by the workflow input
