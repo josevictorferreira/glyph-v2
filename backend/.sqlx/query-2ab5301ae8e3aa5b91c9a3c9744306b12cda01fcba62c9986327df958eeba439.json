@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE step_runs SET status = $3, ended_at = $4, skipped_reason = COALESCE($5, skipped_reason),\n                    updated_at = now()\n             WHERE id = ANY($1) AND status = ANY($2)\n             RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2ab5301ae8e3aa5b91c9a3c9744306b12cda01fcba62c9986327df958eeba439"
+}

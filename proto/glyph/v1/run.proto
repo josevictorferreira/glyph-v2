@@ -43,6 +43,7 @@ message SnapshotWorkflow {
   optional string description = 3;
   WorkflowStatus status = 4;
   optional SnapshotSchedule schedule = 5;
+  bool fail_fast = 6;
 }
 
 message SnapshotInput {

@@ -34,6 +34,9 @@ pub struct SnapshotWorkflow {
     #[serde(default)]
     pub description: Option<String>,
     pub status: String,
+    /// Not in Rails snapshots (where fail_fast silently never applied).
+    #[serde(default)]
+    pub fail_fast: bool,
     #[serde(default)]
     pub schedule: Option<SnapshotSchedule>,
 }
@@ -169,6 +172,7 @@ pub fn build(workflow: &Workflow, catalog: &CatalogView, now: Timestamp) -> Snap
             name: workflow.name.clone(),
             description: workflow.description.clone(),
             status: workflow.status.as_str().to_string(),
+            fail_fast: workflow.fail_fast,
             schedule: workflow.schedule.as_ref().map(|s| SnapshotSchedule {
                 enabled: s.enabled,
                 cron_expression: s.cron_expression.clone(),

@@ -30,6 +30,30 @@ pub struct Config {
     pub worker_enabled: bool,
     /// Public base URL (schema header in exported YAML), e.g. https://glyph.example.
     pub public_url: Option<String>,
+    /// `pi` (default) or `fake`.
+    pub step_runner: StepRunnerKind,
+    /// Concurrent step executions (GLYPH_STEP_CONCURRENCY).
+    pub step_concurrency: usize,
+    /// Worker drain time on shutdown (GLYPH_SHUTDOWN_GRACE seconds).
+    pub shutdown_grace: Duration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepRunnerKind {
+    Pi,
+    Fake,
+}
+
+impl std::str::FromStr for StepRunnerKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "pi" => Ok(Self::Pi),
+            "fake" => Ok(Self::Fake),
+            other => Err(format!("expected pi or fake, got {other:?}")),
+        }
+    }
 }
 
 impl Config {
@@ -62,6 +86,9 @@ impl Config {
             models_cache_ttl: Duration::from_secs(parse(&var, "GLYPH_MODELS_CACHE_TTL", "300")?),
             worker_enabled: parse_bool(&var, "GLYPH_WORKER_ENABLED", true)?,
             public_url: var("GLYPH_PUBLIC_URL"),
+            step_runner: parse(&var, "GLYPH_STEP_RUNNER", "pi")?,
+            step_concurrency: parse(&var, "GLYPH_STEP_CONCURRENCY", "5")?,
+            shutdown_grace: Duration::from_secs(parse(&var, "GLYPH_SHUTDOWN_GRACE", "30")?),
         })
     }
 }

@@ -71,6 +71,11 @@ pub async fn enqueue(conn: &mut sqlx::PgConnection, job: &Job) -> DomainResult<(
     .execute(&mut *conn)
     .await
     .map_err(db)?;
+    // Wakes idle workers on commit (they also poll).
+    sqlx::query!("SELECT pg_notify($1, $2)", super::jobs::WAKE_CHANNEL, job.queue)
+        .execute(&mut *conn)
+        .await
+        .map_err(db)?;
     Ok(())
 }
 

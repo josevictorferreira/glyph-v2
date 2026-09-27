@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, snapshot_step_id, step_name, status, allow_failure, output, output_text\n             FROM step_runs WHERE workflow_run_id = $1 AND status IN ('succeeded', 'failed')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "snapshot_step_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "snapshot_step_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "step_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "step_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "allow_failure",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "allow_failure"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "output",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "output"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "output_text",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "output_text"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "77a339f73d4a6164635971940dc60acb72e8b8b88e5e24df6baab2f8db9d0203"
+}

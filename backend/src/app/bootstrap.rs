@@ -14,7 +14,7 @@ use tonic::service::Routes;
 use tonic_web::GrpcWebLayer;
 
 use crate::app::{router, state::AppState};
-use crate::config::Config;
+use crate::config::{Config, StepRunnerKind};
 use crate::features::catalog::application::refresh_job;
 use crate::features::catalog::grpc::CatalogGrpc;
 use crate::features::catalog::{
@@ -23,11 +23,14 @@ use crate::features::catalog::{
 use crate::features::definition::DefinitionService;
 use crate::features::definition::grpc::DefinitionGrpc;
 use crate::features::live::grpc::LiveGrpc;
+use crate::features::runs::{self, RunService, StepRunner};
 use crate::features::runs::grpc::RunGrpc;
 use crate::features::workflows::WorkflowService;
 use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
+use crate::infrastructure::fake_runner::FakeStepRunner;
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
+use crate::infrastructure::jobs::worker::Worker;
 use crate::infrastructure::postgres::{self, PgStore};
 use crate::proto;
 use crate::proto::pb::catalog_service_server::CatalogServiceServer;
@@ -43,6 +46,7 @@ use crate::shared::time::{Clock, SystemClock};
 pub struct Overrides {
     pub clock: Option<Arc<dyn Clock>>,
     pub gateways: Option<Vec<Arc<dyn ModelGateway>>>,
+    pub step_runner: Option<Arc<dyn StepRunner>>,
     /// Start background tasks even when `worker_enabled` is false.
     pub background: Option<bool>,
 }
@@ -130,8 +134,27 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         clock.clone(),
     );
 
+    // --- runs --------------------------------------------------------------
+    let step_runner: Arc<dyn StepRunner> = match overrides.step_runner.clone() {
+        Some(runner) => runner,
+        None => match config.step_runner {
+            StepRunnerKind::Fake => Arc::new(FakeStepRunner),
+            StepRunnerKind::Pi => Arc::new(FakeStepRunner),
+        },
+    };
+    let runs = RunService::new(
+        Arc::new(store.clone()),
+        Arc::new(store.clone()),
+        step_runner,
+        clock.clone(),
+    );
+
     // --- transport ---------------------------------------------------------
-    let state = AppState { pool, cipher };
+    let state = AppState {
+        pool: pool.clone(),
+        cipher,
+        runs: runs.clone(),
+    };
     let (_health_reporter, health_service) = tonic_health::server::health_reporter();
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
@@ -146,7 +169,7 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         )))
         .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(workflows.clone())))
         .add_service(DefinitionServiceServer::new(DefinitionGrpc::new(definitions)))
-        .add_service(RunServiceServer::new(RunGrpc))
+        .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
         .add_service(LiveServiceServer::new(LiveGrpc))
         .prepare()
         .into_axum_router()
@@ -156,6 +179,7 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
     let stop = CancellationToken::new();
     let mut background = Vec::new();
     if overrides.background.unwrap_or(config.worker_enabled) {
+        background.push(worker(pool.clone(), config, &runs).spawn(stop.clone(), config.shutdown_grace));
         let refresh = refresh_models.clone();
         background.push(tokio::spawn(refresh_job::run_periodically(
             refresh_job::REFRESH_EVERY,
@@ -175,6 +199,30 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
         stop,
         background,
     })
+}
+
+fn id_from<T: std::str::FromStr>(payload: &serde_json::Value, key: &str) -> anyhow::Result<T> {
+    payload
+        .get(key)
+        .and_then(|v| v.as_str())
+        .and_then(|v| v.parse().ok())
+        .with_context(|| format!("job payload has no valid {key}"))
+}
+
+/// Job kinds → application operations.
+fn worker(pool: PgPool, config: &Config, runs: &RunService) -> Worker {
+    let (run_exec, step_exec) = (runs.clone(), runs.clone());
+    Worker::new(pool)
+        .queue(runs::application::RUN_QUEUE, 2)
+        .queue(runs::application::STEP_QUEUE, config.step_concurrency)
+        .handle(runs::application::EXECUTE_RUN, move |payload| {
+            let runs = run_exec.clone();
+            async move { Ok(runs.execute_run(id_from(&payload, "run_id")?).await?) }
+        })
+        .handle(runs::application::EXECUTE_STEP, move |payload| {
+            let runs = step_exec.clone();
+            async move { Ok(runs.execute_step(id_from(&payload, "step_run_id")?).await?) }
+        })
 }
 
 impl App {

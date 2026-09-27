@@ -1,0 +1,365 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, workflow_run_id, snapshot_step_id, step_name, step_kind, status, position,\n                allow_failure, prompt, additional_context, expected_output, model_id, model_settings,\n                enabled_tools, output_name, output_file_format, resolved_inputs, output, output_text,\n                messages, session_content, technical_error, human_error, skipped_reason, queued_at,\n                started_at, ended_at, elapsed_ms, created_at\n         FROM step_runs\n         WHERE ($1::uuid IS NULL OR workflow_run_id = $1) AND ($2::uuid IS NULL OR id = $2)\n         ORDER BY position, created_at, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "workflow_run_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "workflow_run_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "snapshot_step_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "snapshot_step_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "step_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "step_name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "step_kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "step_kind"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "allow_failure",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "allow_failure"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "prompt",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "prompt"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "additional_context",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "additional_context"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "expected_output",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "expected_output"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "model_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "model_id"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "model_settings",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "model_settings"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "enabled_tools",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "enabled_tools"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "output_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "output_name"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "output_file_format",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "output_file_format"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "resolved_inputs",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "resolved_inputs"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "output",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "output"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "output_text",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "output_text"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "messages",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "messages"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "session_content",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "session_content"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "technical_error",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "technical_error"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "human_error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "human_error"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "skipped_reason",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "skipped_reason"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "queued_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "queued_at"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "ended_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "ended_at"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "elapsed_ms",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "elapsed_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "78674673fd1c4d985470ddb9a806822c94a198b1f8dd4cbda922fb8ba956c5ca"
+}

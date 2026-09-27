@@ -1,6 +1,8 @@
 pub mod catalog_repo;
+pub mod jobs;
 pub mod migrate;
 pub mod pool;
+pub mod runs_repo;
 pub mod uow;
 pub mod workflows_repo;
 
