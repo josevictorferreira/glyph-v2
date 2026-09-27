@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use secrecy::SecretString;
 
@@ -19,6 +20,14 @@ pub struct Config {
     pub log_json: bool,
     /// Base64 of 32 bytes; `None` → insecure dev key (warned at boot).
     pub encryption_key: Option<SecretString>,
+    pub velox_base_url: String,
+    pub omniroute_base_url: String,
+    pub velox_api_key: Option<SecretString>,
+    pub omniroute_api_key: Option<SecretString>,
+    /// Catalog staleness threshold (GLYPH_MODELS_CACHE_TTL seconds).
+    pub models_cache_ttl: Duration,
+    /// Runs the job worker and recurring tickers in this process.
+    pub worker_enabled: bool,
 }
 
 impl Config {
@@ -42,6 +51,14 @@ impl Config {
                 .collect(),
             log_json: parse_bool(&var, "GLYPH_LOG_JSON", false)?,
             encryption_key: var("GLYPH_ENCRYPTION_KEY").map(SecretString::from),
+            velox_base_url: var("VELOX_BASE_URL")
+                .unwrap_or_else(|| "https://velox.josevictor.me/v1".into()),
+            omniroute_base_url: var("OMNIROUTE_BASE_URL")
+                .unwrap_or_else(|| "https://omniroute.josevictor.me/v1".into()),
+            velox_api_key: var("VELOX_API_KEY").map(SecretString::from),
+            omniroute_api_key: var("OMNIROUTE_API_KEY").map(SecretString::from),
+            models_cache_ttl: Duration::from_secs(parse(&var, "GLYPH_MODELS_CACHE_TTL", "300")?),
+            worker_enabled: parse_bool(&var, "GLYPH_WORKER_ENABLED", true)?,
         })
     }
 }

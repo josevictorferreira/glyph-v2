@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT provider, model_id, display_name, available, capabilities, fetched_at\n               FROM available_models\n               WHERE available OR $1\n               ORDER BY CASE provider WHEN 'velox' THEN 0 ELSE 1 END, model_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "provider"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "model_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "model_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "available",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "available"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "capabilities",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "capabilities"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "fetched_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "fetched_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b37a773e2ad3d13d78bab9d215531c5a3b2b125215fd5ccf234693b0d1da2bca"
+}

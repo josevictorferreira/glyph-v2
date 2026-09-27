@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO available_models\n                     (provider, model_id, display_name, capabilities, raw, available, fetched_at)\n                   VALUES ($1, $2, $3, $4, $5, true, $6)\n                   ON CONFLICT (provider, model_id) DO UPDATE SET\n                     display_name = EXCLUDED.display_name,\n                     capabilities = EXCLUDED.capabilities,\n                     raw = EXCLUDED.raw,\n                     available = true,\n                     fetched_at = EXCLUDED.fetched_at,\n                     updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52034dba03fdc52f3c2245c2168e93b3c9b53d17e040ba2c49ae1e81785f1666"
+}

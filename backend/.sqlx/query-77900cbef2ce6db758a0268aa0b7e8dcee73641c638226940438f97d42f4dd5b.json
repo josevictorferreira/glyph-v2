@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT model_id FROM available_models WHERE provider = $1 AND available ORDER BY model_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "model_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "model_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "77900cbef2ce6db758a0268aa0b7e8dcee73641c638226940438f97d42f4dd5b"
+}

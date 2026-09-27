@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE available_models SET available = false, updated_at = now()\n             WHERE provider = $1 AND available AND NOT (model_id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d3fbba2a5e35ec84c263f7435e483bf390c20c19fbcb2c93254a4bfa868a598c"
+}
