@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package glyph.v1;
+
+import "glyph/v1/common.proto";
+import "glyph/v1/workflow.proto";
+
+// YAML workflow definitions (schema at GET /schemas/workflow.json).
+//
+// Errors: INVALID_ARGUMENT carries a DefinitionErrors detail; ABORTED means
+// the fingerprint is stale (someone changed the workflow since the export).
+service DefinitionService {
+  rpc ExportDefinition(ExportDefinitionRequest) returns (ExportDefinitionResponse);
+  rpc GetSchemaUrl(GetSchemaUrlRequest) returns (GetSchemaUrlResponse);
+  // Dry run: parse + reference checks only, nothing is written.
+  rpc ParseDefinition(ParseDefinitionRequest) returns (ParseDefinitionResponse);
+  rpc ApplyDefinition(ApplyDefinitionRequest) returns (ApplyDefinitionResponse);
+  // Creates a new workflow from a document.
+  rpc ImportWorkflow(ImportWorkflowRequest) returns (ImportWorkflowResponse);
+}
+
+message ExportDefinitionRequest {
+  string workflow_id = 1;
+}
+
+message ExportDefinitionResponse {
+  string yaml = 1;
+  // sha256 hex of `yaml`; pass back to ApplyDefinition.
+  string fingerprint = 2;
+  // "{parameterized-name}.yml".
+  string filename = 3;
+}
+
+message GetSchemaUrlRequest {}
+
+message GetSchemaUrlResponse {
+  string url = 1;
+}
+
+message ParseDefinitionRequest {
+  // When set, step ids in the document are checked against this workflow.
+  optional string workflow_id = 1;
+  string yaml = 2;
+}
+
+message ParseDefinitionResponse {
+  // Empty when the document is valid.
+  repeated DefinitionError errors = 1;
+}
+
+message ApplyDefinitionRequest {
+  string workflow_id = 1;
+  string yaml = 2;
+  // Fingerprint of the export the edit started from; empty skips the check.
+  string fingerprint = 3;
+}
+
+message ApplyDefinitionResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_fingerprint = 3;
+}
+
+message ImportWorkflowRequest {
+  string yaml = 1;
+}
+
+message ImportWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}

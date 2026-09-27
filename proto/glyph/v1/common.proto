@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package glyph.v1;
+
+enum WorkflowStatus {
+  WORKFLOW_STATUS_UNSPECIFIED = 0;
+  WORKFLOW_STATUS_DRAFT = 1;
+  WORKFLOW_STATUS_ACTIVE = 2;
+  WORKFLOW_STATUS_PAUSED = 3;
+  WORKFLOW_STATUS_NEEDS_ATTENTION = 4;
+}
+
+enum StepKind {
+  STEP_KIND_UNSPECIFIED = 0;
+  // Runs the Pi coding agent.
+  STEP_KIND_PI = 1;
+  // Deterministic: its output is the map of its resolved inputs.
+  STEP_KIND_HELPER = 2;
+}
+
+enum OutputFileFormat {
+  OUTPUT_FILE_FORMAT_UNSPECIFIED = 0;
+  OUTPUT_FILE_FORMAT_FREE_TEXT_MARKDOWN = 1;
+  OUTPUT_FILE_FORMAT_HTML = 2;
+  OUTPUT_FILE_FORMAT_JSON = 3;
+  OUTPUT_FILE_FORMAT_ZIP = 4;
+}
+
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_QUEUED = 1;
+  RUN_STATUS_RUNNING = 2;
+  RUN_STATUS_SUCCEEDED = 3;
+  RUN_STATUS_FAILED = 4;
+  RUN_STATUS_CANCELLED = 5;
+}
+
+enum StepRunStatus {
+  STEP_RUN_STATUS_UNSPECIFIED = 0;
+  STEP_RUN_STATUS_QUEUED = 1;
+  STEP_RUN_STATUS_RUNNING = 2;
+  STEP_RUN_STATUS_SUCCEEDED = 3;
+  STEP_RUN_STATUS_FAILED = 4;
+  STEP_RUN_STATUS_SKIPPED = 5;
+  STEP_RUN_STATUS_CANCELLED = 6;
+}
+
+enum RunTrigger {
+  RUN_TRIGGER_UNSPECIFIED = 0;
+  RUN_TRIGGER_MANUAL = 1;
+  RUN_TRIGGER_SCHEDULED = 2;
+}
+
+enum IssueSeverity {
+  ISSUE_SEVERITY_UNSPECIFIED = 0;
+  // Blocking: the workflow cannot be activated or run.
+  ISSUE_SEVERITY_ERROR = 1;
+}
+
+enum IssueEntityType {
+  ISSUE_ENTITY_TYPE_UNSPECIFIED = 0;
+  ISSUE_ENTITY_TYPE_WORKFLOW = 1;
+  ISSUE_ENTITY_TYPE_WORKFLOW_STEP = 2;
+  ISSUE_ENTITY_TYPE_STEP_INPUT = 3;
+  ISSUE_ENTITY_TYPE_WORKFLOW_INPUT = 4;
+  ISSUE_ENTITY_TYPE_WORKFLOW_CONNECTION = 5;
+  ISSUE_ENTITY_TYPE_WORKFLOW_SCHEDULE = 6;
+}
+
+// A readiness problem found by the validator.
+message Issue {
+  IssueSeverity severity = 1;
+  IssueEntityType entity_type = 2;
+  string entity_id = 3;
+  // Offending attribute, e.g. "prompt", "model_id", "source".
+  string field = 4;
+  // User-facing copy.
+  string message = 5;
+}
+
+// Error detail attached (as google.protobuf.Any in grpc-status-details-bin)
+// to FAILED_PRECONDITION errors with reason VALIDATION_FAILED / MISSING_VALUES.
+message ValidationIssues {
+  repeated Issue issues = 1;
+}
+
+// A located problem in a YAML definition.
+message DefinitionError {
+  // JSON pointer into the document ("/steps/0/prompt"); absent when unknown.
+  optional string path = 1;
+  // 1-based line; absent when unknown.
+  optional int32 line = 2;
+  string message = 3;
+}
+
+// Error detail attached to INVALID_ARGUMENT errors from the definition service.
+message DefinitionErrors {
+  repeated DefinitionError errors = 1;
+}

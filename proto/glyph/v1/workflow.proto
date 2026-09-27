@@ -1,0 +1,568 @@
+syntax = "proto3";
+
+package glyph.v1;
+
+import "glyph/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+// Workflow design: listing, CRUD, the editor mutations, schedule and
+// lifecycle. Every mutation returns the full aggregate plus the validator
+// issues computed after the change (the UI re-renders from it).
+//
+// Errors:
+//   INVALID_ARGUMENT     user-fixable input; message is user-facing copy.
+//   NOT_FOUND            unknown workflow / step / input / connection.
+//   FAILED_PRECONDITION  google.rpc.ErrorInfo{reason} (+ ValidationIssues):
+//                        VALIDATION_FAILED (activate),
+//                        CONNECTION_SOURCE_EXISTS (create connection; metadata
+//                        existing_source_label — retry with replace_existing).
+service WorkflowService {
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+  rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse);
+  rpc CreateWorkflow(CreateWorkflowRequest) returns (CreateWorkflowResponse);
+  rpc UpdateWorkflow(UpdateWorkflowRequest) returns (UpdateWorkflowResponse);
+  rpc ValidateWorkflow(ValidateWorkflowRequest) returns (ValidateWorkflowResponse);
+
+  rpc AddStep(AddStepRequest) returns (AddStepResponse);
+  // Copies kind, name, description, prompt, additional context, allow_failure
+  // and the inputs (unconnected, unmapped). Model, tools, output fields and
+  // expected output are NOT copied (Rails parity).
+  rpc DuplicateStep(DuplicateStepRequest) returns (DuplicateStepResponse);
+  rpc UpdateStepDetails(UpdateStepDetailsRequest) returns (UpdateStepDetailsResponse);
+  rpc UpdateStepPrompt(UpdateStepPromptRequest) returns (UpdateStepPromptResponse);
+  rpc UpdateStepOutput(UpdateStepOutputRequest) returns (UpdateStepOutputResponse);
+  rpc UpdateStepModel(UpdateStepModelRequest) returns (UpdateStepModelResponse);
+  rpc ToggleStepTool(ToggleStepToolRequest) returns (ToggleStepToolResponse);
+  // Canvas position only; does not revalidate.
+  rpc MoveStep(MoveStepRequest) returns (MoveStepResponse);
+  // Also removes the downstream inputs fed by the step's outgoing connections.
+  rpc DeleteStep(DeleteStepRequest) returns (DeleteStepResponse);
+
+  rpc AddStepInput(AddStepInputRequest) returns (AddStepInputResponse);
+  rpc RemoveStepInput(RemoveStepInputRequest) returns (RemoveStepInputResponse);
+  rpc MapStepInput(MapStepInputRequest) returns (MapStepInputResponse);
+
+  rpc AddWorkflowInput(AddWorkflowInputRequest) returns (AddWorkflowInputResponse);
+  rpc UpdateWorkflowInput(UpdateWorkflowInputRequest) returns (UpdateWorkflowInputResponse);
+  rpc RemoveWorkflowInput(RemoveWorkflowInputRequest) returns (RemoveWorkflowInputResponse);
+
+  rpc CreateConnection(CreateConnectionRequest) returns (CreateConnectionResponse);
+  // Drag an output onto a step card: creates an optional input on the target
+  // named after the source output and connects it.
+  rpc ConnectOutputToStep(ConnectOutputToStepRequest) returns (ConnectOutputToStepResponse);
+  // Removes the connection and its destination input.
+  rpc RemoveConnection(RemoveConnectionRequest) returns (RemoveConnectionResponse);
+
+  rpc SaveSchedule(SaveScheduleRequest) returns (SaveScheduleResponse);
+  rpc SetScheduleValue(SetScheduleValueRequest) returns (SetScheduleValueResponse);
+
+  rpc ActivateWorkflow(ActivateWorkflowRequest) returns (ActivateWorkflowResponse);
+  rpc PauseWorkflow(PauseWorkflowRequest) returns (PauseWorkflowResponse);
+  // An invalid workflow lands in NEEDS_ATTENTION; the response is still OK and
+  // carries the issues.
+  rpc ResumeWorkflow(ResumeWorkflowRequest) returns (ResumeWorkflowResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Read model
+// ---------------------------------------------------------------------------
+
+message WorkflowSummary {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  WorkflowStatus status = 4;
+  bool fail_fast = 5;
+  optional google.protobuf.Timestamp last_run_at = 6;
+  optional RunStatus last_run_status = 7;
+  optional google.protobuf.Timestamp next_run_at = 8;
+  // Human description of the schedule when it is enabled.
+  optional string schedule_summary = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message WorkflowInput {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool required = 4;
+  // false = constant (value fixed at design time).
+  bool ask_at_run_time = 5;
+  optional string value = 6;
+  int32 position = 7;
+}
+
+message StepInput {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool required = 4;
+  int32 position = 5;
+  optional string workflow_input_id = 6;
+  optional string incoming_connection_id = 7;
+}
+
+message Step {
+  string id = 1;
+  StepKind kind = 2;
+  string name = 3;
+  optional string description = 4;
+  optional string prompt = 5;
+  optional string additional_context = 6;
+  optional string expected_output = 7;
+  optional string output_name = 8;
+  optional string output_description = 9;
+  OutputFileFormat output_file_format = 10;
+  // "{provider}/{model_id}" (legacy bare model ids are accepted too).
+  optional string model_id = 11;
+  optional double temperature = 12;
+  repeated string enabled_tool_keys = 13;
+  bool allow_failure = 14;
+  int32 canvas_x = 15;
+  int32 canvas_y = 16;
+  int32 position = 17;
+  repeated StepInput inputs = 18;
+  bool configured = 19;
+}
+
+message Connection {
+  string id = 1;
+  string source_step_id = 2;
+  string source_output_name = 3;
+  string destination_step_id = 4;
+  string destination_input_id = 5;
+}
+
+message ScheduleValue {
+  string workflow_input_id = 1;
+  string value = 2;
+}
+
+message Schedule {
+  string id = 1;
+  bool enabled = 2;
+  optional string cron_expression = 3;
+  optional string timezone = 4;
+  optional string human_description = 5;
+  optional google.protobuf.Timestamp next_run_at = 6;
+  optional google.protobuf.Timestamp last_dispatched_at = 7;
+  repeated ScheduleValue values = 8;
+}
+
+message Workflow {
+  WorkflowSummary summary = 1;
+  repeated WorkflowInput inputs = 2;
+  repeated Step steps = 3;
+  repeated Connection connections = 4;
+  optional Schedule schedule = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Listing / CRUD
+// ---------------------------------------------------------------------------
+
+message ListWorkflowsRequest {
+  // Case-insensitive substring of name or description.
+  string query = 1;
+  optional WorkflowStatus status = 2;
+  // 1..100; 0 means 100.
+  int32 limit = 3;
+}
+
+message ListWorkflowsResponse {
+  // Most recently updated first.
+  repeated WorkflowSummary workflows = 1;
+}
+
+message GetWorkflowRequest {
+  string id = 1;
+}
+
+message GetWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message CreateWorkflowRequest {
+  // Blank → "Untitled workflow".
+  string name = 1;
+  optional string description = 2;
+  bool fail_fast = 3;
+}
+
+message CreateWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message UpdateWorkflowRequest {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool fail_fast = 4;
+}
+
+message UpdateWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message ValidateWorkflowRequest {
+  string id = 1;
+}
+
+message ValidateWorkflowResponse {
+  repeated Issue issues = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Steps
+// ---------------------------------------------------------------------------
+
+message AddStepRequest {
+  string workflow_id = 1;
+  StepKind kind = 2;
+  // Both set → explicit position (clamped to 0..4000 × 0..3000); otherwise the
+  // next free slot of the default grid.
+  optional int32 canvas_x = 3;
+  optional int32 canvas_y = 4;
+}
+
+message AddStepResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_step_id = 3;
+}
+
+message DuplicateStepRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+}
+
+message DuplicateStepResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_step_id = 3;
+}
+
+message UpdateStepDetailsRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  string name = 3;
+  optional string description = 4;
+  bool allow_failure = 5;
+}
+
+message UpdateStepDetailsResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message UpdateStepPromptRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  optional string prompt = 3;
+  optional string additional_context = 4;
+}
+
+message UpdateStepPromptResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message UpdateStepOutputRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  // Renaming propagates to the step's outgoing connections.
+  string output_name = 3;
+  optional string output_description = 4;
+  optional string expected_output = 5;
+  // UNSPECIFIED → FREE_TEXT_MARKDOWN.
+  OutputFileFormat output_file_format = 6;
+}
+
+message UpdateStepOutputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message UpdateStepModelRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  // Empty clears the model.
+  string model_id = 3;
+  // Absent removes the setting; present must be within 0..2.
+  optional double temperature = 4;
+}
+
+message UpdateStepModelResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message ToggleStepToolRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  string tool_key = 3;
+}
+
+message ToggleStepToolResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message MoveStepRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  int32 canvas_x = 3;
+  int32 canvas_y = 4;
+}
+
+message MoveStepResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message DeleteStepRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+}
+
+message DeleteStepResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Step inputs
+// ---------------------------------------------------------------------------
+
+message AddStepInputRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  string name = 3;
+  bool required = 4;
+}
+
+message AddStepInputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_input_id = 3;
+}
+
+message RemoveStepInputRequest {
+  string workflow_id = 1;
+  string input_id = 2;
+}
+
+message RemoveStepInputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message MapStepInputRequest {
+  string workflow_id = 1;
+  string input_id = 2;
+  // Absent or empty clears the mapping.
+  optional string workflow_input_id = 3;
+}
+
+message MapStepInputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Workflow inputs ("workflow values")
+// ---------------------------------------------------------------------------
+
+message AddWorkflowInputRequest {
+  string workflow_id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool required = 4;
+  optional string value = 5;
+  bool ask_at_run_time = 6;
+}
+
+message AddWorkflowInputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_input_id = 3;
+}
+
+message UpdateWorkflowInputRequest {
+  string workflow_id = 1;
+  string input_id = 2;
+  string name = 3;
+  optional string description = 4;
+  bool required = 5;
+  optional string value = 6;
+  bool ask_at_run_time = 7;
+}
+
+message UpdateWorkflowInputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message RemoveWorkflowInputRequest {
+  string workflow_id = 1;
+  string input_id = 2;
+}
+
+message RemoveWorkflowInputResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Connections
+// ---------------------------------------------------------------------------
+
+message CreateConnectionRequest {
+  string workflow_id = 1;
+  string source_step_id = 2;
+  string destination_input_id = 3;
+  // Replace the input's current connection / workflow-value mapping. Without
+  // it, an already-fed input fails with CONNECTION_SOURCE_EXISTS.
+  bool replace_existing = 4;
+}
+
+message CreateConnectionResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string connection_id = 3;
+}
+
+message ConnectOutputToStepRequest {
+  string workflow_id = 1;
+  string source_step_id = 2;
+  string target_step_id = 3;
+}
+
+message ConnectOutputToStepResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string connection_id = 3;
+  string new_input_id = 4;
+}
+
+message RemoveConnectionRequest {
+  string workflow_id = 1;
+  string connection_id = 2;
+}
+
+message RemoveConnectionResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Schedule
+// ---------------------------------------------------------------------------
+
+enum IntervalUnit {
+  INTERVAL_UNIT_UNSPECIFIED = 0;
+  INTERVAL_UNIT_MINUTES = 1;
+  INTERVAL_UNIT_HOURS = 2;
+}
+
+// Removes the schedule.
+message ScheduleNone {}
+
+// Every N minutes (1..59) or hours (1..23).
+message ScheduleInterval {
+  int32 every = 1;
+  IntervalUnit unit = 2;
+}
+
+message ScheduleDaily {
+  int32 hour = 1;
+  int32 minute = 2;
+}
+
+message ScheduleWeekly {
+  // 0 = Sunday … 6 = Saturday.
+  int32 weekday = 1;
+  int32 hour = 2;
+  int32 minute = 3;
+}
+
+message ScheduleMonthly {
+  // 1..31.
+  int32 day = 1;
+  int32 hour = 2;
+  int32 minute = 3;
+}
+
+// A raw 5-field cron expression.
+message ScheduleCron {
+  string expression = 1;
+}
+
+message SaveScheduleRequest {
+  string workflow_id = 1;
+  oneof recurrence {
+    ScheduleNone none = 2;
+    ScheduleInterval interval = 3;
+    ScheduleDaily daily = 4;
+    ScheduleWeekly weekly = 5;
+    ScheduleMonthly monthly = 6;
+    ScheduleCron cron = 7;
+  }
+  // IANA timezone, e.g. "America/Sao_Paulo".
+  string timezone = 8;
+  // Ignored (stored disabled) while the workflow is a draft.
+  bool enabled = 9;
+}
+
+message SaveScheduleResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message SetScheduleValueRequest {
+  string workflow_id = 1;
+  string workflow_input_id = 2;
+  string value = 3;
+}
+
+message SetScheduleValueResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+message ActivateWorkflowRequest {
+  string id = 1;
+}
+
+message ActivateWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message PauseWorkflowRequest {
+  string id = 1;
+}
+
+message PauseWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message ResumeWorkflowRequest {
+  string id = 1;
+}
+
+message ResumeWorkflowResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  // False when the workflow was invalid and moved to NEEDS_ATTENTION.
+  bool resumed = 3;
+}

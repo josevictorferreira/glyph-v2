@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package glyph.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Live notifications. Events carry ids only: on each event the client
+// re-fetches what it shows (GetWorkflow, ListRuns, GetRun, GetStepRun).
+service LiveService {
+  // Streams events for one workflow until the client disconnects. RESYNC
+  // means events may have been missed: refetch everything.
+  rpc WatchWorkflow(WatchWorkflowRequest) returns (stream WatchWorkflowResponse);
+}
+
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_WORKFLOW_UPDATED = 1;
+  EVENT_TYPE_RUN_QUEUED = 2;
+  EVENT_TYPE_RUN_STARTED = 3;
+  EVENT_TYPE_RUN_SUCCEEDED = 4;
+  EVENT_TYPE_RUN_FAILED = 5;
+  EVENT_TYPE_RUN_CANCELLED = 6;
+  EVENT_TYPE_STEP_RUN_QUEUED = 7;
+  EVENT_TYPE_STEP_RUN_STARTED = 8;
+  EVENT_TYPE_STEP_RUN_PROGRESS = 9;
+  EVENT_TYPE_STEP_RUN_SUCCEEDED = 10;
+  EVENT_TYPE_STEP_RUN_FAILED = 11;
+  EVENT_TYPE_STEP_RUN_SKIPPED = 12;
+  EVENT_TYPE_STEP_RUN_CANCELLED = 13;
+  EVENT_TYPE_RESYNC = 14;
+  // Keep-alive, sent every GLYPH_LIVE_HEARTBEAT_SECONDS when configured.
+  EVENT_TYPE_HEARTBEAT = 15;
+  EVENT_TYPE_RUN_DELETED = 16;
+}
+
+message WatchWorkflowRequest {
+  string workflow_id = 1;
+}
+
+message WorkflowEvent {
+  EventType type = 1;
+  string workflow_id = 2;
+  optional string run_id = 3;
+  optional string step_run_id = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+}
+
+message WatchWorkflowResponse {
+  WorkflowEvent event = 1;
+}

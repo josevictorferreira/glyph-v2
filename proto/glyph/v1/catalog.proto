@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package glyph.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Models advertised by the providers (velox, omniroute) and the tool catalog.
+service CatalogService {
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+  // Manually refresh every provider's model list (also runs every 5 minutes).
+  rpc RefreshModels(RefreshModelsRequest) returns (RefreshModelsResponse);
+}
+
+message AvailableModel {
+  string provider = 1;
+  string model_id = 2;
+  // "{provider}/{model_id}" — the value to store in Step.model_id.
+  string full_id = 3;
+  string display_name = 4;
+  bool available = 5;
+  map<string, bool> capabilities = 6;
+  google.protobuf.Timestamp fetched_at = 7;
+}
+
+message ToolDefinition {
+  string key = 1;
+  string display_name = 2;
+  string description = 3;
+  string pi_tool_name = 4;
+  bool enabled = 5;
+}
+
+message ProviderRefreshResult {
+  string provider = 1;
+  bool refreshed = 2;
+  int32 model_count = 3;
+  repeated string became_unavailable = 4;
+  optional string error = 5;
+}
+
+message ListModelsRequest {
+  bool include_unavailable = 1;
+}
+
+message ListModelsResponse {
+  // Velox first, then by model_id.
+  repeated AvailableModel models = 1;
+  // True when the catalog was never fetched or is older than the cache TTL.
+  bool stale = 2;
+}
+
+message ListToolsRequest {}
+
+message ListToolsResponse {
+  // Enabled tools ordered by key.
+  repeated ToolDefinition tools = 1;
+}
+
+message RefreshModelsRequest {}
+
+message RefreshModelsResponse {
+  repeated ProviderRefreshResult results = 1;
+}

@@ -1,0 +1,302 @@
+syntax = "proto3";
+
+package glyph.v1;
+
+import "glyph/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Runs: creation, inspection, stop, retry, deletion.
+//
+// Plain HTTP (not gRPC):
+//   GET /workflows/{workflow_id}/runs/{run_id}/step_runs/{step_run_id}/download
+//   GET /workflows/{workflow_id}/runs/{run_id}/step_runs/{step_run_id}/preview
+//
+// Errors: FAILED_PRECONDITION with google.rpc.ErrorInfo{reason} — for StartRun
+// VALIDATION_FAILED or MISSING_VALUES (+ ValidationIssues detail); for stop and
+// retry, RUN_FINISHED / RUN_NOT_RUNNING / STEP_NOT_FAILED / RUN_NOT_FINISHED
+// with the user-facing message.
+service RunService {
+  rpc StartRun(StartRunRequest) returns (StartRunResponse);
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc GetStepRun(GetStepRunRequest) returns (GetStepRunResponse);
+  rpc StopRun(StopRunRequest) returns (StopRunResponse);
+  rpc RetryStep(RetryStepRequest) returns (RetryStepResponse);
+  rpc DeleteRun(DeleteRunRequest) returns (DeleteRunResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot (immutable configuration the run executes against; version 3)
+// ---------------------------------------------------------------------------
+
+message SnapshotSchedule {
+  bool enabled = 1;
+  optional string cron_expression = 2;
+  optional string timezone = 3;
+  optional string human_description = 4;
+}
+
+message SnapshotWorkflow {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  WorkflowStatus status = 4;
+  optional SnapshotSchedule schedule = 5;
+}
+
+message SnapshotInput {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool required = 4;
+  int32 position = 5;
+  optional string value = 6;
+  bool ask_at_run_time = 7;
+}
+
+message SnapshotTool {
+  string key = 1;
+  string display_name = 2;
+  string pi_tool_name = 3;
+}
+
+message SnapshotStepInput {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool required = 4;
+  int32 position = 5;
+  optional string workflow_input_id = 6;
+  optional string workflow_input_name = 7;
+}
+
+message SnapshotStep {
+  string id = 1;
+  StepKind kind = 2;
+  bool allow_failure = 3;
+  string name = 4;
+  optional string description = 5;
+  optional string prompt = 6;
+  optional string additional_context = 7;
+  optional string output_name = 8;
+  optional string output_description = 9;
+  optional string expected_output = 10;
+  OutputFileFormat output_file_format = 11;
+  optional string model_id = 12;
+  optional double temperature = 13;
+  repeated SnapshotTool enabled_tools = 14;
+  int32 canvas_x = 15;
+  int32 canvas_y = 16;
+  int32 position = 17;
+  repeated SnapshotStepInput inputs = 18;
+}
+
+message SnapshotConnection {
+  string source_step_id = 1;
+  string source_output_name = 2;
+  string destination_step_id = 3;
+  string destination_input_id = 4;
+  optional string destination_input_name = 5;
+}
+
+message RunSnapshot {
+  int32 version = 1;
+  google.protobuf.Timestamp captured_at = 2;
+  SnapshotWorkflow workflow = 3;
+  repeated SnapshotInput inputs = 4;
+  repeated SnapshotStep steps = 5;
+  repeated SnapshotConnection connections = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Runs and step runs
+// ---------------------------------------------------------------------------
+
+message StepRunSummary {
+  string id = 1;
+  string snapshot_step_id = 2;
+  string step_name = 3;
+  StepKind step_kind = 4;
+  StepRunStatus status = 5;
+  int32 position = 6;
+  bool allow_failure = 7;
+  optional google.protobuf.Timestamp queued_at = 8;
+  optional google.protobuf.Timestamp started_at = 9;
+  optional google.protobuf.Timestamp ended_at = 10;
+  optional int64 elapsed_ms = 11;
+  optional string human_error = 12;
+  optional string skipped_reason = 13;
+  optional string output_name = 14;
+  OutputFileFormat output_file_format = 15;
+  bool has_output = 16;
+}
+
+enum InputSourceKind {
+  INPUT_SOURCE_KIND_UNSPECIFIED = 0;
+  INPUT_SOURCE_KIND_NONE = 1;
+  INPUT_SOURCE_KIND_STEP_OUTPUT = 2;
+  INPUT_SOURCE_KIND_WORKFLOW_VALUE = 3;
+  INPUT_SOURCE_KIND_CONSTANT = 4;
+}
+
+message InputSource {
+  InputSourceKind kind = 1;
+  optional string step_run_id = 2;
+  optional string workflow_input_id = 3;
+  // e.g. "Output from Research", "Workflow value “topic”", "Not connected".
+  string label = 4;
+}
+
+message ResolvedInput {
+  string name = 1;
+  optional google.protobuf.Value value = 2;
+  InputSource source = 3;
+}
+
+message AgentMessage {
+  string role = 1;
+  string text = 2;
+  int32 tool_calls = 3;
+  optional string stop_reason = 4;
+  optional string error = 5;
+}
+
+enum ToolState {
+  TOOL_STATE_UNSPECIFIED = 0;
+  TOOL_STATE_RUNNING = 1;
+  TOOL_STATE_DONE = 2;
+  TOOL_STATE_ERROR = 3;
+}
+
+message TranscriptText {
+  string text = 1;
+}
+
+message TranscriptThinking {
+  string text = 1;
+}
+
+message TranscriptTool {
+  string name = 1;
+  string summary = 2;
+  ToolState state = 3;
+}
+
+// One rendered block of the agent session (derived from session content).
+message TranscriptBlock {
+  oneof block {
+    TranscriptText text = 1;
+    TranscriptThinking thinking = 2;
+    TranscriptTool tool = 3;
+  }
+}
+
+message StepRun {
+  StepRunSummary summary = 1;
+  optional string prompt = 2;
+  optional string additional_context = 3;
+  optional string expected_output = 4;
+  optional string model_id = 5;
+  optional double temperature = 6;
+  repeated string enabled_tool_names = 7;
+  repeated ResolvedInput resolved_inputs = 8;
+  optional string output_text = 9;
+  // Arbitrary JSON produced by the step (helper map, parsed JSON output).
+  optional google.protobuf.Value output_json = 10;
+  repeated AgentMessage messages = 11;
+  repeated TranscriptBlock transcript = 12;
+  optional string technical_error = 13;
+  string download_path = 14;
+  optional string preview_path = 15;
+}
+
+message Run {
+  string id = 1;
+  string workflow_id = 2;
+  RunStatus status = 3;
+  RunTrigger trigger = 4;
+  // True for manual runs of a draft workflow.
+  bool draft_test = 5;
+  optional google.protobuf.Timestamp queued_at = 6;
+  optional google.protobuf.Timestamp started_at = 7;
+  optional google.protobuf.Timestamp ended_at = 8;
+  optional int64 elapsed_ms = 9;
+  optional string failure_summary = 10;
+  optional string first_failed_step_run_id = 11;
+  optional string schedule_occurrence_key = 12;
+  // Values supplied at run creation, keyed by workflow input name.
+  map<string, string> supplied_values = 13;
+  RunSnapshot snapshot = 14;
+  // Empty in ListRuns.
+  repeated StepRunSummary step_runs = 15;
+  google.protobuf.Timestamp created_at = 16;
+}
+
+message StartRunRequest {
+  string workflow_id = 1;
+  // Keyed by workflow input NAME.
+  map<string, string> values = 2;
+}
+
+message StartRunResponse {
+  Run run = 1;
+}
+
+message ListRunsRequest {
+  string workflow_id = 1;
+  // 1..100; 0 means 20.
+  int32 limit = 2;
+  // Only runs created strictly before this instant (pagination cursor).
+  optional google.protobuf.Timestamp before = 3;
+}
+
+message ListRunsResponse {
+  // Newest first; step_runs and snapshot steps omitted.
+  repeated Run runs = 1;
+}
+
+message GetRunRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message GetRunResponse {
+  Run run = 1;
+}
+
+message GetStepRunRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+  string step_run_id = 3;
+}
+
+message GetStepRunResponse {
+  StepRun step_run = 1;
+}
+
+message StopRunRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message StopRunResponse {
+  Run run = 1;
+}
+
+message RetryStepRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+  string step_run_id = 3;
+}
+
+message RetryStepResponse {
+  Run run = 1;
+}
+
+message DeleteRunRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message DeleteRunResponse {}

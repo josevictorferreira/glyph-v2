@@ -10,7 +10,18 @@ use tonic_web::GrpcWebLayer;
 
 use crate::app::{router, state::AppState};
 use crate::config::Config;
+use crate::features::catalog::grpc::CatalogGrpc;
+use crate::features::definition::grpc::DefinitionGrpc;
+use crate::features::live::grpc::LiveGrpc;
+use crate::features::runs::grpc::RunGrpc;
+use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::postgres;
+use crate::proto;
+use crate::proto::pb::catalog_service_server::CatalogServiceServer;
+use crate::proto::pb::definition_service_server::DefinitionServiceServer;
+use crate::proto::pb::live_service_server::LiveServiceServer;
+use crate::proto::pb::run_service_server::RunServiceServer;
+use crate::proto::pb::workflow_service_server::WorkflowServiceServer;
 
 pub struct App {
     router: Router,
@@ -33,7 +44,18 @@ pub async fn build_with_pool(config: &Config, pool: PgPool) -> anyhow::Result<Ap
     let state = AppState { pool };
 
     let (_health_reporter, health_service) = tonic_health::server::health_reporter();
+    let reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
+        .build_v1()
+        .context("building gRPC reflection")?;
     let grpc = Routes::new(health_service)
+        .add_service(reflection)
+        .add_service(CatalogServiceServer::new(CatalogGrpc))
+        .add_service(WorkflowServiceServer::new(WorkflowGrpc))
+        .add_service(DefinitionServiceServer::new(DefinitionGrpc))
+        .add_service(RunServiceServer::new(RunGrpc))
+        .add_service(LiveServiceServer::new(LiveGrpc))
         .prepare()
         .into_axum_router()
         .layer(GrpcWebLayer::new());

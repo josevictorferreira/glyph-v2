@@ -37,9 +37,12 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 
 [build-dependencies]
+prost = "0.14.4"
 protox = "0.9.1"
 tonic-prost-build = "0.14.6"
 
 [dev-dependencies]
 http-body-util = "0.1.5"
+prost = "0.14.4"
+prost-types = "0.14.4"
 tower = { version = "0.5.3", features = ["util"] }

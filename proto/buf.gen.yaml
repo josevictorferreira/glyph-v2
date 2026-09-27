@@ -1,0 +1,10 @@
+# TypeScript generation for the frontend epic:
+#   cd proto && buf generate
+# Requires `protoc-gen-es` (from @bufbuild/protoc-gen-es) on PATH, e.g. via
+# the frontend's node_modules/.bin.
+version: v2
+plugins:
+  - local: protoc-gen-es
+    out: ../frontend/src/gen
+    opt:
+      - target=ts
