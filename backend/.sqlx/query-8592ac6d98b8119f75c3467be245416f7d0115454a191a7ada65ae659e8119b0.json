@@ -1,0 +1,232 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, kind, name, description, prompt, additional_context, expected_output, output_name,\n                output_description, output_file_format, model_id, model_settings, enabled_tool_ids,\n                allow_failure, canvas_x, canvas_y, position, created_at\n         FROM workflow_steps WHERE workflow_id = $1 ORDER BY position, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "prompt",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "prompt"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "additional_context",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "additional_context"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "expected_output",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "expected_output"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "output_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "output_name"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "output_description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "output_description"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "output_file_format",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "output_file_format"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "model_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "model_id"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "model_settings",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "model_settings"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "enabled_tool_ids",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "enabled_tool_ids"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "allow_failure",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "allow_failure"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "canvas_x",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "canvas_x"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "canvas_y",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "canvas_y"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "workflow_steps",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8592ac6d98b8119f75c3467be245416f7d0115454a191a7ada65ae659e8119b0"
+}

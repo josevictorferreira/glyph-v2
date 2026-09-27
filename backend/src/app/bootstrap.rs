@@ -23,6 +23,7 @@ use crate::features::catalog::{
 use crate::features::definition::grpc::DefinitionGrpc;
 use crate::features::live::grpc::LiveGrpc;
 use crate::features::runs::grpc::RunGrpc;
+use crate::features::workflows::WorkflowService;
 use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
@@ -63,12 +64,13 @@ pub async fn build_with_pool(config: &Config, pool: PgPool) -> anyhow::Result<Ap
     build_with(config, pool, Overrides::default()).await
 }
 
-struct NoopFlagger;
+/// Catalog → workflows: vanished models flag active workflows.
+struct WorkflowsFlagger(WorkflowService);
 
 #[async_trait]
-impl WorkflowFlagger for NoopFlagger {
-    async fn flag_workflows_using_models(&self, _model_ids: &[String]) -> DomainResult<usize> {
-        Ok(0)
+impl WorkflowFlagger for WorkflowsFlagger {
+    async fn flag_workflows_using_models(&self, model_ids: &[String]) -> DomainResult<usize> {
+        self.0.flag_workflows_using_models(model_ids).await
     }
 }
 
@@ -84,6 +86,13 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
     );
     let clock: Arc<dyn Clock> = overrides.clock.clone().unwrap_or_else(|| Arc::new(SystemClock));
     let store = PgStore::new(pool.clone(), cipher.clone());
+
+    // --- workflows ---------------------------------------------------------
+    let workflows = WorkflowService::new(
+        Arc::new(store.clone()),
+        Arc::new(store.clone()),
+        clock.clone(),
+    );
 
     // --- catalog -----------------------------------------------------------
     let gateways = overrides.gateways.clone().unwrap_or_else(|| {
@@ -109,7 +118,7 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
     let refresh_models = RefreshModels::new(
         catalog_store,
         gateways,
-        Arc::new(NoopFlagger),
+        Arc::new(WorkflowsFlagger(workflows.clone())),
         clock.clone(),
     );
 
@@ -127,7 +136,7 @@ pub async fn build_with(config: &Config, pool: PgPool, overrides: Overrides) -> 
             list_models,
             refresh_models.clone(),
         )))
-        .add_service(WorkflowServiceServer::new(WorkflowGrpc))
+        .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(workflows.clone())))
         .add_service(DefinitionServiceServer::new(DefinitionGrpc))
         .add_service(RunServiceServer::new(RunGrpc))
         .add_service(LiveServiceServer::new(LiveGrpc))

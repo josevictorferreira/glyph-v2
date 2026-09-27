@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflow_schedules AS t\n                 (id, workflow_id, enabled, cron_expression, timezone, human_description, next_run_at,\n                  last_dispatched_at, created_at)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n               ON CONFLICT (id) DO UPDATE SET\n                 enabled = EXCLUDED.enabled, cron_expression = EXCLUDED.cron_expression,\n                 timezone = EXCLUDED.timezone, human_description = EXCLUDED.human_description,\n                 next_run_at = EXCLUDED.next_run_at, last_dispatched_at = EXCLUDED.last_dispatched_at,\n                 updated_at = now()\n               WHERE (t.enabled, t.cron_expression, t.timezone, t.human_description, t.next_run_at,\n                      t.last_dispatched_at)\n                     IS DISTINCT FROM\n                     (EXCLUDED.enabled, EXCLUDED.cron_expression, EXCLUDED.timezone,\n                      EXCLUDED.human_description, EXCLUDED.next_run_at, EXCLUDED.last_dispatched_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7dbf8287985b01f4a093155bb1f98ddb8ec15cf47a34671225f40effa6a4f25"
+}

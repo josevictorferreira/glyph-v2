@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT si.id, si.workflow_step_id, si.name, si.description, si.required, si.position,\n                si.workflow_input_id, si.created_at\n         FROM step_inputs si JOIN workflow_steps s ON s.id = si.workflow_step_id\n         WHERE s.workflow_id = $1 ORDER BY si.position, si.created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "workflow_step_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "workflow_step_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "required",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "required"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "workflow_input_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "workflow_input_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "step_inputs",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "755a6bfe51b7f2bd7a51c5dda0833ff1409408c83dcc6a3b196a98ce1b98f653"
+}

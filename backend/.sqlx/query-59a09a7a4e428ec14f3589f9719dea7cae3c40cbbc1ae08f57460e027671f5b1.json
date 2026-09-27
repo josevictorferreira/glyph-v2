@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflow_schedule_values (id, workflow_schedule_id, workflow_input_id, value, created_at)\n                   VALUES ($1, $2, $3, $4, $5)\n                   ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59a09a7a4e428ec14f3589f9719dea7cae3c40cbbc1ae08f57460e027671f5b1"
+}

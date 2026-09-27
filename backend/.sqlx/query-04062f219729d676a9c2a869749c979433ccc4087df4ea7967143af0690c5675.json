@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflow_inputs AS t\n                 (id, workflow_id, name, description, required, ask_at_run_time, value, position, created_at)\n               SELECT u.id, $1, u.name, u.description, u.required, u.ask, u.value, u.position, u.created_at\n               FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::bool[], $6::bool[], $7::text[], $8::int[], $9::timestamptz[])\n                 AS u(id, name, description, required, ask, value, position, created_at)\n               ON CONFLICT (id) DO UPDATE SET\n                 name = EXCLUDED.name, description = EXCLUDED.description, required = EXCLUDED.required,\n                 ask_at_run_time = EXCLUDED.ask_at_run_time, value = EXCLUDED.value,\n                 position = EXCLUDED.position, updated_at = now()\n               WHERE (t.name, t.description, t.required, t.ask_at_run_time, t.value, t.position)\n                     IS DISTINCT FROM\n                     (EXCLUDED.name, EXCLUDED.description, EXCLUDED.required, EXCLUDED.ask_at_run_time,\n                      EXCLUDED.value, EXCLUDED.position)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "BoolArray",
+        "BoolArray",
+        "TextArray",
+        "Int4Array",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "04062f219729d676a9c2a869749c979433ccc4087df4ea7967143af0690c5675"
+}

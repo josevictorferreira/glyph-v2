@@ -126,3 +126,39 @@ impl CatalogTx for PgTx {
         Ok(())
     }
 }
+
+#[async_trait]
+impl crate::features::workflows::ports::catalog::CatalogReader for PgStore {
+    async fn view(&self) -> DomainResult<crate::features::workflows::domain::catalog_view::CatalogView> {
+        use crate::features::workflows::domain::catalog_view::{CatalogModel, CatalogView, ToolRef};
+        let models = sqlx::query!(
+            "SELECT provider, model_id, available, capabilities FROM available_models ORDER BY provider, model_id"
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?
+        .into_iter()
+        .map(|r| CatalogModel {
+            provider: r.provider,
+            model_id: r.model_id,
+            available: r.available,
+            capabilities: object(r.capabilities),
+        })
+        .collect();
+        let tools = sqlx::query!(
+            "SELECT key, display_name, pi_tool_name, enabled FROM tool_definitions ORDER BY key"
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?
+        .into_iter()
+        .map(|r| ToolRef {
+            key: r.key,
+            display_name: r.display_name,
+            pi_tool_name: r.pi_tool_name,
+            enabled: r.enabled,
+        })
+        .collect();
+        Ok(CatalogView { models, tools })
+    }
+}

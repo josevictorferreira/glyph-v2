@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflows AS w\n             (id, name, description, status, fail_fast, last_run_at, last_run_status, next_run_at, created_at)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n           ON CONFLICT (id) DO UPDATE SET\n             name = EXCLUDED.name, description = EXCLUDED.description, status = EXCLUDED.status,\n             fail_fast = EXCLUDED.fail_fast, last_run_at = EXCLUDED.last_run_at,\n             last_run_status = EXCLUDED.last_run_status, next_run_at = EXCLUDED.next_run_at,\n             updated_at = now()\n           WHERE (w.name, w.description, w.status, w.fail_fast, w.last_run_at, w.last_run_status, w.next_run_at)\n                 IS DISTINCT FROM\n                 (EXCLUDED.name, EXCLUDED.description, EXCLUDED.status, EXCLUDED.fail_fast,\n                  EXCLUDED.last_run_at, EXCLUDED.last_run_status, EXCLUDED.next_run_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b70159b5082f86849d010553aab14a6191f2351c4c1aee2184bfea5313b93a76"
+}

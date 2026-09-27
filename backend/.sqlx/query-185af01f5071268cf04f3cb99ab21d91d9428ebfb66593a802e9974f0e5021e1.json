@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT provider, model_id, available, capabilities FROM available_models ORDER BY provider, model_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "provider"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "model_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "model_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "available",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "available"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "capabilities",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "available_models",
+            "name": "capabilities"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "185af01f5071268cf04f3cb99ab21d91d9428ebfb66593a802e9974f0e5021e1"
+}

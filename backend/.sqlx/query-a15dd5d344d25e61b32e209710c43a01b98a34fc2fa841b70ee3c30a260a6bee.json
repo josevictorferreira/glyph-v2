@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflow_steps AS t\n                 (id, workflow_id, kind, name, description, prompt, additional_context, expected_output,\n                  output_name, output_description, output_file_format, model_id, model_settings,\n                  enabled_tool_ids, allow_failure, canvas_x, canvas_y, position, created_at)\n               SELECT u.id, $1, u.kind, u.name, u.description, u.prompt, u.context, u.expected,\n                      u.output_name, u.output_description, u.format, u.model_id, u.settings,\n                      u.tools, u.allow_failure, u.x, u.y, u.position, u.created_at\n               FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[],\n                           $9::text[], $10::text[], $11::text[], $12::text[], $13::jsonb[], $14::jsonb[],\n                           $15::bool[], $16::int[], $17::int[], $18::int[], $19::timestamptz[])\n                 AS u(id, kind, name, description, prompt, context, expected, output_name, output_description,\n                      format, model_id, settings, tools, allow_failure, x, y, position, created_at)\n               ON CONFLICT (id) DO UPDATE SET\n                 kind = EXCLUDED.kind, name = EXCLUDED.name, description = EXCLUDED.description,\n                 prompt = EXCLUDED.prompt, additional_context = EXCLUDED.additional_context,\n                 expected_output = EXCLUDED.expected_output, output_name = EXCLUDED.output_name,\n                 output_description = EXCLUDED.output_description,\n                 output_file_format = EXCLUDED.output_file_format, model_id = EXCLUDED.model_id,\n                 model_settings = EXCLUDED.model_settings, enabled_tool_ids = EXCLUDED.enabled_tool_ids,\n                 allow_failure = EXCLUDED.allow_failure, canvas_x = EXCLUDED.canvas_x,\n                 canvas_y = EXCLUDED.canvas_y, position = EXCLUDED.position, updated_at = now()\n               WHERE (t.kind, t.name, t.description, t.prompt, t.additional_context, t.expected_output,\n                      t.output_name, t.output_description, t.output_file_format, t.model_id,\n                      t.model_settings, t.enabled_tool_ids, t.allow_failure, t.canvas_x, t.canvas_y, t.position)\n                     IS DISTINCT FROM\n                     (EXCLUDED.kind, EXCLUDED.name, EXCLUDED.description, EXCLUDED.prompt,\n                      EXCLUDED.additional_context, EXCLUDED.expected_output, EXCLUDED.output_name,\n                      EXCLUDED.output_description, EXCLUDED.output_file_format, EXCLUDED.model_id,\n                      EXCLUDED.model_settings, EXCLUDED.enabled_tool_ids, EXCLUDED.allow_failure,\n                      EXCLUDED.canvas_x, EXCLUDED.canvas_y, EXCLUDED.position)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "JsonbArray",
+        "JsonbArray",
+        "BoolArray",
+        "Int4Array",
+        "Int4Array",
+        "Int4Array",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a15dd5d344d25e61b32e209710c43a01b98a34fc2fa841b70ee3c30a260a6bee"
+}

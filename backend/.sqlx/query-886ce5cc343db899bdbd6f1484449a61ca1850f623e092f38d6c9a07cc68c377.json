@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflow_connections AS t\n                 (id, workflow_id, source_step_id, source_output_name, destination_step_id,\n                  destination_input_id, created_at)\n               SELECT u.id, $1, u.source, u.output, u.dest, u.input, u.created_at\n               FROM UNNEST($2::uuid[], $3::uuid[], $4::text[], $5::uuid[], $6::uuid[], $7::timestamptz[])\n                 AS u(id, source, output, dest, input, created_at)\n               ON CONFLICT (id) DO UPDATE SET\n                 source_step_id = EXCLUDED.source_step_id, source_output_name = EXCLUDED.source_output_name,\n                 destination_step_id = EXCLUDED.destination_step_id,\n                 destination_input_id = EXCLUDED.destination_input_id, updated_at = now()\n               WHERE (t.source_step_id, t.source_output_name, t.destination_step_id, t.destination_input_id)\n                     IS DISTINCT FROM\n                     (EXCLUDED.source_step_id, EXCLUDED.source_output_name, EXCLUDED.destination_step_id,\n                      EXCLUDED.destination_input_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "UuidArray",
+        "UuidArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "886ce5cc343db899bdbd6f1484449a61ca1850f623e092f38d6c9a07cc68c377"
+}

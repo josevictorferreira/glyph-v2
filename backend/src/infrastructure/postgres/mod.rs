@@ -2,6 +2,7 @@ pub mod catalog_repo;
 pub mod migrate;
 pub mod pool;
 pub mod uow;
+pub mod workflows_repo;
 
 use std::sync::Arc;
 

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM step_inputs si USING workflow_steps s\n         WHERE s.id = si.workflow_step_id AND s.workflow_id = $1 AND NOT (si.id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "796adc53a111b04671581211d96d2280105f93cdcc94239215f45b5f803f8eb3"
+}

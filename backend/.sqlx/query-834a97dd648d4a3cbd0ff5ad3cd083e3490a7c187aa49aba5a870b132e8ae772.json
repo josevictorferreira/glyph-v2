@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, description, status, fail_fast, last_run_at, last_run_status, next_run_at, created_at, updated_at\n             FROM workflows WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "fail_fast",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "fail_fast"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "last_run_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "last_run_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_run_status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "last_run_status"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "next_run_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "next_run_at"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "workflows",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "834a97dd648d4a3cbd0ff5ad3cd083e3490a7c187aa49aba5a870b132e8ae772"
+}
