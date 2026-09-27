@@ -1,7 +1,9 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use secrecy::ExposeSecret;
 use axum::Router;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -15,6 +17,7 @@ use crate::features::definition::grpc::DefinitionGrpc;
 use crate::features::live::grpc::LiveGrpc;
 use crate::features::runs::grpc::RunGrpc;
 use crate::features::workflows::grpc::WorkflowGrpc;
+use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
 use crate::infrastructure::postgres;
 use crate::proto;
 use crate::proto::pb::catalog_service_server::CatalogServiceServer;
@@ -41,7 +44,11 @@ pub async fn build_with_pool(config: &Config, pool: PgPool) -> anyhow::Result<Ap
         .await
         .context("running migrations")?;
 
-    let state = AppState { pool };
+    let cipher: Arc<dyn Cipher> = Arc::new(
+        AesGcmCipher::from_config(config.encryption_key.as_ref().map(|k| k.expose_secret()))
+            .map_err(anyhow::Error::msg)?,
+    );
+    let state = AppState { pool, cipher };
 
     let (_health_reporter, health_service) = tonic_health::server::health_reporter();
     let reflection = tonic_reflection::server::Builder::configure()

@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use secrecy::SecretString;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("{0} is required")]
@@ -15,6 +17,8 @@ pub struct Config {
     pub database_max_connections: u32,
     pub cors_origins: Vec<String>,
     pub log_json: bool,
+    /// Base64 of 32 bytes; `None` → insecure dev key (warned at boot).
+    pub encryption_key: Option<SecretString>,
 }
 
 impl Config {
@@ -37,6 +41,7 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .collect(),
             log_json: parse_bool(&var, "GLYPH_LOG_JSON", false)?,
+            encryption_key: var("GLYPH_ENCRYPTION_KEY").map(SecretString::from),
         })
     }
 }
