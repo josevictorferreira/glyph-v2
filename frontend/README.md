@@ -23,6 +23,16 @@ On NixOS the Playwright-downloaded browser cannot run (missing system libs); poi
 PLAYWRIGHT_CHROMIUM_PATH="$(nix build --no-link --print-out-paths nixpkgs#chromium)/bin/chromium" pnpm e2e
 ```
 
+The suite manages its own stack and refuses to run while :3000/:5173 are busy
+(`nix run .#web` would kill whatever holds them). To run it against a stack you
+started yourself, opt in — it must run the fake runner and the e2e mock:
+
+```sh
+GLYPH_STEP_RUNNER=fake VELOX_BASE_URL=http://localhost:9899/v1 nix run .#web &
+node e2e/mock-velox.mjs &
+E2E_REUSE_SERVER=1 pnpm e2e   # + PLAYWRIGHT_CHROMIUM_PATH on NixOS
+```
+
 ## Environment
 
 | Variable            | Default            | Purpose                                     |
