@@ -16,18 +16,33 @@ export default defineConfig({
   reporter: process.env.CI ? "list" : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
+    // Composer defaults to the viewer timezone; pin it so weekly 09:00 UTC
+    // is exactly what the user sees and asserts.
+    timezoneId: "UTC",
     ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
   },
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : {
-        command: "cd .. && nix run .#web",
-        url: "http://localhost:5173",
-        reuseExistingServer: !process.env.CI,
-        timeout: 180_000,
-        env: {
-          GLYPH_STEP_RUNNER: "fake",
-          GLYPH_LIVE_HEARTBEAT_SECONDS: "2",
+    : [
+        // Must come first so the stack can reach it when refreshing the model
+        // catalog at startup.
+        {
+          command: "node e2e/mock-velox.mjs",
+          url: "http://localhost:9899",
+          reuseExistingServer: !process.env.CI,
+          timeout: 15_000,
         },
-      },
+        {
+          command: "cd .. && nix run .#web",
+          url: "http://localhost:5173",
+          reuseExistingServer: !process.env.CI,
+          timeout: 180_000,
+          env: {
+            GLYPH_STEP_RUNNER: "fake",
+            GLYPH_LIVE_HEARTBEAT_SECONDS: "2",
+            VELOX_BASE_URL: "http://localhost:9899/v1",
+            VELOX_API_KEY: "e2e-test",
+          },
+        },
+      ],
 });

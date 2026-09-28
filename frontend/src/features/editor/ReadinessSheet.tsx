@@ -31,7 +31,12 @@ export function ReadinessSheet({ workflowId }: { workflowId: string }) {
     setReadinessOpen(false);
   };
 
-  const draft = workflow?.summary?.status === WorkflowStatus.DRAFT;
+  const status = workflow?.summary?.status;
+  const draft = status === WorkflowStatus.DRAFT;
+  // Rails parity: the review modal offers Activate whenever the workflow is
+  // not active and has no blocking issues — this also recovers
+  // needs_attention after its issues are fixed.
+  const canActivate = issues.length === 0 && workflow !== undefined && status !== WorkflowStatus.ACTIVE;
 
   return (
     <Sheet open={readinessOpen} onOpenChange={setReadinessOpen}>
@@ -50,7 +55,7 @@ export function ReadinessSheet({ workflowId }: { workflowId: string }) {
             <p className="text-sm font-medium text-ink">
               {draft ? "Ready to activate" : "No issues. Everything is ready."}
             </p>
-            {draft && (
+            {canActivate && (
               <Button
                 variant="primary"
                 size="sm"

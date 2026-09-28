@@ -9,6 +9,7 @@ import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Workflow } from "@/gen/glyph/v1/workflow_pb";
 import { LiveConnectionIndicator } from "@/features/live";
 import { useStartRun } from "@/features/runs";
+import { ScheduleChip } from "@/features/schedule";
 import { useIssues, useWorkflow, useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast, type AppError } from "@/shared/api/errors";
 import { useAutosaveField } from "@/shared/lib/autosave";
@@ -36,6 +37,7 @@ export function WorkspaceHeader({ workflowId }: { workflowId: string }) {
   const workflow = data?.workflow;
   const issues = useIssues(workflowId);
   const issueCount = issues.all.length;
+  const { requestFocus } = useEditorChrome();
 
   return (
     <div
@@ -47,6 +49,7 @@ export function WorkspaceHeader({ workflowId }: { workflowId: string }) {
           <WorkflowNameInput workflow={workflow} />
           <WorkflowStatusBadge status={workflow.summary?.status ?? WorkflowStatus.DRAFT} />
           <ReadinessPill issueCount={issueCount} />
+          <ScheduleChip workflow={workflow} onClick={() => requestFocus({ target: "schedule" })} />
         </>
       ) : (
         <div className="h-7 w-64 animate-pulse rounded-md bg-surface-3" />

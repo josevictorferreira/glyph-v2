@@ -1,15 +1,16 @@
 // Workflow panel (spec 0018): the contextual panel shown while nothing is
 // selected. Details autosave through UpdateWorkflow; the values table and
-// schedule composer land in their own chunks (tasks 7 and 0019).
-import { useCallback } from "react";
+// schedule section (spec 0019) render below.
+import { useCallback, useState } from "react";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Workflow } from "@/gen/glyph/v1/workflow_pb";
+import { ScheduleCard, ScheduleComposer, ScheduledValues } from "@/features/schedule";
 import { useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast } from "@/shared/api/errors";
 import { useAutosaveField } from "@/shared/lib/autosave";
 import { Badge, Disclosure, Field, SaveIndicator, Switch, Textarea } from "@/shared/ui";
 import type { EditorFocus } from "./chrome";
-import { useEditorFocusField } from "./chrome";
+import { useEditorChrome, useEditorFocusField } from "./chrome";
 
 interface WorkflowDetailsValue {
   description: string;
@@ -27,7 +28,7 @@ export function WorkflowPanel({
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-3" data-testid="workflow-panel">
       <DetailsSection workflow={workflow} focus={focus} />
       <ValuesSection workflow={workflow} focus={focus} />
-      <ScheduleSection workflow={workflow} />
+      <ScheduleSection workflow={workflow} focus={focus} />
     </div>
   );
 }
@@ -106,14 +107,21 @@ function ValuesSection({ workflow, focus }: { workflow: Workflow; focus: EditorF
   );
 }
 
-function ScheduleSection({ workflow }: { workflow: Workflow }) {
-  const summary = workflow.summary?.scheduleSummary;
+function ScheduleSection({ workflow, focus }: { workflow: Workflow; focus: EditorFocus | null }) {
+  useEditorFocusField(focus, "schedule");
+  const { setReadinessOpen } = useEditorChrome();
+  const [composerOpen, setComposerOpen] = useState(false);
   return (
     <Disclosure title="Schedule">
-      <p className="py-2 text-xs text-ink-subtle">
-        {summary ? `Scheduled: ${summary}.` : "Runs only when you start it."} The schedule composer
-        arrives with spec 0019.
-      </p>
+      <div className="flex flex-col gap-3 py-2" data-editor-field="schedule">
+        <ScheduleCard
+          workflow={workflow}
+          onOpenComposer={() => setComposerOpen(true)}
+          onOpenReadiness={() => setReadinessOpen(true)}
+        />
+        <ScheduledValues workflow={workflow} />
+      </div>
+      <ScheduleComposer workflow={workflow} open={composerOpen} onOpenChange={setComposerOpen} />
     </Disclosure>
   );
 }
