@@ -14,7 +14,10 @@ export function useStartRun(onAppError?: (err: AppError) => void) {
   return useMutation({
     mutationKey: ["glyph.v1.RunService", "startRun"],
     mutationFn: (request: { workflowId: string; values?: Record<string, string> }) =>
-      createClient(RunService, transport).startRun({ workflowId: request.workflowId, values: request.values ?? {} }),
+      createClient(RunService, transport).startRun({
+        workflowId: request.workflowId,
+        values: request.values ?? {},
+      }),
     onSuccess: (_res, request) => {
       void queryClient.invalidateQueries({ queryKey: runKeys.lists(request.workflowId) });
     },

@@ -58,7 +58,11 @@ export function BuildTab({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "]") return;
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      )
+        return;
       const panel = panelRef.current;
       if (!panel) return;
       if (panel.isCollapsed()) panel.expand();

@@ -28,6 +28,9 @@ export function TabsTrigger({
   );
 }
 
-export function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+export function TabsContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.Content>) {
   return <TabsPrimitive.Content className={cn("outline-none", className)} {...props} />;
 }

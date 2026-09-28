@@ -15,7 +15,8 @@ export function CanvasEmptyState({ onAddStep, onImportYaml }: CanvasEmptyStatePr
       <div className="max-w-xs rounded-card border border-border bg-surface p-4 text-center shadow-sm">
         <p className="text-sm font-medium">Design your workflow</p>
         <p className="mt-1 text-xs text-ink-muted">
-          Add your first step, then wire steps together. Double-click the canvas, press A, or right-click for options.
+          Add your first step, then wire steps together. Double-click the canvas, press A, or
+          right-click for options.
         </p>
         <div className="mt-3 flex justify-center gap-2">
           <Button size="sm" onClick={() => onAddStep(1)} data-testid="canvas-empty-add">

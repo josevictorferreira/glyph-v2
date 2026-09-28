@@ -84,7 +84,11 @@ function renderToastButton(onAction: () => void) {
   renderWithApp(
     <Button
       onClick={() =>
-        toast({ title: "Run failed", tone: "danger", action: { label: "View run", onClick: onAction } })
+        toast({
+          title: "Run failed",
+          tone: "danger",
+          action: { label: "View run", onClick: onAction },
+        })
       }
     >
       Toast

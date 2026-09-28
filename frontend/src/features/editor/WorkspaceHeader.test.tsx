@@ -15,7 +15,12 @@ import {
 import { StartRunResponseSchema } from "@/gen/glyph/v1/run_pb";
 import { WorkflowStatus, IssueSchema } from "@/gen/glyph/v1/common_pb";
 import type { WorkflowEvent } from "@/gen/glyph/v1/live_pb";
-import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { renderWithApp } from "@test/render";
 import { EditorChromeProvider, ReadinessSheet, WorkspaceHeader } from "@/features/editor";
 import type { FakeServices } from "@test/fakeTransport";
@@ -29,7 +34,14 @@ const wf = (status: WorkflowStatus, name = "Tournament") =>
 const withIssue = (response: ReturnType<typeof wf>) =>
   create(GetWorkflowResponseSchema, {
     workflow: response.workflow,
-    issues: [create(IssueSchema, { entityType: 2, entityId: "s1", field: "prompt", message: "“Research” needs a prompt." })],
+    issues: [
+      create(IssueSchema, {
+        entityType: 2,
+        entityId: "s1",
+        field: "prompt",
+        message: "“Research” needs a prompt.",
+      }),
+    ],
   });
 
 function failedPrecondition(reason: string): ConnectError {
@@ -38,8 +50,12 @@ function failedPrecondition(reason: string): ConnectError {
   const reasonBytes = enc.encode(reason);
   const domainBytes = enc.encode("glyph");
   const info = new Uint8Array([
-    (1 << 3) | 2, reasonBytes.length, ...reasonBytes,
-    (2 << 3) | 2, domainBytes.length, ...domainBytes,
+    (1 << 3) | 2,
+    reasonBytes.length,
+    ...reasonBytes,
+    (2 << 3) | 2,
+    domainBytes.length,
+    ...domainBytes,
   ]);
   const err = new ConnectError("This workflow cannot run yet.", Code.FailedPrecondition);
   Object.assign(err, {
@@ -60,16 +76,15 @@ function mount(services: FakeServices) {
   const rootRoute = createRootRoute({ component: () => <>{ui}</> });
   const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory() });
   const rendered = renderWithApp(<RouterProvider router={router} />, {
-      services: {
-        live: {
-          watchWorkflow: async function* (): AsyncIterable<{ event?: WorkflowEvent }> {
-            await new Promise(() => {});
-          },
+    services: {
+      live: {
+        watchWorkflow: async function* (): AsyncIterable<{ event?: WorkflowEvent }> {
+          await new Promise(() => {});
         },
-        ...services,
       },
+      ...services,
     },
-  );
+  });
   return { ...rendered, selectStep };
 }
 
@@ -84,7 +99,10 @@ describe("WorkspaceHeader (spec 0018)", () => {
         updateWorkflow: (req: { id: string; name: string }) => {
           updates.push(req);
           return Promise.resolve(
-            create(UpdateWorkflowResponseSchema, { workflow: wf(WorkflowStatus.DRAFT).workflow, issues: [] }),
+            create(UpdateWorkflowResponseSchema, {
+              workflow: wf(WorkflowStatus.DRAFT).workflow,
+              issues: [],
+            }),
           );
         },
       },
@@ -96,7 +114,9 @@ describe("WorkspaceHeader (spec 0018)", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(600);
       });
-      expect(updates.map((u) => ({ id: u.id, name: u.name }))).toEqual([{ id: "wf-1", name: "Renamed" }]);
+      expect(updates.map((u) => ({ id: u.id, name: u.name }))).toEqual([
+        { id: "wf-1", name: "Renamed" },
+      ]);
       expect(screen.getByTestId("save-indicator")).toHaveTextContent("Saved");
     } finally {
       vi.useRealTimers();
@@ -121,10 +141,18 @@ describe("WorkspaceHeader (spec 0018)", () => {
 
   it("activates a ready draft", async () => {
     const activate = vi.fn((_req: { id: string }) =>
-      Promise.resolve(create(ActivateWorkflowResponseSchema, { workflow: wf(WorkflowStatus.ACTIVE).workflow, issues: [] })),
+      Promise.resolve(
+        create(ActivateWorkflowResponseSchema, {
+          workflow: wf(WorkflowStatus.ACTIVE).workflow,
+          issues: [],
+        }),
+      ),
     );
     const { unmount } = mount({
-      workflow: { getWorkflow: () => Promise.resolve(wf(WorkflowStatus.DRAFT)), activateWorkflow: activate },
+      workflow: {
+        getWorkflow: () => Promise.resolve(wf(WorkflowStatus.DRAFT)),
+        activateWorkflow: activate,
+      },
     });
     await userEvent.click(await screen.findByTestId("activate"));
     await waitFor(() => expect(activate.mock.calls[0]![0]).toMatchObject({ id: "wf-1" }));
@@ -159,7 +187,9 @@ describe("WorkspaceHeader (spec 0018)", () => {
       },
     });
     await userEvent.click(await screen.findByTestId("run-now"));
-    await waitFor(() => expect(started.map((r) => ({ workflowId: r.workflowId }))).toEqual([{ workflowId: "wf-1" }]));
+    await waitFor(() =>
+      expect(started.map((r) => ({ workflowId: r.workflowId }))).toEqual([{ workflowId: "wf-1" }]),
+    );
     expect(await screen.findByText("Run started")).toBeInTheDocument();
     unmount();
   });
@@ -171,7 +201,12 @@ describe("WorkspaceHeader (spec 0018)", () => {
         getWorkflow: () => Promise.resolve(wf(WorkflowStatus.ACTIVE)),
         pauseWorkflow: (req: { id: string }) => {
           paused.push(req);
-          return Promise.resolve(create(PauseWorkflowResponseSchema, { workflow: wf(WorkflowStatus.PAUSED).workflow, issues: [] }));
+          return Promise.resolve(
+            create(PauseWorkflowResponseSchema, {
+              workflow: wf(WorkflowStatus.PAUSED).workflow,
+              issues: [],
+            }),
+          );
         },
       },
     });
@@ -180,7 +215,9 @@ describe("WorkspaceHeader (spec 0018)", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "Pause" }));
     const confirm = await screen.findByTestId("confirm-pause");
     expect(screen.getByText("Pause this workflow?")).toBeInTheDocument();
-    expect(screen.getByText("Scheduled runs stop. Manual runs stay available. History is kept.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Scheduled runs stop. Manual runs stay available. History is kept."),
+    ).toBeInTheDocument();
     await userEvent.click(confirm);
     await waitFor(() => expect(paused.map((r) => ({ id: r.id }))).toEqual([{ id: "wf-1" }]));
     unmount();
@@ -189,7 +226,9 @@ describe("WorkspaceHeader (spec 0018)", () => {
   it("needs-attention shows Review issues and disables the run menu item", async () => {
     const started = vi.fn();
     const { unmount } = mount({
-      workflow: { getWorkflow: () => Promise.resolve(withIssue(wf(WorkflowStatus.NEEDS_ATTENTION))) },
+      workflow: {
+        getWorkflow: () => Promise.resolve(withIssue(wf(WorkflowStatus.NEEDS_ATTENTION))),
+      },
       run: { startRun: started },
     });
     await userEvent.click(await screen.findByTestId("review-issues"));

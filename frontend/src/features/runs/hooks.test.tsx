@@ -32,7 +32,9 @@ describe("run hooks", () => {
 
   it("useStepRun fetches the step run evidence", async () => {
     const r = renderHookWithApp(() => useStepRun("wf-1", "r-1", "s-1"), {
-      services: { run: { getStepRun: () => ({ stepRun: create(StepRunSchema, { summary: { id: "s-1" } }) }) } },
+      services: {
+        run: { getStepRun: () => ({ stepRun: create(StepRunSchema, { summary: { id: "s-1" } }) }) },
+      },
     });
     await waitFor(() => expect(r.result.current.data?.stepRun?.summary?.id).toBe("s-1"));
     r.unmount();

@@ -2,7 +2,15 @@
 // editor focus requests (deep links) shared between the workspace layout
 // (header) and the build tab (contextual panel). Provided once by the
 // /workflows/$id layout, next to LiveProvider.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type StepEditorTab = "instructions" | "inputs" | "model" | "output" | "settings";
 export type WorkflowPanelSection = "details" | "values" | "schedule";

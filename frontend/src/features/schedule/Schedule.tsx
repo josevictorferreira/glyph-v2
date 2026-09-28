@@ -40,7 +40,9 @@ export function ScheduleCard({
       data-testid={`schedule-${state.kind}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-ink">{schedule.humanDescription || "Custom recurrence"}</span>
+        <span className="font-medium text-ink">
+          {schedule.humanDescription || "Custom recurrence"}
+        </span>
         {state.kind === "active" && <Badge tone="success">Enabled</Badge>}
         {state.kind === "paused" && <Badge tone="warning">Paused</Badge>}
         {state.kind === "attention" && <Badge tone="danger">Not dispatching</Badge>}

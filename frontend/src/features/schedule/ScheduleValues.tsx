@@ -11,7 +11,9 @@ import { Badge, Input, SaveIndicator } from "@/shared/ui";
 
 export function ScheduledValues({ workflow }: { workflow: Workflow }) {
   const schedule = workflow.schedule;
-  const inputs = workflow.inputs.filter((input) => input.askAtRunTime || (input.required && !input.value));
+  const inputs = workflow.inputs.filter(
+    (input) => input.askAtRunTime || (input.required && !input.value),
+  );
   if (!schedule || inputs.length === 0) return null;
 
   return (

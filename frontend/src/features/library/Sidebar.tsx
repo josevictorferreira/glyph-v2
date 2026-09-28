@@ -84,19 +84,35 @@ export function LibrarySidebar({ className }: { className?: string }) {
   return (
     <div className={cn("flex h-full flex-col", className)} data-testid="library-sidebar">
       <div className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border px-2">
-        <Button variant="ghost" size="sm" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed((c) => !c)} className="w-7 px-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setCollapsed((c) => !c)}
+          className="w-7 px-0"
+        >
           <PanelLeft />
         </Button>
-        <Link to="/" activeOptions={{ exact: true }} className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold tracking-wide hover:bg-surface-2" aria-label="Home">
+        <Link
+          to="/"
+          activeOptions={{ exact: true }}
+          className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold tracking-wide hover:bg-surface-2"
+          aria-label="Home"
+        >
           Home
         </Link>
-        {!collapsed && <span className="ml-auto text-xs font-normal text-ink-subtle">Workflows</span>}
+        {!collapsed && (
+          <span className="ml-auto text-xs font-normal text-ink-subtle">Workflows</span>
+        )}
       </div>
 
       {!collapsed && (
         <div className="space-y-2 border-b border-border p-2">
           <div className="relative">
-            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-subtle" aria-hidden>
+            <span
+              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-subtle"
+              aria-hidden
+            >
               <Search />
             </span>
             <input
@@ -135,17 +151,38 @@ export function LibrarySidebar({ className }: { className?: string }) {
               </button>
             ))}
           </div>
-          <Button size="sm" aria-label="New workflow" data-testid="library-new" onClick={() => createDialog.open("blank")} className="w-full">
+          <Button
+            size="sm"
+            aria-label="New workflow"
+            data-testid="library-new"
+            onClick={() => createDialog.open("blank")}
+            className="w-full"
+          >
             <Plus /> New
           </Button>
         </div>
       )}
       {collapsed && (
         <div className="flex flex-col items-center gap-1 border-b border-border p-2">
-          <Button variant="ghost" size="sm" aria-label="Search workflows" onClick={() => { setCollapsed(false); searchRef.current?.focus(); }} className="w-7 px-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Search workflows"
+            onClick={() => {
+              setCollapsed(false);
+              searchRef.current?.focus();
+            }}
+            className="w-7 px-0"
+          >
             <Search />
           </Button>
-          <Button variant="ghost" size="sm" aria-label="New workflow" onClick={() => createDialog.open("blank")} className="w-7 px-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="New workflow"
+            onClick={() => createDialog.open("blank")}
+            className="w-7 px-0"
+          >
             <Plus />
           </Button>
         </div>
@@ -183,7 +220,9 @@ export function LibrarySidebar({ className }: { className?: string }) {
                   onMouseEnter={() => setActive(i)}
                   className={cn(
                     "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                    current ? "bg-accent/10 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                    current
+                      ? "bg-accent/10 text-ink"
+                      : "text-ink-muted hover:bg-surface-2 hover:text-ink",
                     i === active && !current && "bg-surface-2",
                   )}
                   title={collapsed ? w.name : undefined}
@@ -191,12 +230,16 @@ export function LibrarySidebar({ className }: { className?: string }) {
                   <StatusDot tone={line.dot} />
                   {!collapsed && (
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium" data-testid="library-row-name">{w.name}</span>
+                      <span className="block truncate font-medium" data-testid="library-row-name">
+                        {w.name}
+                      </span>
                       <span className="block truncate text-xs text-ink-subtle">{line.text}</span>
                     </span>
                   )}
                   {!collapsed && (
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-subtle">{status.label}</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-subtle">
+                      {status.label}
+                    </span>
                   )}
                 </Link>
               </li>

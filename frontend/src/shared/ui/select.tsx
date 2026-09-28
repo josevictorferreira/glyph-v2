@@ -24,7 +24,15 @@ export interface SelectProps {
   ariaLabel?: string;
 }
 
-export function Select({ value, onValueChange, items, placeholder, disabled, className, ariaLabel }: SelectProps) {
+export function Select({
+  value,
+  onValueChange,
+  items,
+  placeholder,
+  disabled,
+  className,
+  ariaLabel,
+}: SelectProps) {
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectPrimitive.Trigger
@@ -88,6 +96,8 @@ export interface ComboboxProps {
   disabled?: boolean;
   className?: string;
   ariaLabel?: string;
+  /** Extra trigger attributes (e.g. data-editor-field for deep links). */
+  triggerProps?: Record<`data-${string}`, string>;
 }
 
 export function Combobox({
@@ -100,6 +110,7 @@ export function Combobox({
   disabled,
   className,
   ariaLabel,
+  triggerProps,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const selected = items.find((i) => i.value === value);
@@ -108,6 +119,7 @@ export function Combobox({
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
+        {...triggerProps}
         aria-label={ariaLabel}
         disabled={disabled}
         className={cn(
@@ -124,14 +136,19 @@ export function Combobox({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={4} className="z-50">
-          <Command loop className="w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+          <Command
+            loop
+            className="w-64 overflow-hidden rounded-md border border-border bg-surface shadow-lg"
+          >
             <Command.Input
               autoFocus
               placeholder={searchPlaceholder}
               className="w-full border-b border-border bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-ink-subtle"
             />
             <Command.List className="max-h-64 overflow-y-auto p-1">
-              <Command.Empty className="px-2 py-4 text-center text-xs text-ink-subtle">{emptyText}</Command.Empty>
+              <Command.Empty className="px-2 py-4 text-center text-xs text-ink-subtle">
+                {emptyText}
+              </Command.Empty>
               {groups.length === 0
                 ? items.map(renderItem)
                 : groups.map((group) => (
@@ -164,7 +181,11 @@ export function Combobox({
       >
         <span className="truncate">{item.label}</span>
         {item.hint && <span className="shrink-0 text-xs text-ink-subtle">{item.hint}</span>}
-        {item.value === value && <span className="text-accent" aria-hidden><CheckIcon /></span>}
+        {item.value === value && (
+          <span className="text-accent" aria-hidden>
+            <CheckIcon />
+          </span>
+        )}
       </Command.Item>
     );
   }
@@ -190,7 +211,14 @@ export const NativeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<H
 
 export function ChevronDownIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -198,7 +226,14 @@ export function ChevronDownIcon() {
 
 export function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+    >
       <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

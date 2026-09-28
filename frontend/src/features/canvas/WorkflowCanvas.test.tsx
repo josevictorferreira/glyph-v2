@@ -21,7 +21,13 @@ import type {
   DeleteStepRequest,
   CreateConnectionRequest,
 } from "@/gen/glyph/v1/workflow_pb";
-import { RunSnapshotSchema, SnapshotStepSchema, SnapshotStepInputSchema, SnapshotConnectionSchema, StepRunSummarySchema } from "@/gen/glyph/v1/run_pb";
+import {
+  RunSnapshotSchema,
+  SnapshotStepSchema,
+  SnapshotStepInputSchema,
+  SnapshotConnectionSchema,
+  StepRunSummarySchema,
+} from "@/gen/glyph/v1/run_pb";
 import type { RunSnapshot, StepRunSummary } from "@/gen/glyph/v1/run_pb";
 import { tidyUp } from "./lib/layout";
 import { WorkflowCanvas } from "./WorkflowCanvas";
@@ -34,8 +40,14 @@ vi.mock("./lib/layout", () => ({ tidyUp: vi.fn() }));
 // jsdom reports 0×0 for every element; React Flow only renders edges once
 // nodes are measured. Give cards a plausible size for this file only.
 beforeAll(() => {
-  Object.defineProperty(window.HTMLElement.prototype, "offsetWidth", { get: () => 240, configurable: true });
-  Object.defineProperty(window.HTMLElement.prototype, "offsetHeight", { get: () => 88, configurable: true });
+  Object.defineProperty(window.HTMLElement.prototype, "offsetWidth", {
+    get: () => 240,
+    configurable: true,
+  });
+  Object.defineProperty(window.HTMLElement.prototype, "offsetHeight", {
+    get: () => 88,
+    configurable: true,
+  });
 });
 
 /* ── fixture ─────────────────────────────────────────────────────────────── */
@@ -136,14 +148,25 @@ function clone(wf: Workflow): Workflow {
   return create(WorkflowSchema, {
     summary: wf.summary,
     inputs: wf.inputs.map((i) => create(WorkflowInputSchema, { ...i })),
-    steps: wf.steps.map((s) => create(StepSchema, { ...s, inputs: s.inputs.map((i) => create(StepInputSchema, { ...i })) })),
+    steps: wf.steps.map((s) =>
+      create(StepSchema, { ...s, inputs: s.inputs.map((i) => create(StepInputSchema, { ...i })) }),
+    ),
     connections: wf.connections.map((c) => create(ConnectionSchema, { ...c })),
   });
 }
 
 /** Fake services that mutate an in-memory workflow like the server would. */
-function makeServices(wf: Workflow, issues: Issue[] = []): { services: FakeServices; recorded: Recorded } {
-  const recorded: Recorded = { addStep: [], moveStep: [], duplicateStep: [], deleteStep: [], createConnection: [] };
+function makeServices(
+  wf: Workflow,
+  issues: Issue[] = [],
+): { services: FakeServices; recorded: Recorded } {
+  const recorded: Recorded = {
+    addStep: [],
+    moveStep: [],
+    duplicateStep: [],
+    deleteStep: [],
+    createConnection: [],
+  };
   const touch = () => {
     wf.summary!.updatedAt = ts(clock++);
   };
@@ -288,7 +311,11 @@ describe("WorkflowCanvas (build)", () => {
     await userEvent.click(await screen.findByTestId("canvas-empty-add"));
     await waitFor(() =>
       expect(recorded.addStep).toEqual([
-        expect.objectContaining({ workflowId: "wf-1", kind: StepKind.PI, canvasX: expect.any(Number) }),
+        expect.objectContaining({
+          workflowId: "wf-1",
+          kind: StepKind.PI,
+          canvasX: expect.any(Number),
+        }),
       ]),
     );
   });
@@ -299,7 +326,9 @@ describe("WorkflowCanvas (build)", () => {
     const canvas = screen.getByTestId("canvas");
     canvas.focus();
     canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "A", shiftKey: true, bubbles: true }));
-    await waitFor(() => expect(recorded.addStep).toEqual([expect.objectContaining({ kind: StepKind.HELPER })]));
+    await waitFor(() =>
+      expect(recorded.addStep).toEqual([expect.objectContaining({ kind: StepKind.HELPER })]),
+    );
   });
 
   it("opens the context menu on a node and duplicates", async () => {
@@ -310,7 +339,9 @@ describe("WorkflowCanvas (build)", () => {
     const menu = await screen.findByTestId("canvas-context-menu");
     await userEvent.click(within(menu).getByText("Duplicate step"));
     await waitFor(() =>
-      expect(recorded.duplicateStep).toEqual([expect.objectContaining({ workflowId: "wf-1", stepId: "s-research" })]),
+      expect(recorded.duplicateStep).toEqual([
+        expect.objectContaining({ workflowId: "wf-1", stepId: "s-research" }),
+      ]),
     );
   });
 
@@ -323,7 +354,9 @@ describe("WorkflowCanvas (build)", () => {
     const menu = await screen.findByTestId("canvas-context-menu");
     await userEvent.click(within(menu).getByText("Delete step"));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining("removes 1 connection"));
-    await waitFor(() => expect(recorded.deleteStep).toEqual([expect.objectContaining({ stepId: "s-research" })]));
+    await waitFor(() =>
+      expect(recorded.deleteStep).toEqual([expect.objectContaining({ stepId: "s-research" })]),
+    );
   });
 
   it("tidies up via elk layout and undoes via the toast", async () => {
@@ -353,14 +386,23 @@ describe("WorkflowCanvas (build)", () => {
 function snapshotFixture(): { snapshot: RunSnapshot; stepRuns: StepRunSummary[] } {
   const snapshot = create(RunSnapshotSchema, {
     steps: [
-      create(SnapshotStepSchema, { id: "ss-1", kind: StepKind.PI, name: "Research", canvasX: 0, canvasY: 0, inputs: [] }),
+      create(SnapshotStepSchema, {
+        id: "ss-1",
+        kind: StepKind.PI,
+        name: "Research",
+        canvasX: 0,
+        canvasY: 0,
+        inputs: [],
+      }),
       create(SnapshotStepSchema, {
         id: "ss-2",
         kind: StepKind.PI,
         name: "Digest",
         canvasX: 400,
         canvasY: 0,
-        inputs: [create(SnapshotStepInputSchema, { id: "i1", name: "notes", required: true, position: 0 })],
+        inputs: [
+          create(SnapshotStepInputSchema, { id: "i1", name: "notes", required: true, position: 0 }),
+        ],
       }),
       create(SnapshotStepSchema, {
         id: "ss-3",
@@ -368,23 +410,42 @@ function snapshotFixture(): { snapshot: RunSnapshot; stepRuns: StepRunSummary[] 
         name: "Skipped",
         canvasX: 800,
         canvasY: 0,
-        inputs: [create(SnapshotStepInputSchema, { id: "i2", name: "draft", required: true, position: 0 })],
+        inputs: [
+          create(SnapshotStepInputSchema, { id: "i2", name: "draft", required: true, position: 0 }),
+        ],
       }),
     ],
     connections: [
-      create(SnapshotConnectionSchema, { sourceStepId: "ss-1", destinationStepId: "ss-2", destinationInputId: "i1" }),
-      create(SnapshotConnectionSchema, { sourceStepId: "ss-2", destinationStepId: "ss-3", destinationInputId: "i2" }),
+      create(SnapshotConnectionSchema, {
+        sourceStepId: "ss-1",
+        destinationStepId: "ss-2",
+        destinationInputId: "i1",
+      }),
+      create(SnapshotConnectionSchema, {
+        sourceStepId: "ss-2",
+        destinationStepId: "ss-3",
+        destinationInputId: "i2",
+      }),
     ],
   });
   const stepRuns = [
-    create(StepRunSummarySchema, { id: "sr-1", snapshotStepId: "ss-1", status: StepRunStatus.SUCCEEDED, elapsedMs: 1200n }),
+    create(StepRunSummarySchema, {
+      id: "sr-1",
+      snapshotStepId: "ss-1",
+      status: StepRunStatus.SUCCEEDED,
+      elapsedMs: 1200n,
+    }),
     create(StepRunSummarySchema, {
       id: "sr-2",
       snapshotStepId: "ss-2",
       status: StepRunStatus.FAILED,
       humanError: "boom happened\nmore",
     }),
-    create(StepRunSummarySchema, { id: "sr-3", snapshotStepId: "ss-3", status: StepRunStatus.SKIPPED }),
+    create(StepRunSummarySchema, {
+      id: "sr-3",
+      snapshotStepId: "ss-3",
+      status: StepRunStatus.SKIPPED,
+    }),
   ];
   return { snapshot, stepRuns };
 }
@@ -394,7 +455,12 @@ describe("WorkflowCanvas (lens)", () => {
     const { snapshot, stepRuns } = snapshotFixture();
     renderWithApp(
       <div className="h-[600px] w-[800px]">
-        <WorkflowCanvas mode="lens" snapshot={snapshot} stepRuns={stepRuns} firstFailedStepRunId="sr-2" />
+        <WorkflowCanvas
+          mode="lens"
+          snapshot={snapshot}
+          stepRuns={stepRuns}
+          firstFailedStepRunId="sr-2"
+        />
       </div>,
     );
     expect(await screen.findByTestId("step-card-ss-1")).toBeInTheDocument();

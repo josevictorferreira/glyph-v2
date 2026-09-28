@@ -53,7 +53,9 @@ export function Toaster() {
           )}
         >
           <div className="flex-1">
-            <ToastPrimitive.Title className="text-sm font-medium text-ink">{item.title}</ToastPrimitive.Title>
+            <ToastPrimitive.Title className="text-sm font-medium text-ink">
+              {item.title}
+            </ToastPrimitive.Title>
             {item.description && (
               <ToastPrimitive.Description className="mt-0.5 text-xs text-ink-muted">
                 {item.description}

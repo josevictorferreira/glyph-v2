@@ -59,7 +59,9 @@ describe("useWorkflow", () => {
 
   it("resolves staleTime to Infinity while live and 30s otherwise", async () => {
     const r = renderHookWithApp(() => useWorkflow("wf-2"), {
-      services: { workflow: { getWorkflow: () => ({ workflow: workflow("wf-2", "W"), issues: [] }) } },
+      services: {
+        workflow: { getWorkflow: () => ({ workflow: workflow("wf-2", "W"), issues: [] }) },
+      },
     });
     await waitFor(() => expect(r.result.current.isSuccess).toBe(true));
     const observer = () => r.queryClient.getQueryCache().getAll()[0]!.observers[0]!;
@@ -100,9 +102,24 @@ describe("useIssues", () => {
           getWorkflow: () => ({
             workflow: workflow("wf-1", "Tournament"),
             issues: [
-              create(IssueSchema, { entityType: 2, entityId: "step-1", field: "model", message: "A" }),
-              create(IssueSchema, { entityType: 2, entityId: "step-1", field: "prompt", message: "B" }),
-              create(IssueSchema, { entityType: 4, entityId: "in-1", field: "value", message: "C" }),
+              create(IssueSchema, {
+                entityType: 2,
+                entityId: "step-1",
+                field: "model",
+                message: "A",
+              }),
+              create(IssueSchema, {
+                entityType: 2,
+                entityId: "step-1",
+                field: "prompt",
+                message: "B",
+              }),
+              create(IssueSchema, {
+                entityType: 4,
+                entityId: "in-1",
+                field: "value",
+                message: "C",
+              }),
             ],
           }),
         },

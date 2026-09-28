@@ -105,10 +105,19 @@ function CommandPalette({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="Commands" data-testid="command-palette">
-        <Command loop className="[&_[cmdk-input]]:w-full [&_[cmdk-input]]:border-b [&_[cmdk-input]]:border-border [&_[cmdk-input]]:bg-transparent [&_[cmdk-input]]:px-3 [&_[cmdk-input]]:py-2.5 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:outline-none">
-          <Command.Input autoFocus placeholder="Type a command or search…" data-testid="command-input" />
+        <Command
+          loop
+          className="[&_[cmdk-input]]:w-full [&_[cmdk-input]]:border-b [&_[cmdk-input]]:border-border [&_[cmdk-input]]:bg-transparent [&_[cmdk-input]]:px-3 [&_[cmdk-input]]:py-2.5 [&_[cmdk-input]]:text-sm [&_[cmdk-input]]:outline-none"
+        >
+          <Command.Input
+            autoFocus
+            placeholder="Type a command or search…"
+            data-testid="command-input"
+          />
           <Command.List className="max-h-80 overflow-y-auto p-1.5">
-            <Command.Empty className="px-2 py-6 text-center text-xs text-ink-subtle">No matching commands.</Command.Empty>
+            <Command.Empty className="px-2 py-6 text-center text-xs text-ink-subtle">
+              No matching commands.
+            </Command.Empty>
             {commands.map((c) => (
               <Command.Item
                 key={c.id}
@@ -149,7 +158,13 @@ export function useAppCommands() {
 
   const commands = useMemo<CommandDef[]>(() => {
     const navigation: CommandDef[] = [
-      { id: "nav:home", group: "Navigation", label: "Home", hint: "/", run: () => void navigate({ to: "/" }) },
+      {
+        id: "nav:home",
+        group: "Navigation",
+        label: "Home",
+        hint: "/",
+        run: () => void navigate({ to: "/" }),
+      },
       ...(data?.workflows ?? []).map((w) => ({
         id: `nav:wf-${w.id}`,
         group: "Navigation",
@@ -159,9 +174,27 @@ export function useAppCommands() {
       })),
     ];
     const global: CommandDef[] = [
-      { id: "global:new", group: "Global", label: "New workflow", keywords: "create", run: () => createDialog.open("blank") },
-      { id: "global:import", group: "Global", label: "Import YAML", keywords: "create", run: () => createDialog.open("yaml") },
-      { id: "global:duplicate", group: "Global", label: "Duplicate a workflow", keywords: "copy", run: () => createDialog.open("duplicate") },
+      {
+        id: "global:new",
+        group: "Global",
+        label: "New workflow",
+        keywords: "create",
+        run: () => createDialog.open("blank"),
+      },
+      {
+        id: "global:import",
+        group: "Global",
+        label: "Import YAML",
+        keywords: "create",
+        run: () => createDialog.open("yaml"),
+      },
+      {
+        id: "global:duplicate",
+        group: "Global",
+        label: "Duplicate a workflow",
+        keywords: "copy",
+        run: () => createDialog.open("duplicate"),
+      },
       {
         id: "global:refresh-models",
         group: "Global",

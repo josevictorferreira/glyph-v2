@@ -12,13 +12,22 @@ import {
   ImportWorkflowResponseSchema,
   ParseDefinitionResponseSchema,
 } from "@/gen/glyph/v1/definition_pb";
-import { GetWorkflowResponseSchema, ListWorkflowsResponseSchema, WorkflowSummarySchema } from "@/gen/glyph/v1/workflow_pb";
+import {
+  GetWorkflowResponseSchema,
+  ListWorkflowsResponseSchema,
+  WorkflowSummarySchema,
+} from "@/gen/glyph/v1/workflow_pb";
 import { renderWithApp } from "@test/render";
 
 afterEach(() => vi.restoreAllMocks());
 
-const ts = (iso: string) => create(TimestampSchema, { seconds: BigInt(Date.parse(iso) / 1000), nanos: 0 });
-const idleLive = { watchWorkflow: async function* () { await new Promise(() => {}); } };
+const ts = (iso: string) =>
+  create(TimestampSchema, { seconds: BigInt(Date.parse(iso) / 1000), nanos: 0 });
+const idleLive = {
+  watchWorkflow: async function* () {
+    await new Promise(() => {});
+  },
+};
 
 const baseWorkflow = {
   listWorkflows: () => Promise.resolve(create(ListWorkflowsResponseSchema, { workflows: [] })),
@@ -85,11 +94,15 @@ describe("create dialog — from YAML", () => {
       services: {
         workflow: baseWorkflow,
         definition: {
-          parseDefinition: () => Promise.resolve(create(ParseDefinitionResponseSchema, { errors: [] })),
+          parseDefinition: () =>
+            Promise.resolve(create(ParseDefinitionResponseSchema, { errors: [] })),
           importWorkflow: (req: { yaml: string }) => {
             imported.push(req.yaml);
             return Promise.resolve(
-              create(ImportWorkflowResponseSchema, { workflow: { summary: { id: "wf-imported", name: "Imported" } }, issues: [] }),
+              create(ImportWorkflowResponseSchema, {
+                workflow: { summary: { id: "wf-imported", name: "Imported" } },
+                issues: [],
+              }),
             );
           },
         },
@@ -119,18 +132,33 @@ describe("create dialog — duplicate", () => {
             Promise.resolve(
               create(ListWorkflowsResponseSchema, {
                 workflows: [
-                  create(WorkflowSummarySchema, { id: "wf-1", name: "Original", status: WorkflowStatus.DRAFT, updatedAt: ts("2026-01-15T10:00:00Z") }),
+                  create(WorkflowSummarySchema, {
+                    id: "wf-1",
+                    name: "Original",
+                    status: WorkflowStatus.DRAFT,
+                    updatedAt: ts("2026-01-15T10:00:00Z"),
+                  }),
                 ],
               }),
             ),
           getWorkflow: baseWorkflow.getWorkflow,
         },
         definition: {
-          exportDefinition: () => Promise.resolve(create(ExportDefinitionResponseSchema, { yaml: exportedYaml, fingerprint: "f", filename: "original.yml" })),
+          exportDefinition: () =>
+            Promise.resolve(
+              create(ExportDefinitionResponseSchema, {
+                yaml: exportedYaml,
+                fingerprint: "f",
+                filename: "original.yml",
+              }),
+            ),
           importWorkflow: (req: { yaml: string }) => {
             imported.push(req.yaml);
             return Promise.resolve(
-              create(ImportWorkflowResponseSchema, { workflow: { summary: { id: "wf-copy", name: "Original (copy)" } }, issues: [] }),
+              create(ImportWorkflowResponseSchema, {
+                workflow: { summary: { id: "wf-copy", name: "Original (copy)" } },
+                issues: [],
+              }),
             );
           },
         },

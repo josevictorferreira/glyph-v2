@@ -15,7 +15,8 @@ export function secondaryLine(s: WorkflowSummary, now: Date = new Date()): Summa
   if (s.lastRunStatus === RunStatus.RUNNING || s.lastRunStatus === RunStatus.QUEUED) {
     const started = tsToMs(s.lastRunAt);
     return {
-      text: started === undefined ? "Running" : `Running · ${formatRelative(new Date(started), now)}`,
+      text:
+        started === undefined ? "Running" : `Running · ${formatRelative(new Date(started), now)}`,
       dot: "accent",
     };
   }

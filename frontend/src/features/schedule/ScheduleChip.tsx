@@ -25,7 +25,9 @@ export function ScheduleChip({ workflow, onClick }: { workflow: Workflow; onClic
   const { schedule } = state;
   const next = tsToDate(schedule.nextRunAt);
   const label =
-    state.kind === "active" && next ? formatInZone(next, schedule.timezone) : CHIP_LABEL[state.kind];
+    state.kind === "active" && next
+      ? formatInZone(next, schedule.timezone)
+      : CHIP_LABEL[state.kind];
 
   return (
     <Tooltip

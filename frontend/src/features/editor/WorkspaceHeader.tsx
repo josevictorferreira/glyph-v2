@@ -115,7 +115,10 @@ function ModeSwitch({ workflowId }: { workflowId: string }) {
     { label: "Definition", to: "/workflows/$id/definition" as const, exact: false },
   ];
   return (
-    <nav aria-label="Workspace mode" className="flex h-7 items-center rounded-lg bg-surface-2 p-0.5">
+    <nav
+      aria-label="Workspace mode"
+      className="flex h-7 items-center rounded-lg bg-surface-2 p-0.5"
+    >
       {modes.map((mode) => (
         <Link
           key={mode.label}
@@ -191,14 +194,24 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
           data-testid="activate"
           loading={activate.isPending}
           disabled={issueCount > 0}
-          title={issueCount > 0 ? `Resolve ${issueCount} ${issueCount === 1 ? "issue" : "issues"} to activate.` : undefined}
+          title={
+            issueCount > 0
+              ? `Resolve ${issueCount} ${issueCount === 1 ? "issue" : "issues"} to activate.`
+              : undefined
+          }
           onClick={() => activate.mutate({ id: workflowId })}
         >
           Activate
         </Button>
       )}
       {status === WorkflowStatus.ACTIVE && (
-        <Button size="sm" variant="primary" data-testid="run-now" loading={startRun.isPending} onClick={runNow}>
+        <Button
+          size="sm"
+          variant="primary"
+          data-testid="run-now"
+          loading={startRun.isPending}
+          onClick={runNow}
+        >
           Run now
         </Button>
       )}
@@ -214,7 +227,12 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
         </Button>
       )}
       {status === WorkflowStatus.NEEDS_ATTENTION && (
-        <Button size="sm" variant="primary" data-testid="review-issues" onClick={() => setReadinessOpen(true)}>
+        <Button
+          size="sm"
+          variant="primary"
+          data-testid="review-issues"
+          onClick={() => setReadinessOpen(true)}
+        >
           Review issues
         </Button>
       )}

@@ -14,10 +14,24 @@ import {
 } from "./recurrence";
 
 const r = {
-  interval: (every: number, unit: "minutes" | "hours"): Recurrence => ({ kind: "interval", every, unit }),
+  interval: (every: number, unit: "minutes" | "hours"): Recurrence => ({
+    kind: "interval",
+    every,
+    unit,
+  }),
   daily: (hour: number, minute: number): Recurrence => ({ kind: "daily", hour, minute }),
-  weekly: (weekday: number, hour: number, minute: number): Recurrence => ({ kind: "weekly", weekday, hour, minute }),
-  monthly: (day: number, hour: number, minute: number): Recurrence => ({ kind: "monthly", day, hour, minute }),
+  weekly: (weekday: number, hour: number, minute: number): Recurrence => ({
+    kind: "weekly",
+    weekday,
+    hour,
+    minute,
+  }),
+  monthly: (day: number, hour: number, minute: number): Recurrence => ({
+    kind: "monthly",
+    day,
+    hour,
+    minute,
+  }),
   cron: (expression: string): Recurrence => ({ kind: "cron", expression }),
 };
 

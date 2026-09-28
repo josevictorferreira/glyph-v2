@@ -62,7 +62,10 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
       {/* Input handles: one per step input, ordered by position (top→bottom). */}
       <div className="flex flex-col gap-1 pt-2">
         {data.inputs.map((input) => (
-          <div key={input.handleId} className="relative flex items-center gap-1 pl-1 text-[11px] leading-4">
+          <div
+            key={input.handleId}
+            className="relative flex items-center gap-1 pl-1 text-[11px] leading-4"
+          >
             <Handle
               id={input.handleId}
               type="target"
@@ -70,7 +73,9 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
               className={cn("glyph-handle", input.required && "glyph-handle-required")}
               isConnectable={!lens}
             />
-            <span className={cn("truncate", input.connected ? "text-ink" : "text-ink-subtle")}>{input.name}</span>
+            <span className={cn("truncate", input.connected ? "text-ink" : "text-ink-subtle")}>
+              {input.name}
+            </span>
             {input.required && !input.connected && <span className="text-status-failed">*</span>}
             {input.valueChip && (
               <span
@@ -90,13 +95,17 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
           <span
             className={cn(
               "inline-flex h-4 items-center rounded px-1 text-[10px] font-semibold uppercase tracking-wide",
-              data.kind === StepKind.PI ? "bg-accent-soft text-accent" : "bg-surface-3 text-ink-muted",
+              data.kind === StepKind.PI
+                ? "bg-accent-soft text-accent"
+                : "bg-surface-3 text-ink-muted",
             )}
             aria-label={stepLabel}
           >
             {stepLabel}
           </span>
-          <span className={cn("truncate text-xs font-medium", untitled && "text-ink-subtle italic")}>
+          <span
+            className={cn("truncate text-xs font-medium", untitled && "text-ink-subtle italic")}
+          >
             {untitled ? "Untitled step" : data.name}
           </span>
           {data.issueCount > 0 && (
@@ -110,15 +119,23 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
           )}
         </div>
 
-        {data.purpose && <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-ink-muted">{data.purpose}</p>}
+        {data.purpose && (
+          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-ink-muted">{data.purpose}</p>
+        )}
 
         {running && (
-          <p data-testid={`step-elapsed-${data.stepId}`} className="mt-1 text-[11px] tabular-nums text-status-running">
+          <p
+            data-testid={`step-elapsed-${data.stepId}`}
+            className="mt-1 text-[11px] tabular-nums text-status-running"
+          >
             {formatDuration(elapsed)}
           </p>
         )}
         {data.status === StepRunStatus.FAILED && data.error && (
-          <p data-testid={`step-error-${data.stepId}`} className="mt-1 line-clamp-2 text-[11px] text-status-failed">
+          <p
+            data-testid={`step-error-${data.stepId}`}
+            className="mt-1 line-clamp-2 text-[11px] text-status-failed"
+          >
             {data.error}
           </p>
         )}
@@ -146,7 +163,9 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
               can fail
             </span>
           )}
-          {data.outputName && <span className="ml-auto truncate font-mono">→ {data.outputName}</span>}
+          {data.outputName && (
+            <span className="ml-auto truncate font-mono">→ {data.outputName}</span>
+          )}
         </div>
       </div>
 

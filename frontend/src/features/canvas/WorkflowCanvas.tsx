@@ -88,7 +88,12 @@ export function WorkflowCanvas(props: WorkflowCanvasProps) {
   );
 }
 
-function LensCanvas({ snapshot, stepRuns, firstFailedStepRunId, ...selection }: WorkflowCanvasLensProps) {
+function LensCanvas({
+  snapshot,
+  stepRuns,
+  firstFailedStepRunId,
+  ...selection
+}: WorkflowCanvasLensProps) {
   const nodes = useMemo(
     () => lensNodes(snapshot, stepRuns, firstFailedStepRunId),
     [snapshot, stepRuns, firstFailedStepRunId],
@@ -102,7 +107,9 @@ function LensCanvas({ snapshot, stepRuns, firstFailedStepRunId, ...selection }: 
         edges={edges}
         nodeTypes={nodeTypes}
         onSelectionChange={
-          selection.onSelectStep ? (p: OnSelectionChangeParams) => selection.onSelectStep?.(singleSelection(p)) : undefined
+          selection.onSelectStep
+            ? (p: OnSelectionChangeParams) => selection.onSelectStep?.(singleSelection(p))
+            : undefined
         }
         onNodeDoubleClick={(_e, node) => selection.onOpenStep?.(node.id)}
         nodesDraggable={false}
@@ -156,7 +163,13 @@ function useDerivedNodes(
   return [nodes, setNodes, onNodesChange] as const;
 }
 
-function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection }: WorkflowCanvasBuildProps) {
+function BuildCanvas({
+  workflow,
+  issues,
+  onImportYaml,
+  panToStepId,
+  ...selection
+}: WorkflowCanvasBuildProps) {
   const workflowId = workflow.summary?.id ?? "";
   const { selectedStepId, onSelectStep, onOpenStep } = selection;
   const [menu, setMenu] = useState<{ x: number; y: number; stepId?: string } | null>(null);
@@ -187,7 +200,8 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
         s.id === req.stepId ? { ...s, canvasX: req.canvasX ?? 0, canvasY: req.canvasY ?? 0 } : s,
       ),
     }),
-    onAppError: (error) => toast({ title: "Move failed", description: error.message, tone: "danger" }),
+    onAppError: (error) =>
+      toast({ title: "Move failed", description: error.message, tone: "danger" }),
   });
 
   // Cache stamp: updatedAt has seconds granularity, so structural facts are
@@ -213,7 +227,8 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
   }, [version]);
 
   // Viewport persistence (per workflow).
-  const storageKey = `glyph.canvas.viewport.${workflowId}`;  useEffect(() => {
+  const storageKey = `glyph.canvas.viewport.${workflowId}`;
+  useEffect(() => {
     const raw = localStorage.getItem(storageKey);
     if (raw) {
       try {
@@ -253,7 +268,8 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
 
   // ── Connections ──────────────────────────────────────────────────────────
   const isValidConnection = useCallback<IsValidConnection>(
-    (c) => c.source !== c.target && !wouldCreateCycle(edgeLikes(edgesRef.current), c.source, c.target),
+    (c) =>
+      c.source !== c.target && !wouldCreateCycle(edgeLikes(edgesRef.current), c.source, c.target),
     [],
   );
 
@@ -263,12 +279,20 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
       const inputId = c.targetHandle;
       if (!sourceId || !inputId) return;
       if (!isValidConnection(c)) {
-        toast({ title: "Connection not allowed", description: "This would create a cycle.", tone: "danger" });
+        toast({
+          title: "Connection not allowed",
+          description: "This would create a cycle.",
+          tone: "danger",
+        });
         return;
       }
       const existing = workflow.connections.find((conn) => conn.destinationInputId === inputId);
       const replacing = Boolean(existing && existing.sourceStepId !== sourceId);
-      if (replacing && !window.confirm(`Replace connection from “${stepDisplayName(workflow, sourceId)}”?`)) return;
+      if (
+        replacing &&
+        !window.confirm(`Replace connection from “${stepDisplayName(workflow, sourceId)}”?`)
+      )
+        return;
       createConnection.mutate({
         workflowId,
         sourceStepId: sourceId,
@@ -286,12 +310,18 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
       if (!sourceId) return;
       const point = "clientX" in event ? { x: event.clientX, y: event.clientY } : undefined;
       const el = point
-        ? (document.elementFromPoint(point.x, point.y)?.closest(".react-flow__node") as HTMLElement | null)
+        ? (document
+            .elementFromPoint(point.x, point.y)
+            ?.closest(".react-flow__node") as HTMLElement | null)
         : null;
       const targetId = el?.dataset.id;
       if (!targetId || targetId === sourceId) return;
       if (wouldCreateCycle(edgeLikes(edgesRef.current), sourceId, targetId)) {
-        toast({ title: "Connection not allowed", description: "This would create a cycle.", tone: "danger" });
+        toast({
+          title: "Connection not allowed",
+          description: "This would create a cycle.",
+          tone: "danger",
+        });
         return;
       }
       connectOutputToStep.mutate({ workflowId, sourceStepId: sourceId, targetStepId: targetId });
@@ -322,7 +352,9 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
       }
       try {
         await Promise.all([
-          ...deletedEdges.map((e) => removeConnection.mutateAsync({ workflowId, connectionId: e.id })),
+          ...deletedEdges.map((e) =>
+            removeConnection.mutateAsync({ workflowId, connectionId: e.id }),
+          ),
           ...deletedNodes.map((n) => deleteStep.mutateAsync({ workflowId, stepId: n.id })),
         ]);
         if (deletedNodes.length > 0) selection.onSelectStep?.(null);
@@ -377,7 +409,9 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
     const previous = workflow.steps.map((s) => ({ stepId: s.id, x: s.canvasX, y: s.canvasY }));
     const layout = await tidyUp(workflow);
     await Promise.all(
-      layout.map((m) => moveStep.mutateAsync({ workflowId, stepId: m.stepId, canvasX: m.x, canvasY: m.y })),
+      layout.map((m) =>
+        moveStep.mutateAsync({ workflowId, stepId: m.stepId, canvasX: m.x, canvasY: m.y }),
+      ),
     );
     toast({
       title: "Layout tidied",
@@ -468,7 +502,8 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
 
   const onPaneDoubleClick = useCallback(
     (e: ReactMouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.classList.contains("react-flow__pane")) return;
+      if (!(e.target instanceof Element) || !e.target.classList.contains("react-flow__pane"))
+        return;
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       addAt(StepKindEnum.PI, { x: pos.x - 120, y: pos.y - 30 });
     },
@@ -499,7 +534,11 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
         onConnectEnd={onConnectEnd}
         isValidConnection={isValidConnection}
         onBeforeDelete={onBeforeDelete}
-        onSelectionChange={onSelectStep ? (p: OnSelectionChangeParams) => onSelectStep(singleSelection(p)) : undefined}
+        onSelectionChange={
+          onSelectStep
+            ? (p: OnSelectionChangeParams) => onSelectStep(singleSelection(p))
+            : undefined
+        }
         onNodeDoubleClick={(_e, node) => onOpenStep?.(node.id)}
         onNodeContextMenu={(e, node) => openMenu(e, node.id)}
         onPaneContextMenu={(e) => openMenu(e)}
@@ -517,12 +556,22 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
         <MiniMap pannable zoomable nodeColor={miniMapNodeColor} />
       </ReactFlow>
 
-      {workflow.steps.length === 0 && <CanvasEmptyState onAddStep={addAt} onImportYaml={onImportYaml} />}
+      {workflow.steps.length === 0 && (
+        <CanvasEmptyState onAddStep={addAt} onImportYaml={onImportYaml} />
+      )}
 
       {/* Toolbar */}
-      <div className="glyph-canvas-toolbar absolute left-2 top-2 z-10 flex items-center gap-1 p-1" data-testid="canvas-toolbar">
+      <div
+        className="glyph-canvas-toolbar absolute left-2 top-2 z-10 flex items-center gap-1 p-1"
+        data-testid="canvas-toolbar"
+      >
         <div className="relative">
-          <Button size="sm" variant="secondary" data-testid="canvas-add-step" onClick={() => setAddOpen((v) => !v)}>
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="canvas-add-step"
+            onClick={() => setAddOpen((v) => !v)}
+          >
             + Step
           </Button>
           {addOpen && (
@@ -531,12 +580,21 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
               data-testid="canvas-add-menu"
               role="menu"
             >
-              <MenuItem onClick={() => (setAddOpen(false), void addAt(StepKindEnum.PI))}>Add Pi step</MenuItem>
-              <MenuItem onClick={() => (setAddOpen(false), void addAt(StepKindEnum.HELPER))}>Add helper step</MenuItem>
+              <MenuItem onClick={() => (setAddOpen(false), void addAt(StepKindEnum.PI))}>
+                Add Pi step
+              </MenuItem>
+              <MenuItem onClick={() => (setAddOpen(false), void addAt(StepKindEnum.HELPER))}>
+                Add helper step
+              </MenuItem>
             </div>
           )}
         </div>
-        <Button size="sm" variant="secondary" data-testid="canvas-tidy" onClick={() => void onTidy()}>
+        <Button
+          size="sm"
+          variant="secondary"
+          data-testid="canvas-tidy"
+          onClick={() => void onTidy()}
+        >
           Tidy up
         </Button>
       </div>
@@ -553,7 +611,9 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
             <>
               <MenuItem onClick={menuAction(() => onOpenStep?.(menu.stepId!))}>Open step</MenuItem>
               <MenuItem
-                onClick={menuAction(() => duplicateStep.mutate({ workflowId, stepId: menu.stepId! }))}
+                onClick={menuAction(() =>
+                  duplicateStep.mutate({ workflowId, stepId: menu.stepId! }),
+                )}
               >
                 Duplicate step
               </MenuItem>
@@ -611,7 +671,15 @@ function BuildCanvas({ workflow, issues, onImportYaml, panToStepId, ...selection
   );
 }
 
-function MenuItem({ children, onClick, danger }: { children: ReactNode; onClick: () => void; danger?: boolean }) {
+function MenuItem({
+  children,
+  onClick,
+  danger,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -658,11 +726,19 @@ function singleSelection(p: OnSelectionChangeParams): string | null {
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
-    target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable
   );
 }
 
-function cycleSelection(nodes: StepNode[], edges: Edge[], direction: 1 | -1, onSelect?: (id: string | null) => void) {
+function cycleSelection(
+  nodes: StepNode[],
+  edges: Edge[],
+  direction: 1 | -1,
+  onSelect?: (id: string | null) => void,
+) {
   if (!onSelect || nodes.length === 0) return;
   const order = topologicalOrder(
     nodes.map((n) => n.id),

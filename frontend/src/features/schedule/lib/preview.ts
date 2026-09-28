@@ -22,7 +22,12 @@ export function isValidTimezone(timeZone: string): boolean {
 }
 
 /** Next `count` occurrences strictly after `from` (UTC instants). Invalid → []. */
-export function nextOccurrences(cron: string, timeZone: string, count = 5, from: Date = new Date()): Date[] {
+export function nextOccurrences(
+  cron: string,
+  timeZone: string,
+  count = 5,
+  from: Date = new Date(),
+): Date[] {
   if (!isValidTimezone(timeZone)) return [];
   try {
     // nextRuns(n, from) enumerates strictly after the seed — the backend's
@@ -34,7 +39,11 @@ export function nextOccurrences(cron: string, timeZone: string, count = 5, from:
 }
 
 /** "Mon, Sep 28, 09:00" style wall-clock in the given zone. */
-export function formatInZone(date: Date, timeZone: string, locale: string | undefined = undefined): string {
+export function formatInZone(
+  date: Date,
+  timeZone: string,
+  locale: string | undefined = undefined,
+): string {
   return new Intl.DateTimeFormat(locale, {
     timeZone,
     weekday: "short",

@@ -4,7 +4,8 @@
 export { BuildTab } from "./Workspace";
 export { WorkspaceHeader } from "./WorkspaceHeader";
 export { ReadinessSheet } from "./ReadinessSheet";
-export { StepEditor, useStepDetailsField, type StepEditorProps } from "./StepEditor";
+export { StepEditor, type StepEditorProps } from "./StepEditor";
+export { useStepDetailsField } from "./step-details";
 export { WorkflowPanel } from "./WorkflowPanel";
 export {
   EditorChromeProvider,

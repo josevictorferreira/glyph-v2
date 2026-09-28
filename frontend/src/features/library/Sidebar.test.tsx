@@ -16,7 +16,8 @@ import { renderWithApp } from "@test/render";
 
 afterEach(() => vi.restoreAllMocks());
 
-const ts = (iso: string) => create(TimestampSchema, { seconds: BigInt(Date.parse(iso) / 1000), nanos: 0 });
+const ts = (iso: string) =>
+  create(TimestampSchema, { seconds: BigInt(Date.parse(iso) / 1000), nanos: 0 });
 
 const summary = (id: string, name: string, init: Record<string, unknown> = {}): WorkflowSummary =>
   create(WorkflowSummarySchema, {
@@ -54,10 +55,18 @@ describe("LibrarySidebar", () => {
     const { unmount } = mount([
       summary("plain", "Plain draft"),
       summary("hot", "Broken", { status: WorkflowStatus.NEEDS_ATTENTION }),
-      summary("run", "Busy", { status: WorkflowStatus.ACTIVE, lastRunStatus: RunStatus.RUNNING, lastRunAt: ts("2026-01-15T11:00:00Z") }),
+      summary("run", "Busy", {
+        status: WorkflowStatus.ACTIVE,
+        lastRunStatus: RunStatus.RUNNING,
+        lastRunAt: ts("2026-01-15T11:00:00Z"),
+      }),
     ]);
     await waitFor(() =>
-      expect(screen.getAllByTestId("library-row-name").map((n) => n.textContent)).toEqual(["Broken", "Busy", "Plain draft"]),
+      expect(screen.getAllByTestId("library-row-name").map((n) => n.textContent)).toEqual([
+        "Broken",
+        "Busy",
+        "Plain draft",
+      ]),
     );
     expect(screen.getByTestId("library-row-hot").textContent).toContain("Needs attention");
     unmount();
@@ -71,7 +80,9 @@ describe("LibrarySidebar", () => {
         workflow: {
           listWorkflows: (req: { query: string; status?: number }) => {
             calls.push({ query: req.query, status: req.status });
-            return Promise.resolve(create(ListWorkflowsResponseSchema, { workflows: [summary("a", "Alpha")] }));
+            return Promise.resolve(
+              create(ListWorkflowsResponseSchema, { workflows: [summary("a", "Alpha")] }),
+            );
           },
           getWorkflow: () => Promise.resolve(create(GetWorkflowResponseSchema, {})),
         },
@@ -108,7 +119,9 @@ describe("LibrarySidebar", () => {
       createWorkflow: (req: { name: string }) => {
         created.push({ name: req.name });
         return Promise.resolve(
-          create(CreateWorkflowResponseSchema, { workflow: { summary: { id: "wf-new", name: req.name } } }),
+          create(CreateWorkflowResponseSchema, {
+            workflow: { summary: { id: "wf-new", name: req.name } },
+          }),
         );
       },
     });

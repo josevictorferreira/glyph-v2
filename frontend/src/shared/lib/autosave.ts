@@ -98,7 +98,14 @@ export function useAutosaveField<T>(opts: UseAutosaveFieldOptions<T>): AutosaveF
     }
   }
 
-  const display = draft !== undefined ? draft : (frozen !== undefined ? frozen : (committed !== undefined ? committed : value));
+  const display =
+    draft !== undefined
+      ? draft
+      : frozen !== undefined
+        ? frozen
+        : committed !== undefined
+          ? committed
+          : value;
   lastDisplay.current = display;
 
   const doSave = useCallback(

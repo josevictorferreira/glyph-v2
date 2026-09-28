@@ -63,7 +63,15 @@ const toneBadge: Record<Tone, BadgeTone> = {
   striped: "muted",
 };
 
-export function StatusDot({ tone, pulse = false, className }: { tone: Tone; pulse?: boolean; className?: string }) {
+export function StatusDot({
+  tone,
+  pulse = false,
+  className,
+}: {
+  tone: Tone;
+  pulse?: boolean;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden
@@ -87,7 +95,13 @@ export function StatusBadge({ view, className }: { view: EnumView; className?: s
   );
 }
 
-export function WorkflowStatusBadge({ status, className }: { status: WorkflowStatus; className?: string }) {
+export function WorkflowStatusBadge({
+  status,
+  className,
+}: {
+  status: WorkflowStatus;
+  className?: string;
+}) {
   return <StatusBadge view={describeWorkflowStatus(status)} className={className} />;
 }
 
@@ -95,6 +109,12 @@ export function RunStatusBadge({ status, className }: { status: RunStatus; class
   return <StatusBadge view={describeRunStatus(status)} className={className} />;
 }
 
-export function StepRunStatusBadge({ status, className }: { status: StepRunStatus; className?: string }) {
+export function StepRunStatusBadge({
+  status,
+  className,
+}: {
+  status: StepRunStatus;
+  className?: string;
+}) {
   return <StatusBadge view={describeStepRunStatus(status)} className={className} />;
 }

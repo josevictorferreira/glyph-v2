@@ -4,7 +4,11 @@
 import { describe, expect, it } from "vitest";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { create, toBinary } from "@bufbuild/protobuf";
-import { DefinitionErrorsSchema, ValidationIssuesSchema, IssueSchema } from "@/gen/glyph/v1/common_pb";
+import {
+  DefinitionErrorsSchema,
+  ValidationIssuesSchema,
+  IssueSchema,
+} from "@/gen/glyph/v1/common_pb";
 import { toAppError } from "./errors";
 
 type IncomingDetail = { type: string; value: Uint8Array };
@@ -14,7 +18,11 @@ function withDetails(err: ConnectError, details: IncomingDetail[]): ConnectError
   return err;
 }
 
-function encodeErrorInfo(info: { reason: string; domain: string; metadata?: Record<string, string> }): Uint8Array {
+function encodeErrorInfo(info: {
+  reason: string;
+  domain: string;
+  metadata?: Record<string, string>;
+}): Uint8Array {
   const enc = new TextEncoder();
   const parts: number[] = [];
   const field = (no: number, bytes: Uint8Array) => {
@@ -32,7 +40,12 @@ function encodeErrorInfo(info: { reason: string; domain: string; metadata?: Reco
   field(2, enc.encode(info.domain));
   for (const [k, v] of Object.entries(info.metadata ?? {})) {
     // map entry submessage: field 1 key, field 2 value
-    const entry = new Uint8Array([...[(1 << 3) | 2, k.length], ...enc.encode(k), ...[(2 << 3) | 2, v.length], ...enc.encode(v)]);
+    const entry = new Uint8Array([
+      ...[(1 << 3) | 2, k.length],
+      ...enc.encode(k),
+      ...[(2 << 3) | 2, v.length],
+      ...enc.encode(v),
+    ]);
     field(3, entry);
   }
   return new Uint8Array(parts);
@@ -60,12 +73,26 @@ describe("toAppError", () => {
 
   it("maps FAILED_PRECONDITION with ErrorInfo + ValidationIssues", () => {
     const issues = create(ValidationIssuesSchema, {
-      issues: [create(IssueSchema, { entityType: 2, entityId: "step-1", field: "model", message: "no longer available" })],
+      issues: [
+        create(IssueSchema, {
+          entityType: 2,
+          entityId: "step-1",
+          field: "model",
+          message: "no longer available",
+        }),
+      ],
     });
     const err = withDetails(
       new ConnectError("This workflow cannot run yet", Code.FailedPrecondition),
       [
-        { type: "google.rpc.ErrorInfo", value: encodeErrorInfo({ reason: "VALIDATION_FAILED", domain: "glyph", metadata: { existing_source_label: "Prompt" } }) },
+        {
+          type: "google.rpc.ErrorInfo",
+          value: encodeErrorInfo({
+            reason: "VALIDATION_FAILED",
+            domain: "glyph",
+            metadata: { existing_source_label: "Prompt" },
+          }),
+        },
         { type: "glyph.v1.ValidationIssues", value: toBinary(ValidationIssuesSchema, issues) },
       ],
     );
@@ -81,7 +108,13 @@ describe("toAppError", () => {
 
   it("maps FAILED_PRECONDITION without ErrorInfo", () => {
     const app = toAppError(new ConnectError("boom", Code.FailedPrecondition));
-    expect(app).toEqual({ kind: "precondition", reason: "", message: "boom", metadata: {}, issues: [] });
+    expect(app).toEqual({
+      kind: "precondition",
+      reason: "",
+      message: "boom",
+      metadata: {},
+      issues: [],
+    });
   });
 
   it("maps ABORTED to conflict", () => {
@@ -104,7 +137,10 @@ describe("toAppError", () => {
   });
 
   it("maps anything else to internal with rawMessage", () => {
-    expect(toAppError(new ConnectError("kaboom", Code.Unknown))).toEqual({ kind: "internal", message: "kaboom" });
+    expect(toAppError(new ConnectError("kaboom", Code.Unknown))).toEqual({
+      kind: "internal",
+      message: "kaboom",
+    });
     expect(toAppError(new Error("weird"))).toEqual({ kind: "internal", message: "weird" });
     expect(toAppError("just a string")).toEqual({ kind: "internal", message: "just a string" });
   });

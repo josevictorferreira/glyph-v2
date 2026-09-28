@@ -4,7 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { create } from "@bufbuild/protobuf";
 import { AppShell } from "./shell";
 import { renderWithApp } from "@test/render";
-import { GetWorkflowResponseSchema, ListWorkflowsResponseSchema, WorkflowSchema, WorkflowSummarySchema } from "@/gen/glyph/v1/workflow_pb";
+import {
+  GetWorkflowResponseSchema,
+  ListWorkflowsResponseSchema,
+  WorkflowSchema,
+  WorkflowSummarySchema,
+} from "@/gen/glyph/v1/workflow_pb";
 
 const services = {
   workflow: {
@@ -12,7 +17,9 @@ const services = {
     getWorkflow: () =>
       Promise.resolve(
         create(GetWorkflowResponseSchema, {
-          workflow: create(WorkflowSchema, { summary: create(WorkflowSummarySchema, { id: "abc", name: "Abc" }) }),
+          workflow: create(WorkflowSchema, {
+            summary: create(WorkflowSummarySchema, { id: "abc", name: "Abc" }),
+          }),
         }),
       ),
   },

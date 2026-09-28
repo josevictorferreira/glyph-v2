@@ -65,13 +65,19 @@ export const Route = createFileRoute("/dev/ui")({
 });
 
 function DevNotFound() {
-  return <div className="p-6 text-sm text-ink-muted">The /dev page is only available in development.</div>;
+  return (
+    <div className="p-6 text-sm text-ink-muted">
+      The /dev page is only available in development.
+    </div>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-b border-border px-4 py-5 last:border-b-0">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-subtle">{title}</h2>
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-subtle">
+        {title}
+      </h2>
       <div className="flex flex-wrap items-start gap-3">{children}</div>
     </section>
   );
@@ -96,7 +102,9 @@ function DevPage() {
         <Button variant="danger">Danger</Button>
         <Button loading>Saving</Button>
         <Button size="sm">Small</Button>
-        <IconButton label="Add" variant="secondary">＋</IconButton>
+        <IconButton label="Add" variant="secondary">
+          ＋
+        </IconButton>
         <Kbd>⌘</Kbd>
         <Kbd>K</Kbd>
       </Section>
@@ -138,8 +146,12 @@ function DevPage() {
             <TabsTrigger value="one">One</TabsTrigger>
             <TabsTrigger value="two">Two</TabsTrigger>
           </TabsList>
-          <TabsContent value="one" className="pt-2 text-sm text-ink-muted">First tab</TabsContent>
-          <TabsContent value="two" className="pt-2 text-sm text-ink-muted">Second tab</TabsContent>
+          <TabsContent value="one" className="pt-2 text-sm text-ink-muted">
+            First tab
+          </TabsContent>
+          <TabsContent value="two" className="pt-2 text-sm text-ink-muted">
+            Second tab
+          </TabsContent>
         </Tabs>
         <Tooltip content="A helpful tooltip">
           <Button variant="ghost">Hover me</Button>
@@ -228,27 +240,49 @@ function DevPage() {
 
       <Section title="Feedback / Time">
         <Button onClick={() => toast("Saved")}>Toast</Button>
-        <Button onClick={() => toast({ title: "Run failed", tone: "danger", description: "Step Research failed." })}>
+        <Button
+          onClick={() =>
+            toast({ title: "Run failed", tone: "danger", description: "Step Research failed." })
+          }
+        >
           Danger toast
         </Button>
-        <Button onClick={() => toast({ title: "Run started", action: { label: "View run", onClick: () => {} } })}>
+        <Button
+          onClick={() =>
+            toast({ title: "Run started", action: { label: "View run", onClick: () => {} } })
+          }
+        >
           Toast with action
         </Button>
         <CopyButton value="copied text" />
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-4 w-16" />
-        <span className="text-sm"><RelativeTime date={twelveMinAgo} /></span>
-        <span className="text-sm"><Duration ms={134_000} /></span>
-        <span className="text-sm"><Duration from={aboutAMinuteAgo} live /></span>
+        <span className="text-sm">
+          <RelativeTime date={twelveMinAgo} />
+        </span>
+        <span className="text-sm">
+          <Duration ms={134_000} />
+        </span>
+        <span className="text-sm">
+          <Duration from={aboutAMinuteAgo} live />
+        </span>
       </Section>
 
       <Section title="Empty / Resizable">
-        <EmptyState className="w-64" title="No workflows yet" description="Create one to get started." />
+        <EmptyState
+          className="w-64"
+          title="No workflows yet"
+          description="Create one to get started."
+        />
         <div className="h-24 w-96 overflow-hidden rounded-md border border-border">
           <PanelGroup orientation="horizontal" className="h-full">
-            <Panel defaultSize={50} className="grid place-items-center text-xs text-ink-subtle">One</Panel>
+            <Panel defaultSize={50} className="grid place-items-center text-xs text-ink-subtle">
+              One
+            </Panel>
             <PanelHandle />
-            <Panel defaultSize={50} className="grid place-items-center text-xs text-ink-subtle">Two</Panel>
+            <Panel defaultSize={50} className="grid place-items-center text-xs text-ink-subtle">
+              Two
+            </Panel>
           </PanelGroup>
         </div>
       </Section>
@@ -279,7 +313,10 @@ function ApiSection() {
     (async () => {
       try {
         for await (const res of live.watchWorkflow({ workflowId }, { signal: abort.signal })) {
-          setEvents((prev) => [...prev.slice(-9), { type: res.event?.type ?? EventType.UNSPECIFIED, at: new Date() }]);
+          setEvents((prev) => [
+            ...prev.slice(-9),
+            { type: res.event?.type ?? EventType.UNSPECIFIED, at: new Date() },
+          ]);
         }
       } catch {
         /* stream ended or aborted */
@@ -304,7 +341,8 @@ function ApiSection() {
           )}
         </p>
         <p className="mt-1 text-xs text-ink-muted">
-          Live stream {workflowId ? `on ${workflowId.slice(0, 8)}…` : "(no workflow — run `nix run .#seed`)"}
+          Live stream{" "}
+          {workflowId ? `on ${workflowId.slice(0, 8)}…` : "(no workflow — run `nix run .#seed`)"}
         </p>
         <p className="text-xs">
           Events: <strong data-testid="event-count">{events.length}</strong> · Heartbeats:{" "}

@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { WorkflowStatus } from "@/gen/glyph/v1/common_pb";
-import { GetWorkflowResponseSchema, ListWorkflowsResponseSchema, WorkflowSummarySchema } from "@/gen/glyph/v1/workflow_pb";
+import {
+  GetWorkflowResponseSchema,
+  ListWorkflowsResponseSchema,
+  WorkflowSummarySchema,
+} from "@/gen/glyph/v1/workflow_pb";
 import { StartRunResponseSchema } from "@/gen/glyph/v1/run_pb";
 import { renderWithApp } from "@test/render";
 
@@ -18,21 +22,38 @@ const mount = (opts: { started: { workflowId: string }[] } = { started: [] }) =>
           Promise.resolve(
             create(ListWorkflowsResponseSchema, {
               workflows: [
-                create(WorkflowSummarySchema, { id: "wf-1", name: "Tournament", status: WorkflowStatus.DRAFT, updatedAt: { seconds: 1n, nanos: 0 } }),
+                create(WorkflowSummarySchema, {
+                  id: "wf-1",
+                  name: "Tournament",
+                  status: WorkflowStatus.DRAFT,
+                  updatedAt: { seconds: 1n, nanos: 0 },
+                }),
               ],
             }),
           ),
         getWorkflow: (req: { id: string }) =>
-          Promise.resolve(create(GetWorkflowResponseSchema, { workflow: { summary: { id: req.id, name: "Tournament", status: WorkflowStatus.DRAFT } } })),
+          Promise.resolve(
+            create(GetWorkflowResponseSchema, {
+              workflow: {
+                summary: { id: req.id, name: "Tournament", status: WorkflowStatus.DRAFT },
+              },
+            }),
+          ),
       },
       run: {
         startRun: (req: { workflowId: string }) => {
           opts.started.push({ workflowId: req.workflowId });
-          return Promise.resolve(create(StartRunResponseSchema, { run: { id: "run-1", workflowId: req.workflowId } }));
+          return Promise.resolve(
+            create(StartRunResponseSchema, { run: { id: "run-1", workflowId: req.workflowId } }),
+          );
         },
       },
       catalog: { refreshModels: () => Promise.resolve({}) },
-      live: { watchWorkflow: async function* () { await new Promise(() => {}); } },
+      live: {
+        watchWorkflow: async function* () {
+          await new Promise(() => {});
+        },
+      },
     },
   });
 

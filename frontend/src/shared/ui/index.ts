@@ -1,7 +1,15 @@
 // shared/ui — design system entry point (spec 0014).
 export { Button, IconButton, Spinner, type ButtonProps } from "./button";
 export { Field, Input, Textarea, type InputProps, type TextareaProps } from "./input";
-export { Select, Combobox, NativeSelect, ChevronDownIcon, CheckIcon, type SelectItem, type ComboboxItem } from "./select";
+export {
+  Select,
+  Combobox,
+  NativeSelect,
+  ChevronDownIcon,
+  CheckIcon,
+  type SelectItem,
+  type ComboboxItem,
+} from "./select";
 export { Switch, Checkbox } from "./switch";
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs";
 export {

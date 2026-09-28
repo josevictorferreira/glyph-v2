@@ -1,0 +1,28 @@
+# Nix / build artifacts
+/result
+/result-*
+/backend/target
+
+# Local state and secrets
+.dev
+.env
+.env*.local
+
+# VCS and agent tooling
+.git
+.gitignore
+.agents
+.omc
+.omo
+
+# Not needed to build the image; excluding them keeps the build context small
+# and stops edits from invalidating the image cache. backend/tests is never
+# COPYed and its fixtures are only include_str!'d under #[cfg(test)]; frontend
+# test output and e2e specs are not part of `vite build`.
+**/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/e2e
+backend/tests
+*.md

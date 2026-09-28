@@ -25,14 +25,20 @@ export function HomePage() {
     () =>
       workflows
         .filter((w) => w.status === WorkflowStatus.ACTIVE && w.nextRunAt !== undefined)
-        .sort((a, b) => (tsToDate(a.nextRunAt)?.getTime() ?? 0) - (tsToDate(b.nextRunAt)?.getTime() ?? 0)),
+        .sort(
+          (a, b) =>
+            (tsToDate(a.nextRunAt)?.getTime() ?? 0) - (tsToDate(b.nextRunAt)?.getTime() ?? 0),
+        ),
     [workflows],
   );
   const finished = useMemo(
     () =>
       workflows
         .filter((w) => w.lastRunAt !== undefined && !isRunning(w))
-        .sort((a, b) => (tsToDate(b.lastRunAt)?.getTime() ?? 0) - (tsToDate(a.lastRunAt)?.getTime() ?? 0))
+        .sort(
+          (a, b) =>
+            (tsToDate(b.lastRunAt)?.getTime() ?? 0) - (tsToDate(a.lastRunAt)?.getTime() ?? 0),
+        )
         .slice(0, 8),
     [workflows],
   );
@@ -72,7 +78,9 @@ export function HomePage() {
                   <span className="text-xs text-ink-muted">
                     {at ? `${formatRelative(at, now)} · ${formatExact(at)}` : null}
                   </span>
-                  {w.scheduleSummary && <span className="text-xs text-ink-subtle">{w.scheduleSummary}</span>}
+                  {w.scheduleSummary && (
+                    <span className="text-xs text-ink-subtle">{w.scheduleSummary}</span>
+                  )}
                 </WorkflowCard>
               );
             })}
@@ -85,7 +93,11 @@ export function HomePage() {
               const status = w.lastRunStatus ? describeRunStatus(w.lastRunStatus) : undefined;
               return (
                 <WorkflowCard key={w.id} workflow={w} testId="home-finished-card">
-                  {status && <Badge tone={status.tone === "striped" ? "muted" : status.tone}>{status.label}</Badge>}
+                  {status && (
+                    <Badge tone={status.tone === "striped" ? "muted" : status.tone}>
+                      {status.label}
+                    </Badge>
+                  )}
                   {at && <span className="text-xs text-ink-subtle">{formatRelative(at, now)}</span>}
                 </WorkflowCard>
               );
@@ -109,7 +121,11 @@ function FirstRun() {
             <Button data-testid="first-run-new" onClick={() => createDialog.open("blank")}>
               <Plus /> New workflow
             </Button>
-            <Button variant="secondary" data-testid="first-run-import" onClick={() => createDialog.open("yaml")}>
+            <Button
+              variant="secondary"
+              data-testid="first-run-import"
+              onClick={() => createDialog.open("yaml")}
+            >
               Import YAML
             </Button>
           </div>
@@ -119,10 +135,20 @@ function FirstRun() {
   );
 }
 
-function Section({ title, testId, children }: { title: string; testId: string; children: React.ReactNode }) {
+function Section({
+  title,
+  testId,
+  children,
+}: {
+  title: string;
+  testId: string;
+  children: React.ReactNode;
+}) {
   return (
     <section data-testid={testId} aria-label={title}>
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{title}</h2>
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+        {title}
+      </h2>
       <div className="space-y-2">{children}</div>
     </section>
   );
@@ -161,7 +187,8 @@ function AttentionCard({ workflow, now }: { workflow: WorkflowSummary; now: Date
   const at = tsToDate(workflow.lastRunAt);
   const reason =
     workflow.status === WorkflowStatus.NEEDS_ATTENTION
-      ? (validation?.issues.find((i: { message: string }) => i.message.length > 0)?.message ?? "Blocked by validation issues")
+      ? (validation?.issues.find((i: { message: string }) => i.message.length > 0)?.message ??
+        "Blocked by validation issues")
       : at
         ? `Last run failed ${formatRelative(at, now)}`
         : "Last run failed";

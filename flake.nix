@@ -275,7 +275,9 @@
           PIDS+=($!)
 
           if [ -f "$ROOT/frontend/package.json" ]; then
-            (cd "$ROOT/frontend" && pnpm install --frozen-lockfile && exec pnpm dev) &
+            # exec vite itself (not `pnpm dev`): pnpm does not forward the
+            # cleanup signal, which left an orphaned Vite holding :5173.
+            (cd "$ROOT/frontend" && pnpm install --frozen-lockfile && exec ./node_modules/.bin/vite) &
             PIDS+=($!)
           fi
 
@@ -356,8 +358,10 @@
           log "Done. Next 'nix run .#web' starts from scratch."
         '';
 
-        # Build the Nix image, push it to GHCR, then restart the deployment in
-        # the owner's homelab. Never run unless explicitly asked.
+        # Build the root Containerfile with podman, push it to GHCR, then restart
+        # the deployment in the owner's homelab — same approach as velox, so a
+        # bare `podman build` and `nix run .#deploy` produce one image, not two
+        # divergent ones. linux/amd64 only. Never run unless explicitly asked.
         deploy = pkgs.writeShellApplication {
           name = "deploy";
           runtimeInputs = [
@@ -378,8 +382,7 @@
               echo "GITHUB_TOKEN not set; assuming already logged in to $REGISTRY."
             fi
 
-            podman load < ${image}
-            podman tag localhost/glyph:latest "$TAG"
+            podman build --platform=linux/amd64 --file Containerfile --tag "$TAG" .
             podman push "$TAG"
             echo "Successfully pushed image: $TAG"
 

@@ -11,7 +11,7 @@ import type { EditorFocusTarget, StepEditorTab } from "./chrome";
 const STEP_TAB_FIELDS: Partial<Record<StepEditorTab, readonly string[]>> = {
   instructions: ["prompt", "additional_context"],
   output: ["output_name", "output_description", "expected_output", "output_file_format"],
-  model: ["model_id", "temperature", "tools"],
+  model: ["model_id", "model_settings", "enabled_tool_ids"],
   settings: ["name", "description", "allow_failure"],
 };
 
@@ -23,7 +23,9 @@ const STEP_FIELD_TABS = Object.entries(STEP_TAB_FIELDS).flatMap(([tab, fields]) 
 export function stepTabIssues(issues: readonly Issue[], step: Step, tab: StepEditorTab): Issue[] {
   if (tab === "inputs") {
     return issues.filter(
-      (i) => i.entityType === IssueEntityType.STEP_INPUT && step.inputs.some((inp) => inp.id === i.entityId),
+      (i) =>
+        i.entityType === IssueEntityType.STEP_INPUT &&
+        step.inputs.some((inp) => inp.id === i.entityId),
     );
   }
   const fields = STEP_TAB_FIELDS[tab] ?? [];
@@ -76,6 +78,8 @@ export function issueField(issue: Issue): string | undefined {
   switch (issue.entityType) {
     case IssueEntityType.WORKFLOW_INPUT:
       return `value-${issue.entityId}`;
+    case IssueEntityType.STEP_INPUT:
+      return `source-${issue.entityId}`;
     default:
       return issue.field;
   }
@@ -88,7 +92,10 @@ export interface IssueGroup {
 }
 
 /** Issues grouped by entity with workflow-aware labels. */
-export function groupIssues(issues: readonly Issue[], workflow: Workflow | undefined): IssueGroup[] {
+export function groupIssues(
+  issues: readonly Issue[],
+  workflow: Workflow | undefined,
+): IssueGroup[] {
   const groups = new Map<string, IssueGroup>();
   const stepName = (id: string) => workflow?.steps.find((s) => s.id === id)?.name ?? "step";
   for (const issue of issues) {
@@ -112,7 +119,9 @@ export function groupIssues(issues: readonly Issue[], workflow: Workflow | undef
         }
         case IssueEntityType.WORKFLOW_CONNECTION: {
           const conn = workflow?.connections.find((c) => c.id === issue.entityId);
-          label = conn ? `${stepName(conn.sourceStepId)} → ${stepName(conn.destinationStepId)}` : "Connection";
+          label = conn
+            ? `${stepName(conn.sourceStepId)} → ${stepName(conn.destinationStepId)}`
+            : "Connection";
           break;
         }
         case IssueEntityType.WORKFLOW_SCHEDULE:

@@ -57,9 +57,14 @@ describe("topologicalOrder", () => {
   });
 
   it("falls back to input order on a cycle", () => {
-    expect(topologicalOrder(["a", "b"], [{ source: "a", target: "b" }, { source: "b", target: "a" }])).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(
+      topologicalOrder(
+        ["a", "b"],
+        [
+          { source: "a", target: "b" },
+          { source: "b", target: "a" },
+        ],
+      ),
+    ).toEqual(["a", "b"]);
   });
 });

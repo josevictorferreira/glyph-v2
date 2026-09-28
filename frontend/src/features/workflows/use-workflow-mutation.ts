@@ -7,7 +7,13 @@ import { useTransport } from "@connectrpc/connect-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@connectrpc/connect";
 import { create } from "@bufbuild/protobuf";
-import type { DescMessage, DescMethodUnary, DescService, MessageInitShape, MessageShape } from "@bufbuild/protobuf";
+import type {
+  DescMessage,
+  DescMethodUnary,
+  DescService,
+  MessageInitShape,
+  MessageShape,
+} from "@bufbuild/protobuf";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import { GetWorkflowResponseSchema } from "@/gen/glyph/v1/workflow_pb";
 import type { GetWorkflowResponse, Workflow } from "@/gen/glyph/v1/workflow_pb";
@@ -89,9 +95,9 @@ export function useWorkflowMutation<Rpc extends WorkflowMutationRpc>(
     mutationFn: async (request: RequestOf<Rpc>): Promise<ResponseOf<Rpc>> => {
       // rpc.parent is the owning service (WorkflowService or DefinitionService).
       const client = createClient(rpc.parent as typeof WorkflowService, transport);
-      const method = (client as unknown as Record<string, (req: RequestOf<Rpc>) => Promise<ResponseOf<Rpc>>>)[
-        rpc.name.charAt(0).toLowerCase() + rpc.name.slice(1)
-      ]!;
+      const method = (
+        client as unknown as Record<string, (req: RequestOf<Rpc>) => Promise<ResponseOf<Rpc>>>
+      )[rpc.name.charAt(0).toLowerCase() + rpc.name.slice(1)]!;
       return method(request);
     },
     onMutate: async (request): Promise<MutationContext> => {

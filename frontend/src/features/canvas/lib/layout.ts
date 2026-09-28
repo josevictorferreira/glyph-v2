@@ -49,7 +49,7 @@ export async function tidyUp(workflow: Workflow): Promise<LayoutPosition[]> {
   const result = await elk.layout(graph);
   return (result.children ?? []).map((child) => ({
     stepId: child.id,
-    x: snap((child.x ?? 0)),
+    x: snap(child.x ?? 0),
     y: snap(child.y ?? 0),
   }));
 }

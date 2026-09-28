@@ -68,7 +68,9 @@
 .glyph-node {
   border-color: var(--c-border);
   border-width: 1px;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 .glyph-node.glyph-node-selected {
   border-color: var(--c-accent);

@@ -17,7 +17,9 @@ describe("nextOccurrences", () => {
 
   it("crosses the London spring-forward boundary (GMT → BST)", () => {
     // 2026-03-29 01:00 GMT the clocks jump to 02:00 BST; 09:00 local stays 09:00 local.
-    expect(isos(nextOccurrences("0 9 * * *", "Europe/London", 4, at("2026-03-27T00:00:00Z")))).toEqual([
+    expect(
+      isos(nextOccurrences("0 9 * * *", "Europe/London", 4, at("2026-03-27T00:00:00Z"))),
+    ).toEqual([
       "2026-03-27T09:00:00.000Z",
       "2026-03-28T09:00:00.000Z",
       "2026-03-29T08:00:00.000Z",
@@ -26,7 +28,9 @@ describe("nextOccurrences", () => {
   });
 
   it("crosses the London fall-back boundary (BST → GMT)", () => {
-    expect(isos(nextOccurrences("0 9 * * *", "Europe/London", 4, at("2026-10-23T00:00:00Z")))).toEqual([
+    expect(
+      isos(nextOccurrences("0 9 * * *", "Europe/London", 4, at("2026-10-23T00:00:00Z"))),
+    ).toEqual([
       "2026-10-23T08:00:00.000Z",
       "2026-10-24T08:00:00.000Z",
       "2026-10-25T09:00:00.000Z",
@@ -35,15 +39,15 @@ describe("nextOccurrences", () => {
   });
 
   it("uses the America/Sao_Paulo fixed -03:00 offset", () => {
-    expect(isos(nextOccurrences("0 9 * * *", "America/Sao_Paulo", 3, at("2026-10-01T00:00:00Z")))).toEqual([
-      "2026-10-01T12:00:00.000Z",
-      "2026-10-02T12:00:00.000Z",
-      "2026-10-03T12:00:00.000Z",
-    ]);
+    expect(
+      isos(nextOccurrences("0 9 * * *", "America/Sao_Paulo", 3, at("2026-10-01T00:00:00Z"))),
+    ).toEqual(["2026-10-01T12:00:00.000Z", "2026-10-02T12:00:00.000Z", "2026-10-03T12:00:00.000Z"]);
   });
 
   it("skips months without day 31 and keeps the local time across DST", () => {
-    expect(isos(nextOccurrences("0 9 31 * *", "Europe/London", 5, at("2026-09-01T00:00:00Z")))).toEqual([
+    expect(
+      isos(nextOccurrences("0 9 31 * *", "Europe/London", 5, at("2026-09-01T00:00:00Z"))),
+    ).toEqual([
       "2026-10-31T09:00:00.000Z", // GMT
       "2026-12-31T09:00:00.000Z", // no Nov 31
       "2027-01-31T09:00:00.000Z",

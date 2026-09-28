@@ -33,7 +33,10 @@ export interface WorkflowLiveState {
   lastEventAt: number | undefined;
 }
 
-export function useWorkflowLive({ workflowId, onEvent }: UseWorkflowLiveOptions): WorkflowLiveState {
+export function useWorkflowLive({
+  workflowId,
+  onEvent,
+}: UseWorkflowLiveOptions): WorkflowLiveState {
   const queryClient = useQueryClient();
   const transport = useTransport();
   const [status, setStatus] = useState<LiveStatus>("connecting");
@@ -58,7 +61,8 @@ export function useWorkflowLive({ workflowId, onEvent }: UseWorkflowLiveOptions)
     const progressAt = new Map<string, number>();
 
     const isStepRunObserved = (runId: string, stepRunId: string) =>
-      queryClient.getQueryState(runKeys.stepRun(workflowId, runId, stepRunId, transport)) !== undefined;
+      queryClient.getQueryState(runKeys.stepRun(workflowId, runId, stepRunId, transport)) !==
+      undefined;
 
     const handleEvent = (ev: WorkflowEvent) => {
       const ts = ev.occurredAt;
@@ -152,7 +156,13 @@ export function useWorkflowLive({ workflowId, onEvent }: UseWorkflowLiveOptions)
     };
 
     const connect = (): AbortController => {
-      setStatus(attempt === 0 ? "connecting" : attempt >= OFFLINE_AFTER_ATTEMPTS ? "offline" : "reconnecting");
+      setStatus(
+        attempt === 0
+          ? "connecting"
+          : attempt >= OFFLINE_AFTER_ATTEMPTS
+            ? "offline"
+            : "reconnecting",
+      );
       const ac = new AbortController();
       void (async () => {
         try {

@@ -101,7 +101,9 @@ describe("ScheduleComposer (spec 0019)", () => {
     expect(screen.getByRole("tab", { name: "Interval", selected: true })).toBeVisible();
     fireEvent.change(screen.getByLabelText("Every"), { target: { value: "6" } });
     fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "hours" } });
-    await waitFor(() => expect(screen.getByTestId("schedule-preview").textContent).toContain("7 */6 * * *"));
+    await waitFor(() =>
+      expect(screen.getByTestId("schedule-preview").textContent).toContain("7 */6 * * *"),
+    );
     await userEvent.click(screen.getByTestId("save-schedule"));
     const req = await waitFor(() => {
       const r = last();

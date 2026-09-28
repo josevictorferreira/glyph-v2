@@ -4,12 +4,7 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import type { Issue, StepKind } from "@/gen/glyph/v1/common_pb";
-import type {
-  Workflow,
-  WorkflowInput,
-  Connection,
-  Step,
-} from "@/gen/glyph/v1/workflow_pb";
+import type { Workflow, WorkflowInput, Connection, Step } from "@/gen/glyph/v1/workflow_pb";
 import type { RunSnapshot, StepRunSummary } from "@/gen/glyph/v1/run_pb";
 import { StepRunStatus } from "@/gen/glyph/v1/common_pb";
 import { tsToMs } from "@/shared/lib/time";

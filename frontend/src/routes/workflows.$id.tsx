@@ -20,7 +20,11 @@ function WorkspaceLayout() {
   // Deep links select canvas steps through the shared URL (?step=).
   const selectStep = useCallback(
     (stepId: string | null) => {
-      void navigate({ to: "/workflows/$id", params: { id }, search: stepId ? { step: stepId } : {} });
+      void navigate({
+        to: "/workflows/$id",
+        params: { id },
+        search: stepId ? { step: stepId } : {},
+      });
     },
     [navigate, id],
   );

@@ -37,7 +37,10 @@ test("renaming in one tab updates the other within 1s", async ({ browser }) => {
   await nameA.blur();
 
   await expect(nameB).toHaveValue("Renamed by tab A", { timeout: 1000 });
-  await expect(tabA.getByTestId("save-indicator")).toContainText("Saved");
+  // The header indicator aggregates every field; panels have their own.
+  await expect(tabA.getByTestId("workspace-header").getByTestId("save-indicator")).toContainText(
+    "Saved",
+  );
 
   await ctxA.close();
   await ctxB.close();

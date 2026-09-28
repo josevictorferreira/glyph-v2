@@ -66,7 +66,9 @@ export function useWorkflowCommands(workflowId: string): CommandDef[] {
         label: "Export YAML",
         keywords: "download definition",
         run: async () => {
-          const exported = await createClient(DefinitionService, transport).exportDefinition({ workflowId });
+          const exported = await createClient(DefinitionService, transport).exportDefinition({
+            workflowId,
+          });
           const url = URL.createObjectURL(new Blob([exported.yaml], { type: "text/yaml" }));
           const a = document.createElement("a");
           a.href = url;
@@ -89,9 +91,20 @@ export function useWorkflowCommands(workflowId: string): CommandDef[] {
       group: "Steps",
       label: `Go to step ${s.name}`,
       keywords: "jump canvas",
-      run: () => void navigate({ to: "/workflows/$id", params: { id: workflowId }, hash: `step-${s.id}` }),
+      run: () =>
+        void navigate({ to: "/workflows/$id", params: { id: workflowId }, hash: `step-${s.id}` }),
     }));
     return [...actions, ...steps];
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mutateAsync identities are stable in v5; commands refresh when workflow data changes
-  }, [workflowId, status, workflow?.steps, navigate, transport, activate.mutateAsync, pause.mutateAsync, resume.mutateAsync, startRun.mutateAsync]);
+  }, [
+    workflowId,
+    status,
+    workflow?.steps,
+    navigate,
+    transport,
+    activate.mutateAsync,
+    pause.mutateAsync,
+    resume.mutateAsync,
+    startRun.mutateAsync,
+  ]);
 }

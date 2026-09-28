@@ -101,21 +101,27 @@ export function recurrenceFromCron(cron: string): Recurrence | null {
     const h = int(hour);
     const m = int(minute);
     const w = int(dow);
-    if (h !== null && m !== null && w !== null) return { kind: "weekly", weekday: w, hour: h, minute: m };
+    if (h !== null && m !== null && w !== null)
+      return { kind: "weekly", weekday: w, hour: h, minute: m };
   }
   if (dow === "*" && month === "*") {
     const h = int(hour);
     const m = int(minute);
     const d = int(dom);
-    if (h !== null && m !== null && d !== null) return { kind: "monthly", day: d, hour: h, minute: m };
+    if (h !== null && m !== null && d !== null)
+      return { kind: "monthly", day: d, hour: h, minute: m };
   }
   return { kind: "cron", expression: parsed };
 }
 
 /** The SaveScheduleRequest.recurrence oneof for a pattern (or its removal). */
-export function recurrenceToRequest(pattern: SchedulePattern, recurrence: Recurrence): SaveScheduleRequest["recurrence"] {
+export function recurrenceToRequest(
+  pattern: SchedulePattern,
+  recurrence: Recurrence,
+): SaveScheduleRequest["recurrence"] {
   if (pattern === "none") return { case: "none", value: create(ScheduleNoneSchema, {}) };
-  if (pattern !== recurrence.kind) throw new Error(`pattern ${pattern} does not match recurrence ${recurrence.kind}`);
+  if (pattern !== recurrence.kind)
+    throw new Error(`pattern ${pattern} does not match recurrence ${recurrence.kind}`);
   switch (recurrence.kind) {
     case "interval":
       return {
@@ -126,7 +132,10 @@ export function recurrenceToRequest(pattern: SchedulePattern, recurrence: Recurr
         }),
       };
     case "daily":
-      return { case: "daily", value: create(ScheduleDailySchema, { hour: recurrence.hour, minute: recurrence.minute }) };
+      return {
+        case: "daily",
+        value: create(ScheduleDailySchema, { hour: recurrence.hour, minute: recurrence.minute }),
+      };
     case "weekly":
       return {
         case: "weekly",
@@ -139,10 +148,17 @@ export function recurrenceToRequest(pattern: SchedulePattern, recurrence: Recurr
     case "monthly":
       return {
         case: "monthly",
-        value: create(ScheduleMonthlySchema, { day: recurrence.day, hour: recurrence.hour, minute: recurrence.minute }),
+        value: create(ScheduleMonthlySchema, {
+          day: recurrence.day,
+          hour: recurrence.hour,
+          minute: recurrence.minute,
+        }),
       };
     case "cron":
-      return { case: "cron", value: create(ScheduleCronSchema, { expression: recurrence.expression.trim() }) };
+      return {
+        case: "cron",
+        value: create(ScheduleCronSchema, { expression: recurrence.expression.trim() }),
+      };
   }
 }
 

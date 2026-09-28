@@ -22,7 +22,10 @@ export function recentTimezones(): string[] {
 
 export function rememberTimezone(timezone: string): void {
   try {
-    const next = [timezone, ...recentTimezones().filter((z) => z !== timezone)].slice(0, RECENT_MAX);
+    const next = [timezone, ...recentTimezones().filter((z) => z !== timezone)].slice(
+      0,
+      RECENT_MAX,
+    );
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
   } catch {
     // Private mode / disabled storage: recents are a nicety, not a feature.

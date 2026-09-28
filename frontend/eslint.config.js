@@ -40,7 +40,12 @@ export default tseslint.config(
       "boundaries/elements": [
         { type: "app", pattern: "src/app" },
         { type: "routes", pattern: "src/routes" },
-        { type: "feature", pattern: "src/features/*", partialMatch: false, capture: ["featureName"] },
+        {
+          type: "feature",
+          pattern: "src/features/*",
+          partialMatch: false,
+          capture: ["featureName"],
+        },
         { type: "shared", pattern: "src/shared/*", partialMatch: false, capture: ["sharedName"] },
         { type: "gen", pattern: "src/gen" },
         { type: "test", pattern: ["test/*", "e2e/*"], partialMatch: false, capture: ["testKind"] },
@@ -135,6 +140,11 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // Node scripts run by Playwright (mock servers).
+    files: ["e2e/**/*.mjs"],
+    languageOptions: { globals: { process: "readonly" } },
   },
   prettier,
 );

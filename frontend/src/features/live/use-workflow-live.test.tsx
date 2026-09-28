@@ -4,7 +4,12 @@ import { act } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { GetStepRunResponseSchema } from "@/gen/glyph/v1/run_pb";
 import { Code, ConnectError, type ServiceImpl } from "@connectrpc/connect";
-import { EventType, LiveService, WorkflowEventSchema, type WorkflowEvent } from "@/gen/glyph/v1/live_pb";
+import {
+  EventType,
+  LiveService,
+  WorkflowEventSchema,
+  type WorkflowEvent,
+} from "@/gen/glyph/v1/live_pb";
 import { runKeys, workflowKeys } from "@/shared/api/keys";
 import { isLive } from "@/shared/api/liveness";
 import { renderHookWithApp } from "@test/render";
@@ -108,10 +113,14 @@ describe("useWorkflowLive", () => {
     const script = scriptStream();
     const { queryClient, transport, unmount } = mount(script);
     // Observe the step run: its exact query now exists in the cache.
-    queryClient.setQueryData(runKeys.stepRun("wf", "r1", "s1", transport), create(GetStepRunResponseSchema));
+    queryClient.setQueryData(
+      runKeys.stepRun("wf", "r1", "s1", transport),
+      create(GetStepRunResponseSchema),
+    );
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     const stepFilter = JSON.stringify(runKeys.stepRun("wf", "r1", "s1"));
-    const stepInvalidations = () => invalidatedKeys(invalidate).filter((k) => k === stepFilter).length;
+    const stepInvalidations = () =>
+      invalidatedKeys(invalidate).filter((k) => k === stepFilter).length;
 
     script.push(ev(EventType.STEP_RUN_PROGRESS, { runId: "r1", stepRunId: "s1" }));
     await flush();

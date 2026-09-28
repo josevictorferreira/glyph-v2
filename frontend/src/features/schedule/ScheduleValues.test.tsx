@@ -32,7 +32,15 @@ function wf(inputs: Parameters<typeof makeInputs>[0]): Workflow {
   });
 }
 
-function makeInputs(init: Array<{ id: string; name: string; required?: boolean; askAtRunTime?: boolean; value?: string }>) {
+function makeInputs(
+  init: Array<{
+    id: string;
+    name: string;
+    required?: boolean;
+    askAtRunTime?: boolean;
+    value?: string;
+  }>,
+) {
   return init;
 }
 
@@ -52,7 +60,10 @@ function mount(inputs: Parameters<typeof makeInputs>[0]) {
               ...schedule,
               values: [
                 ...schedule.values.filter((v) => v.workflowInputId !== req.workflowInputId),
-                create(ScheduleValueSchema, { workflowInputId: req.workflowInputId, value: req.value }),
+                create(ScheduleValueSchema, {
+                  workflowInputId: req.workflowInputId,
+                  value: req.value,
+                }),
               ],
             }),
           });
@@ -96,7 +107,11 @@ describe("ScheduledValues (spec 0019)", () => {
 
   it("renders nothing without a schedule or without relevant inputs", () => {
     renderWithApp(
-      <ScheduledValues workflow={create(WorkflowSchema, { summary: { id: "wf-1", status: WorkflowStatus.ACTIVE } })} />,
+      <ScheduledValues
+        workflow={create(WorkflowSchema, {
+          summary: { id: "wf-1", status: WorkflowStatus.ACTIVE },
+        })}
+      />,
       {},
     );
     expect(screen.queryByTestId("schedule-values")).toBeNull();

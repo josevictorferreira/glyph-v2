@@ -75,7 +75,12 @@ export function ConnectionIndicator({
       ? `${view.label} · last event ${formatRelative(new Date(lastEventAt))}`
       : view.label;
   return (
-    <Badge tone={view.badge} className={cn("gap-1.5", className)} title={title} data-testid="connection-indicator">
+    <Badge
+      tone={view.badge}
+      className={cn("gap-1.5", className)}
+      title={title}
+      data-testid="connection-indicator"
+    >
       <StatusDot tone={view.dot} pulse={view.pulse} />
       {view.label}
     </Badge>

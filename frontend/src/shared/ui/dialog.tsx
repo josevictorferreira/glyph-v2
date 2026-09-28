@@ -31,7 +31,9 @@ export function DialogContent({
       >
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
-            <DialogPrimitive.Title className="text-base font-semibold text-ink">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="text-base font-semibold text-ink">
+              {title}
+            </DialogPrimitive.Title>
             {description && (
               <DialogPrimitive.Description className="mt-0.5 text-sm text-ink-muted">
                 {description}
@@ -85,7 +87,9 @@ export function SheetContent({
       >
         <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
           <div>
-            <DialogPrimitive.Title className="text-base font-semibold text-ink">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="text-base font-semibold text-ink">
+              {title}
+            </DialogPrimitive.Title>
             {description && (
               <DialogPrimitive.Description className="mt-0.5 text-sm text-ink-muted">
                 {description}

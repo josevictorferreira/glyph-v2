@@ -43,13 +43,22 @@ describe("useWorkflowMutation", () => {
             }),
             updateWorkflow: () => ({
               workflow: makeWorkflow({ id: "s-1", canvasX: 0, canvasY: 0 }),
-              issues: [create(IssueSchema, { entityType: 2, entityId: "s-1", field: "model", message: "gone" })],
+              issues: [
+                create(IssueSchema, {
+                  entityType: 2,
+                  entityId: "s-1",
+                  field: "model",
+                  message: "gone",
+                }),
+              ],
             }),
           },
         },
       },
     );
-    await waitFor(() => expect(r.result.current.q.data?.workflow?.summary?.name).toBe("Tournament"));
+    await waitFor(() =>
+      expect(r.result.current.q.data?.workflow?.summary?.name).toBe("Tournament"),
+    );
 
     const invalidateSpy = vi.spyOn(r.queryClient, "invalidateQueries");
     await act(() => r.result.current.mut.mutateAsync({ id: "wf-1", name: "Renamed" }));
@@ -86,7 +95,10 @@ describe("useWorkflowMutation", () => {
               new Promise((resolve, reject) => {
                 settle = (ok) =>
                   ok
-                    ? resolve({ workflow: makeWorkflow({ id: "s-1", canvasX: 100, canvasY: 200 }), issues: [] })
+                    ? resolve({
+                        workflow: makeWorkflow({ id: "s-1", canvasX: 100, canvasY: 200 }),
+                        issues: [],
+                      })
                     : reject(new ConnectError("stale", Code.Aborted));
               }),
           },
@@ -99,10 +111,18 @@ describe("useWorkflowMutation", () => {
     // Optimistic patch visible while the server has not answered.
     let inFlight: Promise<unknown> | undefined;
     act(() => {
-      inFlight = r.result.current.mut.mutateAsync({ workflowId: "wf-1", stepId: "s-1", canvasX: 100, canvasY: 200 });
+      inFlight = r.result.current.mut.mutateAsync({
+        workflowId: "wf-1",
+        stepId: "s-1",
+        canvasX: 100,
+        canvasY: 200,
+      });
     });
     await waitFor(() =>
-      expect(stepOf(r.result.current.q.data!.workflow!)).toMatchObject({ canvasX: 100, canvasY: 200 }),
+      expect(stepOf(r.result.current.q.data!.workflow!)).toMatchObject({
+        canvasX: 100,
+        canvasY: 200,
+      }),
     );
 
     act(() => settle(false));
@@ -142,7 +162,10 @@ describe("useWorkflowMutation", () => {
     const r = renderHookWithApp(() => useWorkflowMutation(WorkflowService.method.updateWorkflow), {
       services: {
         workflow: {
-          updateWorkflow: () => ({ workflow: makeWorkflow({ id: "s-1", canvasX: 0, canvasY: 0 }), issues: [] }),
+          updateWorkflow: () => ({
+            workflow: makeWorkflow({ id: "s-1", canvasX: 0, canvasY: 0 }),
+            issues: [],
+          }),
         },
       },
     });

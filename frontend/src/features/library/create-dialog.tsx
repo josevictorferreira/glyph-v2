@@ -1,13 +1,7 @@
 // Create / import / duplicate dialog (spec 0016). One dialog, three tabs.
 // Blank → CreateWorkflow; From YAML → debounced ParseDefinition dry run +
 // ImportWorkflow; Duplicate → ExportDefinition, strip step ids, rename, import.
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTransport } from "@connectrpc/connect-query";
 import { useQuery } from "@tanstack/react-query";
@@ -184,7 +178,9 @@ function YamlTab({ onDone }: { onDone: () => void }) {
             onChange={(e) => setYaml(e.target.value)}
             rows={8}
             className="font-mono text-xs"
-            placeholder={"name: My workflow\nsteps:\n  - name: Research\n    kind: pi\n    prompt: …"}
+            placeholder={
+              "name: My workflow\nsteps:\n  - name: Research\n    kind: pi\n    prompt: …"
+            }
           />
         </div>
       </Field>
@@ -280,7 +276,11 @@ function DuplicateTab({ onDone }: { onDone: () => void }) {
         />
       </Field>
       <DialogFooter>
-        <Button onClick={() => void duplicate()} disabled={busy || !source} data-testid="duplicate-submit">
+        <Button
+          onClick={() => void duplicate()}
+          disabled={busy || !source}
+          data-testid="duplicate-submit"
+        >
           {busy ? "Copying…" : "Duplicate"}
         </Button>
       </DialogFooter>

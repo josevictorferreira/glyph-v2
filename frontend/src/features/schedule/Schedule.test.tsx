@@ -5,22 +5,39 @@ import userEvent from "@testing-library/user-event";
 import { create } from "@bufbuild/protobuf";
 import { TimestampSchema } from "@bufbuild/protobuf/wkt";
 import { IssueEntityType, IssueSchema, WorkflowStatus } from "@/gen/glyph/v1/common_pb";
-import { GetWorkflowResponseSchema, ScheduleSchema, WorkflowSchema } from "@/gen/glyph/v1/workflow_pb";
+import {
+  GetWorkflowResponseSchema,
+  ScheduleSchema,
+  WorkflowSchema,
+} from "@/gen/glyph/v1/workflow_pb";
 import { renderWithApp } from "@test/render";
 import { ScheduleCard } from "./Schedule";
 
-const ts = (iso: string) => create(TimestampSchema, { seconds: BigInt(Date.parse(iso) / 1000), nanos: 0 });
+const ts = (iso: string) =>
+  create(TimestampSchema, { seconds: BigInt(Date.parse(iso) / 1000), nanos: 0 });
 
-function mount(status: WorkflowStatus, schedule?: boolean, issues: ReturnType<typeof makeIssue>[] = []) {
+function mount(
+  status: WorkflowStatus,
+  schedule?: boolean,
+  issues: ReturnType<typeof makeIssue>[] = [],
+) {
   const onOpenComposer = vi.fn();
   const onOpenReadiness = vi.fn();
-  renderWithApp(<ScheduleCard workflow={wf(status, schedule)} onOpenComposer={onOpenComposer} onOpenReadiness={onOpenReadiness} />, {
-    services: {
-      workflow: {
-        getWorkflow: async () => create(GetWorkflowResponseSchema, { workflow: wf(status, schedule), issues }),
+  renderWithApp(
+    <ScheduleCard
+      workflow={wf(status, schedule)}
+      onOpenComposer={onOpenComposer}
+      onOpenReadiness={onOpenReadiness}
+    />,
+    {
+      services: {
+        workflow: {
+          getWorkflow: async () =>
+            create(GetWorkflowResponseSchema, { workflow: wf(status, schedule), issues }),
+        },
       },
     },
-  });
+  );
   return { onOpenComposer, onOpenReadiness };
 }
 
@@ -56,13 +73,16 @@ describe("ScheduleCard (spec 0019)", () => {
   });
 
   it("active: description, next run and last dispatched", () => {
-    renderWithApp(<ScheduleCard workflow={activeWf()} onOpenComposer={vi.fn()} onOpenReadiness={vi.fn()} />, {
-      services: {
-        workflow: {
-          getWorkflow: async () => create(GetWorkflowResponseSchema, { workflow: activeWf() }),
+    renderWithApp(
+      <ScheduleCard workflow={activeWf()} onOpenComposer={vi.fn()} onOpenReadiness={vi.fn()} />,
+      {
+        services: {
+          workflow: {
+            getWorkflow: async () => create(GetWorkflowResponseSchema, { workflow: activeWf() }),
+          },
         },
       },
-    });
+    );
     expect(screen.getByTestId("schedule-active")).toBeVisible();
     expect(screen.getByText("Mondays at 09:00 (UTC)")).toBeVisible();
     expect(screen.getByText("Enabled")).toBeVisible();
@@ -73,7 +93,9 @@ describe("ScheduleCard (spec 0019)", () => {
   it("draft: explains it starts after activation", () => {
     mount(WorkflowStatus.DRAFT, true);
     expect(screen.getByTestId("schedule-draft")).toBeVisible();
-    expect(screen.getByText("Schedule saved. It starts after you activate the workflow.")).toBeVisible();
+    expect(
+      screen.getByText("Schedule saved. It starts after you activate the workflow."),
+    ).toBeVisible();
   });
 
   it("paused: explains there are no scheduled runs", () => {

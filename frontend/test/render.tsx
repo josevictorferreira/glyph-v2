@@ -1,5 +1,10 @@
 // renderWithApp (spec 0014): wraps providers + an optional memory router.
-import { createMemoryHistory, createRouter, RouterProvider, type Router } from "@tanstack/react-router";
+import {
+  createMemoryHistory,
+  createRouter,
+  RouterProvider,
+  type Router,
+} from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TransportProvider } from "@connectrpc/connect-query";
 import { render, renderHook, type RenderOptions, type RenderResult } from "@testing-library/react";
@@ -27,7 +32,13 @@ export interface RenderWithAppResult extends RenderResult {
 export function renderHookWithApp<TResult>(
   hook: () => TResult,
   opts: RenderWithAppOptions = {},
-): { result: { current: TResult }; unmount: () => void; rerender: (hook?: () => TResult) => void; queryClient: QueryClient; transport: Transport } {
+): {
+  result: { current: TResult };
+  unmount: () => void;
+  rerender: (hook?: () => TResult) => void;
+  queryClient: QueryClient;
+  transport: Transport;
+} {
   const transport = opts.transport ?? fakeTransport(opts.services ?? {});
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -43,7 +54,10 @@ export function renderHookWithApp<TResult>(
   return { ...rendered, queryClient, transport };
 }
 
-export function renderWithApp(ui?: React.ReactNode, opts: RenderWithAppOptions = {}): RenderWithAppResult {
+export function renderWithApp(
+  ui?: React.ReactNode,
+  opts: RenderWithAppOptions = {},
+): RenderWithAppResult {
   const transport = opts.transport ?? fakeTransport(opts.services ?? {});
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

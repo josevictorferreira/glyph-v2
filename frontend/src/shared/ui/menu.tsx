@@ -19,12 +19,20 @@ export function DropdownContent({
 }: React.ComponentProps<typeof DropdownMenu.Content>) {
   return (
     <DropdownMenu.Portal>
-      <DropdownMenu.Content sideOffset={4} align="end" className={cn(contentClass, className)} {...props} />
+      <DropdownMenu.Content
+        sideOffset={4}
+        align="end"
+        className={cn(contentClass, className)}
+        {...props}
+      />
     </DropdownMenu.Portal>
   );
 }
 
-export function DropdownItem({ className, ...props }: React.ComponentProps<typeof DropdownMenu.Item>) {
+export function DropdownItem({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenu.Item>) {
   return <DropdownMenu.Item className={cn(itemClass, className)} {...props} />;
 }
 
@@ -32,10 +40,15 @@ export function DropdownSeparator({
   className,
   ...props
 }: React.ComponentProps<typeof DropdownMenu.Separator>) {
-  return <DropdownMenu.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />;
+  return (
+    <DropdownMenu.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />
+  );
 }
 
-export function DropdownLabel({ className, ...props }: React.ComponentProps<typeof DropdownMenu.Label>) {
+export function DropdownLabel({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenu.Label>) {
   return (
     <DropdownMenu.Label
       className={cn("px-2 py-1 text-xs font-medium text-ink-subtle", className)}
@@ -49,7 +62,10 @@ export const PopoverRoot = Popover.Root;
 export const PopoverTrigger = Popover.Trigger;
 export const PopoverAnchor = Popover.Anchor;
 
-export function PopoverContent({ className, ...props }: React.ComponentProps<typeof Popover.Content>) {
+export function PopoverContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof Popover.Content>) {
   return (
     <Popover.Portal>
       <Popover.Content sideOffset={6} className={cn(contentClass, className)} {...props} />
@@ -72,7 +88,10 @@ export function ContextMenuContent({
   );
 }
 
-export function ContextMenuItem({ className, ...props }: React.ComponentProps<typeof ContextMenu.Item>) {
+export function ContextMenuItem({
+  className,
+  ...props
+}: React.ComponentProps<typeof ContextMenu.Item>) {
   return <ContextMenu.Item className={cn(itemClass, className)} {...props} />;
 }
 
@@ -80,5 +99,7 @@ export function ContextMenuSeparator({
   className,
   ...props
 }: React.ComponentProps<typeof ContextMenu.Separator>) {
-  return <ContextMenu.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />;
+  return (
+    <ContextMenu.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />
+  );
 }

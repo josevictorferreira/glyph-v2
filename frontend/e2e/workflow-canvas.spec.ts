@@ -32,7 +32,8 @@ async function createWorkflow(
     stepIds.push(stepId);
     if (s.name) await workflows.updateStepDetails({ workflowId: id, stepId, name: s.name });
     // Connections require the source to expose a named output.
-    if (s.output) await workflows.updateStepOutput({ workflowId: id, stepId, outputName: s.output });
+    if (s.output)
+      await workflows.updateStepOutput({ workflowId: id, stepId, outputName: s.output });
   }
   return { id, stepIds };
 }
@@ -61,9 +62,14 @@ async function openCanvas(page: Page, id: string) {
 }
 
 const node = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
-const outHandle = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"] [data-handleid="out"]`);
+const outHandle = (page: Page, id: string) =>
+  page.locator(`.react-flow__node[data-id="${id}"] [data-handleid="out"]`);
 
-async function dragFromTo(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
+async function dragFromTo(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x + 8, to.y, { steps: 8 });
@@ -96,7 +102,9 @@ test("add a step from the empty state; selecting a card updates ?step=", async (
 });
 
 test("drag persists position after reload", async ({ page }) => {
-  const { id, stepIds } = await createWorkflow("E2E canvas move", [{ name: "Mover", x: 100, y: 100 }]);
+  const { id, stepIds } = await createWorkflow("E2E canvas move", [
+    { name: "Mover", x: 100, y: 100 },
+  ]);
   const before = (await stepPositions(id)).get(stepIds[0]!)!;
   await openCanvas(page, id);
   const card = node(page, stepIds[0]!);
@@ -122,7 +130,9 @@ test("drag persists position after reload", async ({ page }) => {
   expect(restored).toEqual(after);
 });
 
-test("connect to card body, replace with confirmation, block cycles, delete edge", async ({ page }) => {
+test("connect to card body, replace with confirmation, block cycles, delete edge", async ({
+  page,
+}) => {
   const { id, stepIds } = await createWorkflow("E2E canvas connect", [
     { name: "Alpha", x: 80, y: 120, output: "findings" },
     { name: "Beta", x: 480, y: 120 },
@@ -209,7 +219,7 @@ test("duplicate with Ctrl+D; delete via context menu counts connections", async 
   await expect(page.getByTestId("canvas-context-menu")).toBeVisible();
   const deleteMsg = nextConfirm(page, true);
   await page.getByRole("menuitem", { name: "Delete step" }).click();
-  expect(await deleteMsg).toBe('Delete “Linked”? This removes 1 connection.');
+  expect(await deleteMsg).toBe("Delete “Linked”? This removes 1 connection.");
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   await expect(page.locator(".react-flow__edge")).toHaveCount(0);
 });

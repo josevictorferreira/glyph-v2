@@ -9,6 +9,7 @@ const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   timeout: 30_000,
   // Tests share one database (create/import/rename); keep them serial.
   fullyParallel: false,

@@ -35,7 +35,10 @@ export function AppShell({
             onClick={() => setDrawerOpen(false)}
             data-testid="sidebar-backdrop"
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-surface" data-testid="app-sidebar-drawer">
+          <aside
+            className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-surface"
+            data-testid="app-sidebar-drawer"
+          >
             {sidebar}
           </aside>
         </div>
@@ -73,7 +76,10 @@ export function DefaultSidebar() {
   return (
     <>
       <div className="flex h-11 items-center gap-2 border-b border-border px-3">
-        <span className="grid size-6 place-items-center rounded-md bg-accent text-on-accent" aria-hidden>
+        <span
+          className="grid size-6 place-items-center rounded-md bg-accent text-on-accent"
+          aria-hidden
+        >
           <Layers size={14} />
         </span>
         <span className="text-sm font-semibold tracking-wide">Glyph</span>

@@ -71,7 +71,13 @@ export function ScheduleComposer({
   );
 }
 
-function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenChange: (open: boolean) => void }) {
+function ComposerForm({
+  workflow,
+  onOpenChange,
+}: {
+  workflow: Workflow;
+  onOpenChange: (open: boolean) => void;
+}) {
   const workflowId = workflow.summary?.id ?? "";
   const status = workflow.summary?.status ?? WorkflowStatus.DRAFT;
   const draft = status === WorkflowStatus.DRAFT;
@@ -86,7 +92,9 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
     saved ? (saved.kind === "cron" ? "cron" : saved.kind) : "interval",
   );
   const [every, setEvery] = useState(() => (saved?.kind === "interval" ? saved.every : 15));
-  const [unit, setUnit] = useState<"minutes" | "hours">(() => (saved?.kind === "interval" ? saved.unit : "minutes"));
+  const [unit, setUnit] = useState<"minutes" | "hours">(() =>
+    saved?.kind === "interval" ? saved.unit : "minutes",
+  );
   const [time, setTime] = useState(() =>
     saved && (saved.kind === "daily" || saved.kind === "weekly" || saved.kind === "monthly")
       ? `${String(saved.hour).padStart(2, "0")}:${String(saved.minute).padStart(2, "0")}`
@@ -94,11 +102,15 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
   );
   const [weekday, setWeekday] = useState(() => (saved?.kind === "weekly" ? saved.weekday : 1));
   const [day, setDay] = useState(() => (saved?.kind === "monthly" ? saved.day : 1));
-  const [expression, setExpression] = useState(() => (saved?.kind === "cron" ? saved.expression : ""));
+  const [expression, setExpression] = useState(() =>
+    saved?.kind === "cron" ? saved.expression : "",
+  );
   const [timezone, setTimezone] = useState(() => schedule?.timezone || viewerTimezone());
   // A new schedule on an active workflow starts enabled; drafts are stored
   // disabled by the backend either way.
-  const [enabled, setEnabled] = useState(() => schedule?.enabled ?? status === WorkflowStatus.ACTIVE);
+  const [enabled, setEnabled] = useState(
+    () => schedule?.enabled ?? status === WorkflowStatus.ACTIVE,
+  );
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const recurrence: Recurrence = useMemo(() => {
@@ -153,7 +165,11 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="tablist" aria-label="Recurrence pattern" className="flex flex-wrap gap-1 rounded-lg bg-surface-2 p-1">
+      <div
+        role="tablist"
+        aria-label="Recurrence pattern"
+        className="flex flex-wrap gap-1 rounded-lg bg-surface-2 p-1"
+      >
         {PATTERNS.map((p) => (
           <button
             key={p.value}
@@ -163,7 +179,9 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
             onClick={() => setPattern(p.value)}
             className={
               "flex h-7 items-center rounded-md px-2.5 text-sm font-medium " +
-              (pattern === p.value ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")
+              (pattern === p.value
+                ? "bg-surface text-ink shadow-sm"
+                : "text-ink-muted hover:text-ink")
             }
           >
             {p.label}
@@ -199,7 +217,13 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
 
       {(pattern === "daily" || pattern === "weekly" || pattern === "monthly") && (
         <Field label="Time" htmlFor="schedule-time" hint="24-hour clock, 5-minute steps.">
-          <Input id="schedule-time" type="time" step={300} value={time} onChange={(e) => setTime(e.target.value)} />
+          <Input
+            id="schedule-time"
+            type="time"
+            step={300}
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
         </Field>
       )}
 
@@ -227,7 +251,11 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
       )}
 
       {pattern === "monthly" && (
-        <Field label="Day of month" htmlFor="schedule-day" hint="Months without this day are skipped.">
+        <Field
+          label="Day of month"
+          htmlFor="schedule-day"
+          hint="Months without this day are skipped."
+        >
           <Input
             id="schedule-day"
             type="number"
@@ -265,8 +293,8 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
 
       {draft ? (
         <p className="text-xs text-ink-subtle">
-          The switch is unavailable while the workflow is a draft; the schedule starts after you activate the
-          workflow.
+          The switch is unavailable while the workflow is a draft; the schedule starts after you
+          activate the workflow.
         </p>
       ) : (
         <div className="flex items-center justify-between gap-3">
@@ -277,7 +305,10 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
         </div>
       )}
 
-      <div className="rounded-md border border-border bg-surface-2 px-2.5 py-2" data-testid="schedule-preview">
+      <div
+        className="rounded-md border border-border bg-surface-2 px-2.5 py-2"
+        data-testid="schedule-preview"
+      >
         {cron && (
           <p className="font-mono text-[0.6875rem] text-ink-subtle">
             {cron} <span className="font-sans">· {timezone}</span>
@@ -289,7 +320,10 @@ function ComposerForm({ workflow, onOpenChange }: { workflow: Workflow; onOpenCh
               <li key={occurrence.toISOString()} className="text-xs text-ink">
                 {formatInZone(occurrence, timezone)}
                 {showLocalLine && (
-                  <span className="text-ink-subtle"> · {formatInZone(occurrence, viewerTz)} your time</span>
+                  <span className="text-ink-subtle">
+                    {" "}
+                    · {formatInZone(occurrence, viewerTz)} your time
+                  </span>
                 )}
               </li>
             ))}

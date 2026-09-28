@@ -1,6 +1,6 @@
 // Workflow panel (spec 0018): the contextual panel shown while nothing is
-// selected. Details autosave through UpdateWorkflow; the values table and
-// schedule section (spec 0019) render below.
+// selected. Details autosave through UpdateWorkflow; the values table
+// (WorkflowValues) and schedule section (spec 0019) render below.
 import { useCallback, useState } from "react";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Workflow } from "@/gen/glyph/v1/workflow_pb";
@@ -11,6 +11,7 @@ import { useAutosaveField } from "@/shared/lib/autosave";
 import { Badge, Disclosure, Field, SaveIndicator, Switch, Textarea } from "@/shared/ui";
 import type { EditorFocus } from "./chrome";
 import { useEditorChrome, useEditorFocusField } from "./chrome";
+import { WorkflowValues } from "./WorkflowValues";
 
 interface WorkflowDetailsValue {
   description: string;
@@ -50,7 +51,10 @@ function DetailsSection({ workflow, focus }: { workflow: Workflow; focus: Editor
     [mutateAsync, workflowId, workflow.summary?.name],
   );
   const field = useAutosaveField<WorkflowDetailsValue>({
-    value: { description: workflow.summary?.description ?? "", failFast: workflow.summary?.failFast ?? false },
+    value: {
+      description: workflow.summary?.description ?? "",
+      failFast: workflow.summary?.failFast ?? false,
+    },
     save,
     equals: (a, b) => a.description === b.description && a.failFast === b.failFast,
   });
@@ -89,20 +93,10 @@ function ValuesSection({ workflow, focus }: { workflow: Workflow; focus: EditorF
   return (
     <Disclosure
       title="Workflow values"
+      defaultOpen={workflow.steps.length === 0}
       right={<Badge tone="muted">{workflow.inputs.length}</Badge>}
     >
-      <div className="flex flex-col gap-1 py-2">
-        {workflow.inputs.length === 0 && (
-          <p className="text-xs text-ink-subtle">No workflow values yet.</p>
-        )}
-        {workflow.inputs.map((input) => (
-          <div key={input.id} className="flex items-center gap-2 text-sm" data-editor-field={`value-${input.id}`}>
-            <span className="font-medium text-ink">{input.name}</span>
-            {input.required && <Badge tone="neutral">Required</Badge>}
-            <Badge tone="muted">{input.askAtRunTime ? "Asked at run time" : "Constant"}</Badge>
-          </div>
-        ))}
-      </div>
+      <WorkflowValues workflow={workflow} />
     </Disclosure>
   );
 }

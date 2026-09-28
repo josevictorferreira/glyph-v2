@@ -17,26 +17,12 @@ let workflows: ReturnType<typeof createClient<typeof WorkflowService>>;
 
 const backendUrl = process.env.E2E_BACKEND_URL ?? "http://localhost:3000";
 
-/** The webServer gates on Vite (:5173); the backend on :3000 may still be booting. */
-async function waitForBackend() {
-  for (let i = 0; i < 60; i++) {
-    try {
-      if ((await fetch(`${backendUrl}/up`)).ok) return;
-    } catch {
-      // not listening yet
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-  }
-  throw new Error(`backend at ${backendUrl} did not come up`);
-}
-
 test.beforeAll(() => {
   transport = createGrpcWebTransport({ baseUrl: backendUrl, useBinaryFormat: true });
   workflows = createClient(WorkflowService, transport);
 });
 
 test.beforeEach(async () => {
-  await waitForBackend();
   await createClient(CatalogService, transport).refreshModels({});
 });
 
@@ -84,12 +70,17 @@ test("weekly schedule on an active workflow shows the next run", async ({ page }
   const card = page.getByTestId("schedule-active");
   await expect(card).toBeVisible();
   // Weekly Monday 09:00 always lands on a Mon.
-  await expect(card).toContainText(/^Next: Mon, .* 09:00/);
+  await expect(card).toContainText(/Next: Mon, .* 09:00/);
 });
 
 test("required asked input without a schedule value blocks until filled", async ({ page }) => {
   const id = await createWorkflow("E2E schedule missing value");
-  await workflows.addWorkflowInput({ workflowId: id, name: "topic", required: true, askAtRunTime: true });
+  await workflows.addWorkflowInput({
+    workflowId: id,
+    name: "topic",
+    required: true,
+    askAtRunTime: true,
+  });
   await workflows.activateWorkflow({ id });
 
   await openSchedulePanel(page, id);
@@ -111,7 +102,9 @@ test("required asked input without a schedule value blocks until filled", async 
 
   // needs_attention never auto-heals: reactivate from the readiness sheet.
   await page.getByTestId("review-issues").click();
-  await expect(page.getByTestId("readiness-sheet")).toContainText("No issues. Everything is ready.");
+  await expect(page.getByTestId("readiness-sheet")).toContainText(
+    "No issues. Everything is ready.",
+  );
   await page.getByTestId("readiness-activate").click();
-  await expect(page.getByTestId("schedule-active")).toContainText(/^Next: Mon, .* 09:00/);
+  await expect(page.getByTestId("schedule-active")).toContainText(/Next: Mon, .* 09:00/);
 });

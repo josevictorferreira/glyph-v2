@@ -1,14 +1,13 @@
 // Step editor (spec 0018): the contextual panel shown while a step is
 // selected. Header (kind, name, overflow menu) + tabs with issue dots.
-// Tab contents arrive with their own chunks; every field autosaves through
-// useWorkflowMutation so the cache stays the single source of truth.
-import { useCallback, useState } from "react";
+// Every field autosaves through useWorkflowMutation so the cache stays the
+// single source of truth.
+import { useState } from "react";
 import { StepKind } from "@/gen/glyph/v1/common_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Step, Workflow } from "@/gen/glyph/v1/workflow_pb";
 import { useIssues, useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast } from "@/shared/api/errors";
-import { useAutosaveField } from "@/shared/lib/autosave";
 import {
   Button,
   Dialog,
@@ -31,7 +30,10 @@ import {
   toast,
 } from "@/shared/ui";
 import type { EditorFocus, StepEditorTab } from "./chrome";
+import { InputsTab } from "./InputsTab";
 import { stepTabIssues } from "./issues";
+import { useStepDetailsField } from "./step-details";
+import { InstructionsTab, ModelTab, OutputTab, SettingsTab, type StepTabProps } from "./StepTabs";
 
 export interface StepEditorProps {
   workflowId: string;
@@ -43,37 +45,15 @@ export interface StepEditorProps {
   focus: EditorFocus | null;
 }
 
-/** Fields saved together by UpdateStepDetails (name header + Settings tab). */
-export interface StepDetailsValue {
-  name: string;
-  description: string;
-  allowFailure: boolean;
-}
-
-export function useStepDetailsField(workflowId: string, step: Step) {
-  const { mutateAsync } = useWorkflowMutation(WorkflowService.method.updateStepDetails, {
-    onAppError: appErrorToast,
-  });
-  const save = useCallback(
-    (next: StepDetailsValue) =>
-      mutateAsync({
-        workflowId,
-        stepId: step.id,
-        name: next.name,
-        description: next.description || undefined,
-        allowFailure: next.allowFailure,
-      }).then(() => undefined),
-    [mutateAsync, workflowId, step.id],
-  );
-  return useAutosaveField<StepDetailsValue>({
-    value: { name: step.name, description: step.description ?? "", allowFailure: step.allowFailure },
-    save,
-    equals: (a, b) =>
-      a.name === b.name && a.description === b.description && a.allowFailure === b.allowFailure,
-  });
-}
-
-export function StepEditor({ workflowId, workflow, step, tab, onTabChange, onSelectStep, focus }: StepEditorProps) {
+export function StepEditor({
+  workflowId,
+  workflow,
+  step,
+  tab,
+  onTabChange,
+  onSelectStep,
+  focus,
+}: StepEditorProps) {
   const issues = useIssues(workflowId).all;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const isPi = step.kind === StepKind.PI;
@@ -97,9 +77,7 @@ export function StepEditor({ workflowId, workflow, step, tab, onTabChange, onSel
   });
 
   const outgoing = workflow.connections.filter((c) => c.sourceStepId === step.id).length;
-  const incoming = workflow.connections.filter(
-    (c) => c.destinationStepId === step.id,
-  ).length;
+  const incoming = workflow.connections.filter((c) => c.destinationStepId === step.id).length;
   const removedConnections = outgoing + incoming;
 
   const tabs: ReadonlyArray<{ value: StepEditorTab; label: string }> = [
@@ -136,7 +114,13 @@ export function StepEditor({ workflowId, workflow, step, tab, onTabChange, onSel
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {tabs.map((t) => (
             <TabsContent key={t.value} value={t.value} className="flex flex-col gap-4">
-              <TabPanel tab={t.value} workflowId={workflowId} step={step} workflow={workflow} focus={focus} />
+              <TabPanel
+                tab={t.value}
+                workflowId={workflowId}
+                step={step}
+                workflow={workflow}
+                focus={focus}
+              />
             </TabsContent>
           ))}
         </div>
@@ -231,11 +215,14 @@ function StepEditorHeader({
   );
 }
 
-/** Placeholder until each tab lands in its own chunk (instructions → …). */
-function TabPanel({ tab }: { tab: StepEditorTab; workflowId: string; step: Step; workflow: Workflow; focus: EditorFocus | null }) {
-  return (
-    <p className="text-xs text-ink-subtle" data-testid={`step-tab-${tab}`}>
-      {tab} editor lands next.
-    </p>
-  );
+function TabPanel({ tab, ...props }: { tab: StepEditorTab } & StepTabProps) {
+  const Tab = {
+    instructions: InstructionsTab,
+    inputs: InputsTab,
+    model: ModelTab,
+    output: OutputTab,
+    settings: SettingsTab,
+  }[tab];
+  // Keyed by step: autosave drafts never leak into another step's fields.
+  return <Tab key={props.step.id} {...props} />;
 }

@@ -1,14 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { create } from "@bufbuild/protobuf";
-import { WorkflowSchema, WorkflowInputSchema, StepSchema, StepInputSchema, ConnectionSchema } from "@/gen/glyph/v1/workflow_pb";
+import {
+  WorkflowSchema,
+  WorkflowInputSchema,
+  StepSchema,
+  StepInputSchema,
+  ConnectionSchema,
+} from "@/gen/glyph/v1/workflow_pb";
 import { IssueSchema, StepKind, IssueEntityType } from "@/gen/glyph/v1/common_pb";
-import { RunSnapshotSchema, SnapshotStepSchema, SnapshotConnectionSchema, StepRunSummarySchema } from "@/gen/glyph/v1/run_pb";
+import {
+  RunSnapshotSchema,
+  SnapshotStepSchema,
+  SnapshotConnectionSchema,
+  StepRunSummarySchema,
+} from "@/gen/glyph/v1/run_pb";
 import { StepRunStatus } from "@/gen/glyph/v1/common_pb";
-import { buildEdges, buildNodes, issuesForStep, lensEdges, lensNodes, modelShortName, firstLine } from "./mapping";
+import {
+  buildEdges,
+  buildNodes,
+  issuesForStep,
+  lensEdges,
+  lensNodes,
+  modelShortName,
+  firstLine,
+} from "./mapping";
 
 function workflowFixture() {
   const topic = create(WorkflowInputSchema, { id: "wi-1", name: "topic", position: 0 });
-  const researchNotes = create(StepInputSchema, { id: "in-notes", name: "notes", required: true, position: 0 });
+  const researchNotes = create(StepInputSchema, {
+    id: "in-notes",
+    name: "notes",
+    required: true,
+    position: 0,
+  });
   const topicIn = create(StepInputSchema, {
     id: "in-topic",
     name: "subject",
@@ -85,15 +109,31 @@ describe("buildNodes / buildEdges", () => {
       },
     ]);
     const d = buildNodes(workflow, []).find((n) => n.id === "s-digest")!;
-    expect(d.data.inputs[0]).toMatchObject({ handleId: "in-notes", connected: true, valueChip: null });
+    expect(d.data.inputs[0]).toMatchObject({
+      handleId: "in-notes",
+      connected: true,
+      valueChip: null,
+    });
   });
 
   it("attributes step and input issues to the card", () => {
     const { workflow, digest } = workflowFixture();
     const issues = [
-      create(IssueSchema, { entityType: IssueEntityType.WORKFLOW_STEP, entityId: "s-digest", message: "prompt is required" }),
-      create(IssueSchema, { entityType: IssueEntityType.STEP_INPUT, entityId: "in-notes", message: "source is required" }),
-      create(IssueSchema, { entityType: IssueEntityType.WORKFLOW, entityId: "wf", message: "unrelated" }),
+      create(IssueSchema, {
+        entityType: IssueEntityType.WORKFLOW_STEP,
+        entityId: "s-digest",
+        message: "prompt is required",
+      }),
+      create(IssueSchema, {
+        entityType: IssueEntityType.STEP_INPUT,
+        entityId: "in-notes",
+        message: "source is required",
+      }),
+      create(IssueSchema, {
+        entityType: IssueEntityType.WORKFLOW,
+        entityId: "wf",
+        message: "unrelated",
+      }),
     ];
     const d = buildNodes(workflow, issues).find((n) => n.id === "s-digest")!;
     expect(d.data.issueCount).toBe(2);

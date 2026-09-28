@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   type InputHTMLAttributes,
@@ -53,13 +54,20 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { label, hint, error, mono, className, id, ...props },
   ref,
 ) {
-  const inputId = id ?? props.name;
+  const fallbackId = useId();
+  const inputId = id ?? props.name ?? fallbackId;
   return (
     <Field label={label} hint={hint} error={error} htmlFor={inputId}>
       <input
         ref={ref}
         id={inputId}
-        className={cn(fieldBase, "h-8", mono && "font-mono", error && "border-status-failed", className)}
+        className={cn(
+          fieldBase,
+          "h-8",
+          mono && "font-mono",
+          error && "border-status-failed",
+          className,
+        )}
         {...props}
       />
     </Field>
@@ -79,7 +87,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   ref,
 ) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null);
-  const inputId = id ?? props.name;
+  const fallbackId = useId();
+  const inputId = id ?? props.name ?? fallbackId;
 
   const resize = () => {
     const el = innerRef.current;

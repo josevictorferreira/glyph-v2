@@ -20,7 +20,10 @@ export function useWorkflow(id: string) {
 
 export type WorkflowQueryData = GetWorkflowResponse;
 
-export function useWorkflowList(filter: WorkflowListFilter = {}, options?: { refetchInterval?: number }) {
+export function useWorkflowList(
+  filter: WorkflowListFilter = {},
+  options?: { refetchInterval?: number },
+) {
   return useQuery(
     WorkflowService.method.listWorkflows,
     { query: filter.query ?? "", status: filter.status, limit: filter.limit ?? 0 },
@@ -42,7 +45,10 @@ function indexIssues(issues: Issue[]): IssueIndex {
   for (const issue of issues) {
     const eKey = `${issue.entityType}/${issue.entityId}`;
     byEntity.set(eKey, [...(byEntity.get(eKey) ?? []), issue]);
-    byField.set(`${eKey}/${issue.field}`, [...(byField.get(`${eKey}/${issue.field}`) ?? []), issue]);
+    byField.set(`${eKey}/${issue.field}`, [
+      ...(byField.get(`${eKey}/${issue.field}`) ?? []),
+      issue,
+    ]);
   }
   return {
     all: issues,
@@ -58,5 +64,9 @@ export function useIssues(workflowId: string): IssueIndex {
 
 /** Validation dry run (needs-attention reasons on Home cards). */
 export function useValidateWorkflow(id: string) {
-  return useQuery(WorkflowService.method.validateWorkflow, { id }, { staleTime: 30_000, enabled: id.length > 0 });
+  return useQuery(
+    WorkflowService.method.validateWorkflow,
+    { id },
+    { staleTime: 30_000, enabled: id.length > 0 },
+  );
 }

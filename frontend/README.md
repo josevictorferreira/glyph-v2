@@ -25,8 +25,8 @@ PLAYWRIGHT_CHROMIUM_PATH="$(nix build --no-link --print-out-paths nixpkgs#chromi
 
 ## Environment
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
+| Variable            | Default            | Purpose                                     |
+| ------------------- | ------------------ | ------------------------------------------- |
 | `VITE_API_BASE_URL` | `""` (same origin) | Backend base URL; the Vite proxy covers dev |
 
 ## Layout (enforced by ESLint boundaries)
