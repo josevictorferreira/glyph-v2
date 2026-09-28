@@ -358,40 +358,6 @@
           log "Done. Next 'nix run .#web' starts from scratch."
         '';
 
-        # Build the root Containerfile with podman, push it to GHCR, then restart
-        # the deployment in the owner's homelab — same approach as velox, so a
-        # bare `podman build` and `nix run .#deploy` produce one image, not two
-        # divergent ones. linux/amd64 only. Never run unless explicitly asked.
-        deploy = pkgs.writeShellApplication {
-          name = "deploy";
-          runtimeInputs = [
-            pkgs.git
-            pkgs.podman
-            pkgs.kubectl
-          ];
-          text = ''
-            set -euo pipefail
-
-            REGISTRY="ghcr.io"
-            REPO=$(git remote get-url origin 2>/dev/null | sed -E 's|.*github\.com[:/]||' | sed 's/\.git$//' || echo "$USER/glyph")
-            TAG="''${REGISTRY}/''${REPO}:latest"
-
-            if [ -n "''${GITHUB_TOKEN:-}" ]; then
-              echo "$GITHUB_TOKEN" | podman login "$REGISTRY" -u "josevictorferreira" --password-stdin
-            else
-              echo "GITHUB_TOKEN not set; assuming already logged in to $REGISTRY."
-            fi
-
-            podman build --platform=linux/amd64 --file Containerfile --tag "$TAG" .
-            podman push "$TAG"
-            echo "Successfully pushed image: $TAG"
-
-            echo "Restarting glyph deployment in apps namespace"
-            kubectl -n apps rollout restart deployment/glyph
-            kubectl -n apps rollout status deployment/glyph --timeout=600s
-          '';
-        };
-
         mkRun = drv: {
           type = "app";
           program = "${drv}/bin/${drv.name}";
@@ -407,7 +373,6 @@
             check
             seed
             reset
-            deploy
             ;
           default = web;
         };
@@ -418,7 +383,6 @@
           check = mkRun check;
           seed = mkRun seed;
           reset = mkRun reset;
-          deploy = mkRun deploy;
           default = mkRun web;
         };
 

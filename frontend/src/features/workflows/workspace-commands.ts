@@ -8,7 +8,7 @@ import { DefinitionService } from "@/gen/glyph/v1/definition_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import { createClient } from "@connectrpc/connect";
 import type { CommandDef } from "@/app/commands";
-import { useStartRun } from "@/features/runs";
+import { useRunSheet } from "@/features/runs";
 import { useWorkflow } from "./hooks";
 import { useWorkflowMutation } from "./use-workflow-mutation";
 import { appErrorToast } from "@/shared/api/errors";
@@ -20,7 +20,7 @@ export function useWorkflowCommands(workflowId: string): CommandDef[] {
   const { data } = useWorkflow(workflowId);
   const workflow = data?.workflow;
   const status = workflow?.summary?.status;
-  const startRun = useStartRun(appErrorToast);
+  const { runNow } = useRunSheet();
 
   const lifecycleArgs = { onAppError: appErrorToast } as const;
   const activate = useWorkflowMutation(WorkflowService.method.activateWorkflow, lifecycleArgs);
@@ -34,7 +34,7 @@ export function useWorkflowCommands(workflowId: string): CommandDef[] {
         group: "Actions",
         label: "Run now",
         keywords: "start execute",
-        run: () => void startRun.mutateAsync({ workflowId }),
+        run: runNow,
       },
     ];
     if (status === WorkflowStatus.DRAFT) {
@@ -105,6 +105,6 @@ export function useWorkflowCommands(workflowId: string): CommandDef[] {
     activate.mutateAsync,
     pause.mutateAsync,
     resume.mutateAsync,
-    startRun.mutateAsync,
+    runNow,
   ]);
 }

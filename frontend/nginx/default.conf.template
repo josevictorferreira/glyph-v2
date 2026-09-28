@@ -1,0 +1,67 @@
+# Backend address is substituted at container start from GLYPH_BACKEND_URL;
+# only defined env vars are replaced, so nginx's own $uri/$host survive.
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Workflow imports travel as gRPC-Web POST bodies; the default 1m is too
+    # small. Streaming responses must not be buffered or compressed (see the
+    # gRPC-Web location below).
+    client_max_body_size 25m;
+
+    gzip on;
+    gzip_types text/css text/javascript application/javascript application/json image/svg+xml;
+    gzip_vary on;
+
+    # Vite emits content-hashed filenames here: cache forever, and a miss is a
+    # real 404 (never index.html).
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # gRPC-Web (Connect) and gRPC health. Mirrors the Vite dev proxy: pass
+    # through with accept-encoding: identity (compressed frames break gRPC-Web
+    # decoders) and no effective read timeout (server streaming would stall).
+    location ~ ^/(glyph\.v1\.|grpc\.) {
+        proxy_pass ${GLYPH_BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header accept-encoding identity;
+        proxy_buffering off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # Step-run artifacts: zip download / preview can be long transfers.
+    location ~ ^/workflows/[^/]+/runs/[^/]+/step_runs/[^/]+/(download|preview)$ {
+        proxy_pass ${GLYPH_BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    location /schemas/ {
+        proxy_pass ${GLYPH_BACKEND_URL};
+        proxy_set_header Host $host;
+    }
+
+    location = /up {
+        proxy_pass ${GLYPH_BACKEND_URL};
+    }
+
+    # index.html is the SPA entry point: always revalidate.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    # SPA routing: unknown paths fall back to index.html (internal redirect,
+    # so deep links keep working).
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

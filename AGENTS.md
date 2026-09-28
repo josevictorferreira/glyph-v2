@@ -8,6 +8,7 @@ Glyph is a visual designer, scheduler and runner for DAG-shaped AI workflows. Ea
 - `proto/glyph/v1/*.proto`: the gRPC contract shared by backend and frontend.
 - `backend/`: Rust (axum + tonic + sqlx). See `backend/AGENTS.md`.
 - `frontend/`: TypeScript React (later epic).
+- Each service owns its `Containerfile` and deploy flake: `nix run .#deploy` from `backend/` or `frontend/` builds and pushes that service's image to GHCR and restarts its deployment.
 - `.agents/specs/`: epic plan and per-spec implementation plans.
 
 ## Development commands
@@ -25,7 +26,7 @@ GLYPH_STEP_RUNNER=fake nix run .#web   # deterministic runner, no provider keys 
 nix develop                   # shell with db_start/db_stop/db_psql/db_migrate/sqlx_prepare
 ```
 
-Local state lives in `.dev/` (gitignored). Secrets go in `.env` (gitignored), sourced by every app. `nix run .#deploy` builds, pushes and restarts production: never run it unless explicitly asked.
+Local state lives in `.dev/` (gitignored). Secrets go in `.env` (gitignored), sourced by every app. `nix run .#deploy` (from `backend/` or `frontend/`) builds, pushes and restarts that service: never run it unless explicitly asked.
 
 ## Architecture rules
 

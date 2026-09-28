@@ -8,7 +8,7 @@ import { WorkflowStatus } from "@/gen/glyph/v1/common_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Workflow } from "@/gen/glyph/v1/workflow_pb";
 import { LiveConnectionIndicator } from "@/features/live";
-import { useStartRun } from "@/features/runs";
+import { useRunSheet } from "@/features/runs";
 import { ScheduleChip } from "@/features/schedule";
 import { useIssues, useWorkflow, useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast, type AppError } from "@/shared/api/errors";
@@ -140,9 +140,8 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
   const { setReadinessOpen } = useEditorChrome();
   const [pauseOpen, setPauseOpen] = useState(false);
 
-  // Run now starts immediately here; the run sheet (spec 0020) will replace
-  // this with a value-collecting sheet and MISSING_VALUES field handling.
-  const startRun = useStartRun((error) => toast({ title: appErrorToast(error), tone: "danger" }));
+  // Run now opens the run sheet when values are asked, else starts at once.
+  const { runNow } = useRunSheet();
 
   const lifecycleError = useCallback(
     (error: AppError) => {
@@ -177,12 +176,6 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
     onAppError: lifecycleError,
   });
 
-  const runNow = () =>
-    startRun
-      .mutateAsync({ workflowId })
-      .then(() => toast({ title: "Run started" }))
-      .catch(() => undefined);
-
   const secondaryRunLabel = status === WorkflowStatus.DRAFT ? "Test run" : "Run now";
 
   return (
@@ -205,13 +198,7 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
         </Button>
       )}
       {status === WorkflowStatus.ACTIVE && (
-        <Button
-          size="sm"
-          variant="primary"
-          data-testid="run-now"
-          loading={startRun.isPending}
-          onClick={runNow}
-        >
+        <Button size="sm" variant="primary" data-testid="run-now" onClick={runNow}>
           Run now
         </Button>
       )}
@@ -245,7 +232,7 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
         </DropdownTrigger>
         <DropdownContent align="end">
           <DropdownItem
-            onSelect={() => void runNow()}
+            onSelect={runNow}
             disabled={status === WorkflowStatus.NEEDS_ATTENTION}
             title={
               status === WorkflowStatus.NEEDS_ATTENTION

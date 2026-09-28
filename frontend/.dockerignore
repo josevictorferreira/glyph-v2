@@ -1,0 +1,9 @@
+# Local state, test output and specs are not part of `vite build`; excluding
+# them keeps the context small and stops edits from invalidating the cache.
+node_modules
+dist
+test-results
+playwright-report
+e2e
+test
+*.md

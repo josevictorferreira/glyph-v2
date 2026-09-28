@@ -42,12 +42,12 @@ export const workflowKeys = {
 export const runKeys = {
   /** Filter: every RunService query. */
   service: () => createConnectQueryKey({ schema: RunService, cardinality: undefined }),
-  /** Filter: ListRuns for one workflow, any limit/page. */
+  /** Filter: ListRuns for one workflow, any limit/page (finite and infinite). */
   lists: (workflowId: string) =>
     createConnectQueryKey({
       schema: RunService.method.listRuns,
       input: { workflowId },
-      cardinality: "finite",
+      cardinality: undefined,
     }),
   list: (workflowId: string, limit: number, transport?: Transport) =>
     createConnectQueryKey({

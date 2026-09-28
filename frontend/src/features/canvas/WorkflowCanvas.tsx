@@ -94,9 +94,15 @@ function LensCanvas({
   firstFailedStepRunId,
   ...selection
 }: WorkflowCanvasLensProps) {
+  // Selection is controlled by the caller (URL ?step=); the lens has no
+  // onNodesChange, so clicks select explicitly instead of via React Flow state.
   const nodes = useMemo(
-    () => lensNodes(snapshot, stepRuns, firstFailedStepRunId),
-    [snapshot, stepRuns, firstFailedStepRunId],
+    () =>
+      lensNodes(snapshot, stepRuns, firstFailedStepRunId).map((n) => ({
+        ...n,
+        selected: n.id === selection.selectedStepId,
+      })),
+    [snapshot, stepRuns, firstFailedStepRunId, selection.selectedStepId],
   );
   const edges = useMemo(() => lensEdges(snapshot, stepRuns), [snapshot, stepRuns]);
 
@@ -106,11 +112,7 @@ function LensCanvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onSelectionChange={
-          selection.onSelectStep
-            ? (p: OnSelectionChangeParams) => selection.onSelectStep?.(singleSelection(p))
-            : undefined
-        }
+        onNodeClick={(_e, node) => selection.onSelectStep?.(node.id)}
         onNodeDoubleClick={(_e, node) => selection.onOpenStep?.(node.id)}
         nodesDraggable={false}
         nodesConnectable={false}

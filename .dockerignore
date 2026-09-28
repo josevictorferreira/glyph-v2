@@ -1,3 +1,7 @@
+# Context for backend/Containerfile, which builds with the repository root as
+# context (build.rs compiles ../proto). The frontend is its own microservice
+# with its own image and context (frontend/.dockerignore).
+
 # Nix / build artifacts
 /result
 /result-*
@@ -15,14 +19,13 @@
 .omc
 .omo
 
-# Not needed to build the image; excluding them keeps the build context small
-# and stops edits from invalidating the image cache. backend/tests is never
-# COPYed and its fixtures are only include_str!'d under #[cfg(test)]; frontend
-# test output and e2e specs are not part of `vite build`.
-**/node_modules
-frontend/dist
-frontend/test-results
-frontend/playwright-report
-frontend/e2e
+# Root node workspace is not part of the backend image
+node_modules
+package.json
+pnpm-lock.yaml
+
+# Not needed to build the backend image; backend/tests is never COPYed and its
+# fixtures are only include_str!'d under #[cfg(test)].
+frontend
 backend/tests
 *.md

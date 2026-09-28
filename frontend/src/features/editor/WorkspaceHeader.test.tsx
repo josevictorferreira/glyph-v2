@@ -23,6 +23,7 @@ import {
 } from "@tanstack/react-router";
 import { renderWithApp } from "@test/render";
 import { EditorChromeProvider, ReadinessSheet, WorkspaceHeader } from "@/features/editor";
+import { RunSheetProvider } from "@/features/runs";
 import type { FakeServices } from "@test/fakeTransport";
 
 const wf = (status: WorkflowStatus, name = "Tournament") =>
@@ -68,7 +69,9 @@ function mount(services: FakeServices) {
   const selectStep = vi.fn();
   const ui = (
     <EditorChromeProvider selectStep={selectStep}>
-      <WorkspaceHeader workflowId="wf-1" />
+      <RunSheetProvider workflowId="wf-1" onReviewIssues={() => {}}>
+        <WorkspaceHeader workflowId="wf-1" />
+      </RunSheetProvider>
       <ReadinessSheet workflowId="wf-1" />
     </EditorChromeProvider>
   );

@@ -160,3 +160,56 @@ svg.react-flow__connectionline {
   width: 100%;
   text-align: left;
 }
+
+/* Rendered Markdown (agent output, sanitized) */
+.glyph-prose > * + * {
+  margin-top: 0.5em;
+}
+.glyph-prose h1,
+.glyph-prose h2,
+.glyph-prose h3 {
+  font-weight: 600;
+}
+.glyph-prose h1 {
+  font-size: 1.125rem;
+}
+.glyph-prose h2 {
+  font-size: 1rem;
+}
+.glyph-prose ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.glyph-prose ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.glyph-prose a {
+  color: var(--c-accent);
+  text-decoration: underline;
+}
+.glyph-prose code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8125em;
+  background: var(--c-surface-2);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+}
+.glyph-prose pre {
+  overflow-x: auto;
+  background: var(--c-surface-2);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+}
+.glyph-prose pre code {
+  background: none;
+  padding: 0;
+}
+.glyph-prose table {
+  border-collapse: collapse;
+}
+.glyph-prose th,
+.glyph-prose td {
+  border: 1px solid var(--c-border);
+  padding: 0.125rem 0.375rem;
+}
