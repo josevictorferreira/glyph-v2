@@ -21,6 +21,10 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "@test": fileURLToPath(new URL("./test", import.meta.url)),
+      // monaco-editor 0.57's exports map hides the old esm/vs/* deep paths
+      // that monaco-worker-manager still references inside its worker.
+      "monaco-editor/esm/vs/editor/editor.worker.js":
+        "monaco-editor/editor/editor.worker.js",
     },
   },
   server: {

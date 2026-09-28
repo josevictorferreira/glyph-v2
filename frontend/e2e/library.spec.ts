@@ -67,13 +67,18 @@ test("sidebar search filters workflows", async ({ page }) => {
   await expect(page).toHaveURL(/\/workflows\/.+$/);
 });
 
+/** Type YAML into the dialog's Monaco editor (spec 0021). */
+async function fillYaml(page: import("@playwright/test").Page, yaml: string) {
+  await page.getByRole("textbox", { name: "YAML definition" }).focus();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.insertText(yaml);
+}
+
 test("YAML tab shows dry-run errors with line numbers and blocks import", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("library-new").click();
   await page.getByRole("tab", { name: "From YAML" }).click();
-  await page
-    .getByTestId("create-yaml")
-    .fill("name: E2E bad\nsteps:\n  - name: A\n    kind: turbo\n");
+  await fillYaml(page, "name: E2E bad\nsteps:\n  - name: A\n    kind: turbo\n");
   const errors = page.getByTestId("yaml-errors");
   await expect(errors).toBeVisible();
   await expect(errors).toContainText(/Line \d+:/);
@@ -84,9 +89,10 @@ test("YAML tab imports a valid document", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("library-new").click();
   await page.getByRole("tab", { name: "From YAML" }).click();
-  await page
-    .getByTestId("create-yaml")
-    .fill("name: E2E imported\nsteps:\n  - name: Research\n    kind: pi\n    prompt: Find facts\n");
+  await fillYaml(
+    page,
+    "name: E2E imported\nsteps:\n  - name: Research\n    kind: pi\n    prompt: Find facts\n",
+  );
   await expect(page.getByTestId("yaml-valid")).toBeVisible();
   await page.getByTestId("import-submit").click();
   await expect(page).toHaveURL(/\/workflows\/.+$/);

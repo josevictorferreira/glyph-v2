@@ -133,7 +133,18 @@ export function useWorkflowMutation<Rpc extends WorkflowMutationRpc>(
       if (ctx?.id) {
         const key = workflowKeys.detail(ctx.id, transport);
         if (ctx.snapshot) queryClient.setQueryData(key, ctx.snapshot);
-        else queryClient.removeQueries({ queryKey: key });
+        else {
+          const query = queryClient.getQueryCache().find({ queryKey: key });
+          if (query?.isActive()) {
+            // Something is watching this workflow (e.g. the workspace
+            // header): removing the entry would leave its observer dangling
+            // on the removed query, blind to later cache writes (an aborted
+            // definition apply hits this). Invalidate so it refetches.
+            void queryClient.invalidateQueries({ queryKey: key });
+          } else {
+            queryClient.removeQueries({ queryKey: key });
+          }
+        }
       }
       options.onAppError?.(toAppError(error), request);
     },

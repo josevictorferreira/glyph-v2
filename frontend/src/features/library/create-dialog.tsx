@@ -10,6 +10,7 @@ import { parseDocument, YAMLMap, YAMLSeq } from "yaml";
 import { DefinitionService } from "@/gen/glyph/v1/definition_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import { useWorkflowList, useWorkflowMutation } from "@/features/workflows";
+import { YamlEditor } from "@/features/definition";
 import { appErrorToast } from "@/shared/api/errors";
 import { useDebouncedValue } from "@/shared/lib/use-debounced";
 import {
@@ -165,22 +166,19 @@ function YamlTab({ onDone }: { onDone: () => void }) {
     <div className="space-y-3">
       <Field label="Definition" hint="Paste a workflow definition, or drop / pick a .yml file.">
         <div
-          className="rounded-md border border-border"
           onDragOver={(e) => e.preventDefault()}
           onDrop={async (e) => {
             e.preventDefault();
             await onFile(e.dataTransfer.files[0]);
           }}
         >
-          <Textarea
+          <YamlEditor
+            file="import.yml"
             data-testid="create-yaml"
             value={yaml}
-            onChange={(e) => setYaml(e.target.value)}
-            rows={8}
-            className="font-mono text-xs"
-            placeholder={
-              "name: My workflow\nsteps:\n  - name: Research\n    kind: pi\n    prompt: …"
-            }
+            onChange={setYaml}
+            errors={errors}
+            className="h-56"
           />
         </div>
       </Field>

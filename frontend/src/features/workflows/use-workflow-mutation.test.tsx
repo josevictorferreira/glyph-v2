@@ -158,6 +158,47 @@ describe("useWorkflowMutation", () => {
     r.unmount();
   });
 
+  it("on error with an observed workflow, invalidates instead of removing the query", async () => {
+    // An aborted definition apply hits this: the workspace header observes
+    // GetWorkflow; removing the entry would leave its observer dangling on
+    // the removed query, blind to every later cache write.
+    const r = renderHookWithApp(
+      () => ({
+        q: useWorkflow("wf-1"),
+        mut: useWorkflowMutation(WorkflowService.method.activateWorkflow, {
+          onAppError: () => {},
+        }),
+      }),
+      {
+        services: {
+          workflow: {
+            getWorkflow: () => ({
+              workflow: makeWorkflow({ id: "s-1", canvasX: 0, canvasY: 0 }),
+              issues: [],
+            }),
+            activateWorkflow: () => {
+              throw new ConnectError("not ready", Code.FailedPrecondition);
+            },
+          },
+        },
+      },
+    );
+    await waitFor(() =>
+      expect(r.result.current.q.data?.workflow?.summary?.name).toBe("Tournament"),
+    );
+
+    const removeSpy = vi.spyOn(r.queryClient, "removeQueries");
+    const invalidateSpy = vi.spyOn(r.queryClient, "invalidateQueries");
+    await act(async () => {
+      await expect(r.result.current.mut.mutateAsync({ id: "wf-1" })).rejects.toBeTruthy();
+    });
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(invalidateSpy).toHaveBeenCalled();
+    removeSpy.mockRestore();
+    invalidateSpy.mockRestore();
+    r.unmount();
+  });
+
   it("invalidates list queries after success", async () => {
     const r = renderHookWithApp(() => useWorkflowMutation(WorkflowService.method.updateWorkflow), {
       services: {

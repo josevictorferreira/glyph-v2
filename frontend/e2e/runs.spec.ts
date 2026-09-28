@@ -114,9 +114,13 @@ test("a failed run opens on the failing step from Home, and retry re-runs it", a
   await page.getByRole("button", { name: "View run" }).click();
   await expect(page.getByTestId("run-header")).toContainText("Failed");
 
-  // One click from Home lands on the failing step's error.
+  // One click from Home lands on the failing step's error. Earlier suite
+  // runs may have left other failed "E2E failure" workflows in this database.
   await page.goto("/");
-  const card = page.getByTestId("home-attention-card").filter({ hasText: "E2E failure" });
+  const card = page
+    .getByTestId("home-attention-card")
+    .filter({ hasText: "E2E failure" })
+    .first();
   await card.getByRole("link", { name: /View run/ }).click();
   const error = page.getByTestId("step-run-error");
   await expect(error).toContainText("The selected model or provider could not complete the step.");

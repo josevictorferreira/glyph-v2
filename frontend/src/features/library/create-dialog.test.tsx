@@ -19,6 +19,26 @@ import {
 } from "@/gen/glyph/v1/workflow_pb";
 import { renderWithApp } from "@test/render";
 
+// The import dialog uses the shared Monaco editor (spec 0021 task 6); in
+// jsdom it is stubbed with a plain controlled textarea.
+vi.mock("@/features/definition", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/definition")>();
+  return {
+    ...actual,
+    YamlEditor: (props: {
+      value: string;
+      "data-testid"?: string;
+      onChange?: (value: string) => void;
+    }) => (
+      <textarea
+        data-testid={props["data-testid"] ?? "create-yaml"}
+        value={props.value}
+        onChange={(e) => props.onChange?.(e.target.value)}
+      />
+    ),
+  };
+});
+
 afterEach(() => vi.restoreAllMocks());
 
 const ts = (iso: string) =>
