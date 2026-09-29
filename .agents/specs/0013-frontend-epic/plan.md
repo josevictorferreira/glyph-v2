@@ -101,7 +101,7 @@ Rules (lint-enforced): `shared/*` imports nothing from `features/*`; features im
 | 0019 | schedule | schedule composer with preview, schedule values, pause/resume UX |
 | 0020 | runs-and-evidence | run sheet, run strip + history, Run lens, step run panel (live transcript, outputs), timeline view, stop/retry/delete |
 | 0021 | definition-yaml | Monaco YAML mode, dry-run lint, apply with fingerprint, conflict diff, export, import |
-| 0022 | production-build-and-release | backend static serving, Nix frontend derivation in image, CSP, e2e + a11y in `.#check`, acceptance audit |
+| 0022 | production-build-and-release | nginx frontend image + split deploy flakes (built), CSP, e2e + axe + bundle budget in `.#check`, acceptance audit |
 
 ## Parallelism
 

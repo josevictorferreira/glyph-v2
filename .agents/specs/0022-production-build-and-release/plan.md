@@ -2,62 +2,78 @@
 
 ## Goal
 
-Ship the SPA with the backend as one origin and one image, harden it (CSP, caching, error reporting), and prove the product acceptance criteria end to end.
+Two production images (backend binary + nginx frontend), the frontend hardened with a CSP, quality gates (e2e + axe + bundle budget) in `nix run .#check`, and the epic's acceptance audit written from passing tests.
 
 ## Depends on
 
-0014 for task 1; everything for the audit.
+0014 for tooling; every screen spec (0015–0021) for the audit.
 
 ## Design
 
-### Backend static serving (small backend change)
+### Serving (already built — this spec follows reality, not the reverse)
 
-- New config `GLYPH_STATIC_DIR` (optional). When set, the router adds a fallback service: `tower_http::services::ServeDir` with `index.html` fallback for SPA routes. Order: explicit backend HTTP routes (`/up`, `/schemas/...`, download, preview) and gRPC paths first; everything else → static/SPA.
-- Headers: hashed assets under `/assets/*` → `Cache-Control: public, max-age=31536000, immutable`; `index.html` → `no-cache`.
-- CSP on SPA responses: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self' blob:` (Monaco workers). Preview route keeps its own stricter CSP.
-- Tests: SPA deep link `/workflows/<id>/runs/<id>` returns index.html; download route still reaches the handler; unknown `/assets/x.js` → 404 (not index.html).
+The app ships as **two services**, both deployed from their own directory flake (`cd backend && nix run .#deploy`, `cd frontend && nix run .#deploy`; never run unless asked):
 
-### Nix
+- `backend/Containerfile` — the Rust binary image (root flake `.#image` mirrors it via `dockerTools`).
+- `frontend/Containerfile` — build stage (node 22, pnpm) → `nginxinc/nginx-unprivileged:1.28`. The frontend is the user-facing origin: it serves `dist/` and reverse-proxies `/(glyph\.v1\.|grpc\.)`, `/schemas/`, `/up` and artifact download/preview to `GLYPH_BACKEND_URL` (envsubst at start). gRPC-Web passes through with `accept-encoding: identity`, buffering off and long read timeouts (mirrors the Vite dev proxy); `/assets/` are `immutable` with real 404s; `index.html` is `no-cache`; unknown paths fall back to `index.html`.
 
-- `frontend` derivation: `stdenv.mkDerivation` with `pnpm.fetchDeps` / `pnpm.configHook` (hash pinned), `pnpm build` → `$out` = `dist/`.
-- `image` includes the frontend output and sets `GLYPH_STATIC_DIR=${frontend}`.
-- `nix build .#frontend` exposed; `nix run .#web` unchanged (dev server on :5173).
+The earlier design (backend `GLYPH_STATIC_DIR` + one image) was dropped for the split: it matches the deployment flow the rest of the fleet uses and keeps the backend image frontend-free. No backend change is needed in this spec.
 
-### Build settings
+### CSP (this spec's work)
 
-- Vite: `build.target: es2022`, manual chunks for `monaco`, `@xyflow/react`, `elkjs` (web worker); source maps uploaded? No external service: emit hidden source maps kept out of the image.
-- Bundle budget: main chunk ≤ 250 KB gzip; enforced by a size check in `.#check`.
+One policy, served by nginx on the document (SPA fallback included, so it lands on every route):
+
+```
+default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  font-src 'self' data:;
+  connect-src 'self';
+  worker-src 'self' blob:;
+  base-uri 'none';
+  form-action 'none';
+  frame-ancestors 'none'
+```
+
+`worker-src blob:` for Monaco's workers, `'unsafe-inline'` in `style-src` for component style attributes. The backend's artifact preview keeps its own stricter `default-src 'none'` CSP (already shipped; nginx must not override it — the frontend policy is added with `add_header` only on locations the frontend serves, and the preview location adds no CSP header of its own).
 
 ### Quality gates in `nix run .#check`
 
-- Unit tests, lint, typecheck, codegen drift (from 0014).
-- Playwright e2e: boots Postgres + backend with `GLYPH_STEP_RUNNER=fake` and the built SPA via `GLYPH_STATIC_DIR` (tests the production path), runs the suite headless (Chromium from nixpkgs `playwright-driver.browsers`).
-- axe checks on Home, workspace Build, Run lens, YAML mode: zero serious/critical violations.
+Appended after today's gates (buf, backend fmt/clippy/deny/test, frontend gen/lint/typecheck/vitest):
 
-### Error reporting
+- `pnpm build` — the production build must compile; it also produces the sizes for the budget below.
+- Bundle budget: `frontend/scripts/bundle-size.mjs` fails if the main entry chunk exceeds **850 KB gzip** (measured baseline: 819 KB; Monaco lives in lazy chunks that only the definition/import routes load) or if any chunk appears outside `dist/assets/` and `dist/workers/`.
+- `pnpm e2e` — the Playwright suite against the dev stack with the fake runner (`GLYPH_STEP_RUNNER=fake` + mock Velox, already wired in `playwright.config.ts`; the port guard refuses to run over a hand-started dev stack unless `E2E_REUSE_SERVER=1`). On NixOS the check exports `PLAYWRIGHT_CHROMIUM_PATH` from nixpkgs chromium, since the Playwright-downloaded browser cannot run.
+- axe (`@axe-core/playwright`) is part of the e2e suite (`e2e/a11y.spec.ts`): Home, workspace Build, Definition mode and a run's Evidence view must report **zero serious/critical violations**.
 
-Top-level error boundary with "Reload" and copyable diagnostics (route, build hash, error). Console-only logging; no third-party telemetry.
+### Error boundary
+
+Root route `errorComponent`: app-styled page with a Reload button and copyable diagnostics (path, error message, stack). Component test renders it. No third-party telemetry.
 
 ### Acceptance audit
 
-`.agents/specs/0022-production-build-and-release/acceptance.md`: each of the 14 acceptance criteria from `../glyph/features.md` → Playwright test name(s) → pass date. Plus the RPC coverage table (every RPC → screen or "intentionally unused").
+`.agents/specs/0022-production-build-and-release/acceptance.md`:
+
+- each of the 14 acceptance criteria from `../glyph/features.md` → the Playwright test(s) that demonstrate it (all must exist and pass; the audit only records the mapping);
+- RPC coverage table: every method in `proto/glyph/v1/*.proto` → the screen/hook that calls it, or "intentionally unused" with the reason;
+- keyboard-only walkthrough: the dedicated keyboard tests (canvas: select/nudge/duplicate/menu; dialogs; toasts) plus the axe scan on the four audited views.
 
 ## Tasks
 
-1. Backend `GLYPH_STATIC_DIR` + SPA fallback + headers + tests → verify: backend integration tests above; architecture test still green (static serving lives in `app/router.rs`).
-2. Nix `frontend` derivation + image wiring → verify: `nix build .#image`, `podman run` → `:3000` serves the app and gRPC-Web works same-origin.
-3. Vite build config, chunking, bundle budget → verify: size check fails when budget exceeded.
-4. Production-path e2e + axe in `.#check` → verify: green from clean clone.
-5. Error boundary + diagnostics → verify: component test.
-6. Acceptance audit + RPC coverage → verify: every row has a passing test.
-7. Docs: root README + `frontend/README.md` + `frontend/AGENTS.md` (conventions from 0015, boundaries, testing) → verify: a new contributor runs `nix run .#web` and the e2e suite from the README alone.
+1. CSP in `frontend/nginx/default.conf.template` → verify: build the image with podman, load it, `curl -I` shows the header on `/` and SPA deep links, app boots in the browser, backend preview still carries its stricter CSP.
+2. `@axe-core/playwright` + `e2e/a11y.spec.ts` on the four views → verify: suite green; a deliberately injected violation fails the check (smoke, then removed).
+3. `frontend/scripts/bundle-size.mjs` (gzip, entry-chunk cap 850 KB, assets stay under `/assets|workers/`) wired into `.#check` together with `pnpm build` and `pnpm e2e` (chromium path exported) → verify: `nix run .#check` green from clean ports; budget script fails on an oversized fixture.
+4. Error boundary + diagnostics → verify: component test.
+5. Acceptance audit + RPC coverage table → verify: every criterion row names a passing test; every proto method appears exactly once.
+6. Docs: root README (check now runs e2e; browsers on NixOS) and `frontend/README.md` (CSP location, budget, axe) → verify: instructions run as written.
 
 ## Acceptance
 
-- `nix build .#image` produces one image serving API and UI on :3000.
-- `nix run .#check` green including e2e and a11y.
-- `acceptance.md` complete.
+- `nix run .#check` green end to end, including build, budget, e2e and axe.
+- Frontend image serves the CSP on every document response.
+- `acceptance.md` complete: 14/14 criteria mapped to passing tests, full RPC coverage table, keyboard walkthrough recorded.
 
 ## Out of scope
 
-CDN hosting, telemetry services, `nix run .#deploy` changes beyond image contents (deploy only when explicitly asked).
+CDN hosting, telemetry, production-path e2e against the nginx image (podman-in-check is too heavy; the image is smoke-tested in task 1), deploy automation changes.
