@@ -184,6 +184,8 @@ function WorkflowCard({
 
 function AttentionCard({ workflow, now }: { workflow: WorkflowSummary; now: Date }) {
   const { data: validation } = useValidateWorkflow(workflow.id);
+  const { data: runs } = useRuns(workflow.id, 1);
+  const latestRun = runs?.runs[0];
   const at = tsToDate(workflow.lastRunAt);
   const reason =
     workflow.status === WorkflowStatus.NEEDS_ATTENTION
@@ -192,6 +194,12 @@ function AttentionCard({ workflow, now }: { workflow: WorkflowSummary; now: Date
       : at
         ? `Last run failed ${formatRelative(at, now)}`
         : "Last run failed";
+
+  // Deep-link target: failing step if known from validation, else failed step run, else workflow build tab
+  const firstIssue = validation?.issues.find((i: { entityId?: string }) => Boolean(i.entityId));
+  const failedStepId =
+    workflow.status === WorkflowStatus.NEEDS_ATTENTION ? firstIssue?.entityId : undefined;
+
   return (
     <WorkflowCard workflow={workflow} testId="home-attention-card">
       <span className="min-w-0 flex-1 truncate text-xs text-danger">{reason}</span>
@@ -204,15 +212,37 @@ function AttentionCard({ workflow, now }: { workflow: WorkflowSummary; now: Date
         >
           Open
         </Link>
-        <Link
-          to="/workflows/$id"
-          params={{ id: workflow.id }}
-          className="rounded-md border border-accent px-2 py-0.5 text-xs text-accent hover:bg-accent/10"
-          data-testid="attention-fix"
-        >
-          Fix
-        </Link>
-        {workflow.lastRunStatus === RunStatus.FAILED && <ViewRunLink workflow={workflow} />}
+        {workflow.lastRunStatus === RunStatus.FAILED && latestRun ? (
+          <Link
+            to="/workflows/$id/runs/$runId"
+            params={{ id: workflow.id, runId: latestRun.id }}
+            search={latestRun.firstFailedStepRunId ? { step: latestRun.firstFailedStepRunId } : {}}
+            className="rounded-md border border-accent px-2 py-0.5 text-xs text-accent hover:bg-accent/10"
+            data-testid="attention-fix"
+          >
+            Fix
+          </Link>
+        ) : (
+          <Link
+            to="/workflows/$id"
+            params={{ id: workflow.id }}
+            search={failedStepId ? { step: failedStepId } : {}}
+            className="rounded-md border border-accent px-2 py-0.5 text-xs text-accent hover:bg-accent/10"
+            data-testid="attention-fix"
+          >
+            Fix
+          </Link>
+        )}
+        {workflow.lastRunStatus === RunStatus.FAILED && latestRun && (
+          <Link
+            to="/workflows/$id/runs/$runId"
+            params={{ id: workflow.id, runId: latestRun.id }}
+            className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-surface-2"
+            data-testid="attention-view-run"
+          >
+            View run
+          </Link>
+        )}
       </div>
     </WorkflowCard>
   );
@@ -238,22 +268,5 @@ function RunningCard({ workflow, now }: { workflow: WorkflowSummary; now: Date }
         </Link>
       )}
     </WorkflowCard>
-  );
-}
-
-/** Latest-run link via ListRuns{limit:1}; renders nothing before it loads. */
-function ViewRunLink({ workflow }: { workflow: WorkflowSummary }) {
-  const { data: runs } = useRuns(workflow.id, 1);
-  const latest = runs?.runs[0];
-  if (!latest) return null;
-  return (
-    <Link
-      to="/workflows/$id/runs/$runId"
-      params={{ id: workflow.id, runId: latest.id }}
-      className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-surface-2"
-      data-testid="attention-view-run"
-    >
-      View run
-    </Link>
   );
 }

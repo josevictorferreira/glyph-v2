@@ -102,15 +102,37 @@ describe("LibrarySidebar", () => {
       });
       expect(calls.at(-1)?.query).toBe("alp");
 
-      fireEvent.click(screen.getByTestId("chip-attention"));
+      fireEvent.click(screen.getByTestId("chip-active"));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(250);
       });
-      expect(calls.at(-1)?.status).toBe(WorkflowStatus.NEEDS_ATTENTION);
+      expect(calls.at(-1)?.status).toBe(WorkflowStatus.ACTIVE);
     } finally {
       vi.useRealTimers();
       unmount();
     }
+  });
+
+  it("shows failed-active workflows under the Needs attention chip (audit 1)", async () => {
+    // Server-side NEEDS_ATTENTION filtering returns nothing for these — the
+    // chip must agree with Home's needsAttention() definition instead.
+    const { unmount } = mount([
+      summary("failed-active", "Broken run", {
+        status: WorkflowStatus.ACTIVE,
+        lastRunStatus: RunStatus.FAILED,
+        lastRunAt: ts("2026-01-15T11:48:00Z"),
+      }),
+      summary("attention", "Blocked", { status: WorkflowStatus.NEEDS_ATTENTION }),
+      summary("healthy", "Fine", { status: WorkflowStatus.ACTIVE }),
+    ]);
+    fireEvent.click(await screen.findByTestId("chip-attention"));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("library-row-name").map((n) => n.textContent)).toEqual([
+        "Blocked",
+        "Broken run",
+      ]),
+    );
+    unmount();
   });
 
   it("opens the create dialog from New and creates a blank workflow", async () => {
@@ -132,6 +154,16 @@ describe("LibrarySidebar", () => {
     fireEvent.click(screen.getByTestId("create-submit"));
     await waitFor(() => expect(created).toEqual([{ name: "Tournament" }]));
     await waitFor(() => expect(router?.state.location.pathname).toBe("/workflows/wf-new"));
+    unmount();
+  });
+
+  it("shows cap notice when 100 workflows are returned", async () => {
+    const list = Array.from({ length: 100 }, (_, i) => summary(`wf-${i}`, `Workflow ${i}`));
+    const { unmount } = mount(list);
+    await screen.findByTestId("library-row-wf-0");
+    expect(screen.getByTestId("library-cap-notice")).toHaveTextContent(
+      "Showing 100 workflows — search to narrow.",
+    );
     unmount();
   });
 });

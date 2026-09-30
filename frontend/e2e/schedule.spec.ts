@@ -100,11 +100,9 @@ test("required asked input without a schedule value blocks until filled", async 
   await field.blur();
   await expect(page.getByTestId("schedule-attention")).toHaveCount(0);
 
-  // needs_attention never auto-heals: reactivate from the readiness sheet.
-  await page.getByTestId("review-issues").click();
-  await expect(page.getByTestId("readiness-sheet")).toContainText(
-    "No issues. Everything is ready.",
-  );
-  await page.getByTestId("readiness-activate").click();
+  // needs_attention never auto-heals — but with no issues left the header now
+  // offers one consistent recovery: Reactivate (audit ticket 3).
+  await expect(page.getByTestId("readiness-pill")).toContainText("Ready — reactivate");
+  await page.getByTestId("reactivate").click();
   await expect(page.getByTestId("schedule-active")).toContainText(/Next: Mon, .* 09:00/);
 });

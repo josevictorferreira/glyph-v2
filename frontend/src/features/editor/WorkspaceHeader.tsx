@@ -38,6 +38,12 @@ export function WorkspaceHeader({ workflowId }: { workflowId: string }) {
   const issues = useIssues(workflowId);
   const issueCount = issues.all.length;
   const { requestFocus } = useEditorChrome();
+  const status = workflow?.summary?.status ?? WorkflowStatus.DRAFT;
+  // A needs_attention workflow whose issues were fixed (e.g. the schedule
+  // that blocked it was removed) validates clean but only resume() clears
+  // the status. Showing "Ready" next to "Needs attention" reads as a lie —
+  // the pill states the recovery instead (audit ticket 3).
+  const readyToReactivate = status === WorkflowStatus.NEEDS_ATTENTION && issueCount === 0;
 
   return (
     <div
@@ -47,8 +53,8 @@ export function WorkspaceHeader({ workflowId }: { workflowId: string }) {
       {workflow ? (
         <>
           <WorkflowNameInput workflow={workflow} />
-          <WorkflowStatusBadge status={workflow.summary?.status ?? WorkflowStatus.DRAFT} />
-          <ReadinessPill issueCount={issueCount} />
+          <WorkflowStatusBadge status={status} />
+          <ReadinessPill issueCount={issueCount} readyToReactivate={readyToReactivate} />
           <ScheduleChip workflow={workflow} onClick={() => requestFocus({ target: "schedule" })} />
         </>
       ) : (
@@ -57,7 +63,13 @@ export function WorkspaceHeader({ workflowId }: { workflowId: string }) {
       <div className="ml-auto flex items-center gap-2">
         {workflow && <ModeSwitch workflowId={workflowId} />}
         <LiveConnectionIndicator />
-        {workflow && <PrimaryActions workflow={workflow} issueCount={issueCount} />}
+        {workflow && (
+          <PrimaryActions
+            workflow={workflow}
+            issueCount={issueCount}
+            readyToReactivate={readyToReactivate}
+          />
+        )}
       </div>
     </div>
   );
@@ -76,6 +88,7 @@ function WorkflowNameInput({ workflow }: { workflow: Workflow }) {
   const field = useAutosaveField({ value: name, save: saveName });
   return (
     <>
+      <h1 className="sr-only">{name || "Workflow"}</h1>
       <Input
         aria-label="Workflow name"
         data-testid="workflow-name"
@@ -90,20 +103,30 @@ function WorkflowNameInput({ workflow }: { workflow: Workflow }) {
   );
 }
 
-function ReadinessPill({ issueCount }: { issueCount: number }) {
+function ReadinessPill({
+  issueCount,
+  readyToReactivate,
+}: {
+  issueCount: number;
+  readyToReactivate: boolean;
+}) {
   const { setReadinessOpen } = useEditorChrome();
-  const ready = issueCount === 0;
+  const label = readyToReactivate
+    ? "Ready — reactivate"
+    : issueCount === 0
+      ? "Ready"
+      : `${issueCount} ${issueCount === 1 ? "issue" : "issues"}`;
   return (
     <button
       type="button"
       data-testid="readiness-pill"
-      aria-label={ready ? "Workflow readiness: ready" : `Workflow readiness: ${issueCount} issues`}
+      aria-label={`Workflow readiness: ${label}`}
       onClick={() => setReadinessOpen(true)}
-      className="rounded-full focus-visible:outline-none"
+      // 24px hit area (WCAG 2.2 target size; root font is 14px so rem
+      // spacing would land at 21px).
+      className="min-h-[24px] rounded-full focus-visible:outline-none"
     >
-      <Badge tone={ready ? "success" : "danger"}>
-        {ready ? "Ready" : `${issueCount} ${issueCount === 1 ? "issue" : "issues"}`}
-      </Badge>
+      <Badge tone={issueCount === 0 ? "success" : "danger"}>{label}</Badge>
     </button>
   );
 }
@@ -134,7 +157,15 @@ function ModeSwitch({ workflowId }: { workflowId: string }) {
   );
 }
 
-function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCount: number }) {
+function PrimaryActions({
+  workflow,
+  issueCount,
+  readyToReactivate,
+}: {
+  workflow: Workflow;
+  issueCount: number;
+  readyToReactivate: boolean;
+}) {
   const workflowId = workflow.summary?.id ?? "";
   const status = workflow.summary?.status ?? WorkflowStatus.DRAFT;
   const { setReadinessOpen } = useEditorChrome();
@@ -213,16 +244,28 @@ function PrimaryActions({ workflow, issueCount }: { workflow: Workflow; issueCou
           Resume
         </Button>
       )}
-      {status === WorkflowStatus.NEEDS_ATTENTION && (
-        <Button
-          size="sm"
-          variant="primary"
-          data-testid="review-issues"
-          onClick={() => setReadinessOpen(true)}
-        >
-          Review issues
-        </Button>
-      )}
+      {status === WorkflowStatus.NEEDS_ATTENTION &&
+        (readyToReactivate ? (
+          <Button
+            size="sm"
+            variant="primary"
+            data-testid="reactivate"
+            loading={resume.isPending}
+            title="The issues are resolved — reactivate the workflow."
+            onClick={() => resume.mutate({ id: workflowId })}
+          >
+            Reactivate
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            data-testid="review-issues"
+            onClick={() => setReadinessOpen(true)}
+          >
+            Review issues
+          </Button>
+        ))}
 
       <Dropdown>
         <DropdownTrigger asChild>

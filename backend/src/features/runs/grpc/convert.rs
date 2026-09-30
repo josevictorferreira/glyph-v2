@@ -183,6 +183,8 @@ pub fn run(r: &Run, step_runs: &[StepRun], full: bool) -> pb::Run {
         started_at: opt_timestamp(r.started_at),
         ended_at: opt_timestamp(r.ended_at),
         elapsed_ms: r.elapsed_ms,
+        active_ms: Some(r.active_ms),
+        resumed_at: opt_timestamp(r.resumed_at),
         failure_summary: r.failure_summary.clone(),
         first_failed_step_run_id: r.first_failed_step_run_id.map(|i| i.to_string()),
         schedule_occurrence_key: r.schedule_occurrence_key.clone(),

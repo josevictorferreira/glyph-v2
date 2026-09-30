@@ -11,6 +11,7 @@ import {
   WorkflowSchema,
   ActivateWorkflowResponseSchema,
   PauseWorkflowResponseSchema,
+  ResumeWorkflowResponseSchema,
 } from "@/gen/glyph/v1/workflow_pb";
 import { StartRunResponseSchema } from "@/gen/glyph/v1/run_pb";
 import { WorkflowStatus, IssueSchema } from "@/gen/glyph/v1/common_pb";
@@ -240,6 +241,45 @@ describe("WorkspaceHeader (spec 0018)", () => {
     await userEvent.click(screen.getByRole("button", { name: "More workflow actions" }));
     const runItem = await screen.findByRole("menuitem", { name: "Run now" });
     expect(runItem).toHaveAttribute("aria-disabled", "true");
+    unmount();
+  });
+
+  // Audit ticket 3: a needs_attention workflow whose issues are gone shows
+  // one consistent state ("Ready — reactivate") and one obvious action.
+  it("needs-attention with no issues offers Reactivate, not Review issues", async () => {
+    const resumed: { id: string }[] = [];
+    const { unmount } = mount({
+      workflow: {
+        getWorkflow: () => Promise.resolve(wf(WorkflowStatus.NEEDS_ATTENTION)),
+        resumeWorkflow: (req: { id: string }) => {
+          resumed.push(req);
+          return Promise.resolve(
+            create(ResumeWorkflowResponseSchema, {
+              workflow: wf(WorkflowStatus.ACTIVE).workflow,
+              issues: [],
+              resumed: true,
+            }),
+          );
+        },
+      },
+    });
+    expect(await screen.findByTestId("reactivate")).toBeInTheDocument();
+    expect(screen.queryByTestId("review-issues")).not.toBeInTheDocument();
+    expect(screen.getByTestId("readiness-pill")).toHaveTextContent("Ready — reactivate");
+    await userEvent.click(screen.getByTestId("reactivate"));
+    await waitFor(() => expect(resumed).toHaveLength(1));
+    expect(resumed[0]).toMatchObject({ id: "wf-1" });
+    unmount();
+  });
+
+  it("the readiness sheet says Ready to reactivate for a recovered workflow", async () => {
+    const { unmount } = mount({
+      workflow: { getWorkflow: () => Promise.resolve(wf(WorkflowStatus.NEEDS_ATTENTION)) },
+    });
+    await userEvent.click(await screen.findByTestId("readiness-pill"));
+    expect(await screen.findByTestId("readiness-sheet")).toBeInTheDocument();
+    expect(screen.getByText("Ready to reactivate")).toBeInTheDocument();
+    expect(screen.getByTestId("readiness-activate")).toHaveTextContent("Reactivate");
     unmount();
   });
 });

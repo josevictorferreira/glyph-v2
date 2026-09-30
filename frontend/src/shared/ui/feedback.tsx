@@ -3,6 +3,7 @@ import { Collapsible } from "radix-ui";
 import { cn } from "@/shared/lib/cn";
 import { ChevronRight } from "./icons";
 import { CheckIcon } from "./select";
+import { toast } from "./toast";
 
 // ---------------------------------------------------------------------------
 export function EmptyState({
@@ -95,7 +96,8 @@ export function CopyButton({
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         } catch {
-          // clipboard unavailable (permissions); ignore
+          // Clipboard unavailable (permissions or insecure context) — inform user (fixes.md #14)
+          toast({ title: "Copy failed", tone: "danger" });
         }
       }}
     >

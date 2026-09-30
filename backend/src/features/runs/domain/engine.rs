@@ -62,6 +62,8 @@ pub fn build_run(
         started_at: None,
         ended_at: None,
         elapsed_ms: None,
+        active_ms: 0,
+        resumed_at: None,
         failure_summary: None,
         first_failed_step_run_id: None,
         created_at: now,

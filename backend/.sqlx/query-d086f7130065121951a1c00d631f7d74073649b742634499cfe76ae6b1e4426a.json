@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE step_runs SET status = 'queued', queued_at = $3, started_at = NULL, ended_at = NULL, elapsed_ms = NULL,\n                    output_text = NULL, output = NULL, messages = NULL, session_content = NULL,\n                    human_error = NULL, technical_error = NULL, skipped_reason = NULL, updated_at = now()\n             WHERE id = ANY($1) AND status = ANY($2)\n             RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d086f7130065121951a1c00d631f7d74073649b742634499cfe76ae6b1e4426a"
+}

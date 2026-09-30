@@ -11,7 +11,7 @@ import { useNow } from "@/shared/lib/time";
 import { describeWorkflowStatus } from "@/shared/api/enums";
 import { Button, PanelLeft, Plus, Search, StatusDot } from "@/shared/ui";
 import { cn } from "@/shared/lib/cn";
-import { secondaryLine, sortWorkflows } from "./summaries";
+import { secondaryLine, sortWorkflows, needsAttention } from "./summaries";
 import { useCreateWorkflowDialog } from "./create-dialog";
 
 type FilterChip = "all" | "active" | "draft" | "paused" | "attention";
@@ -21,7 +21,10 @@ const CHIPS: { id: FilterChip; label: string; status?: WorkflowStatus }[] = [
   { id: "active", label: "Active", status: WorkflowStatus.ACTIVE },
   { id: "draft", label: "Draft", status: WorkflowStatus.DRAFT },
   { id: "paused", label: "Paused", status: WorkflowStatus.PAUSED },
-  { id: "attention", label: "Needs attention", status: WorkflowStatus.NEEDS_ATTENTION },
+  // "Needs attention" is NOT a server status filter: Home defines it as
+  // NEEDS_ATTENTION *or* last run failed, and the sidebar must agree (audit
+  // ticket 1) — it filters client-side with the same needsAttention().
+  { id: "attention", label: "Needs attention" },
 ];
 
 export function LibrarySidebar({ className }: { className?: string }) {
@@ -40,8 +43,15 @@ export function LibrarySidebar({ className }: { className?: string }) {
     [debounced, chip],
   );
   const { data, isFetching } = useWorkflowList(filter);
+  const isCapped = (data?.workflows.length ?? 0) >= 100;
   const now = useNow(10_000);
-  const workflows = useMemo(() => sortWorkflows(data?.workflows ?? []), [data?.workflows]);
+  const workflows = useMemo(
+    () =>
+      chip === "attention"
+        ? sortWorkflows(data?.workflows ?? []).filter(needsAttention)
+        : sortWorkflows(data?.workflows ?? []),
+    [data?.workflows, chip],
+  );
 
   // `/` focuses search (when not already typing).
   useEffect(() => {
@@ -141,7 +151,9 @@ export function LibrarySidebar({ className }: { className?: string }) {
                 aria-pressed={chip === c.id}
                 data-testid={`chip-${c.id}`}
                 className={cn(
-                  "rounded-full border px-2 py-0.5 text-[11px] leading-4",
+                  // 24px hit area (WCAG 2.2 target size). The app root is
+                  // 14px, so rem-based heights land at 21px — pixels here.
+                  "min-h-[24px] rounded-full border px-2.5 py-0.5 text-[11px] leading-4",
                   chip === c.id
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-border text-ink-muted hover:bg-surface-2",
@@ -185,6 +197,15 @@ export function LibrarySidebar({ className }: { className?: string }) {
           >
             <Plus />
           </Button>
+        </div>
+      )}
+
+      {isCapped && !collapsed && (
+        <div
+          className="border-b border-border bg-surface-2 px-2 py-1 text-[11px] text-ink-subtle"
+          data-testid="library-cap-notice"
+        >
+          Showing 100 workflows — search to narrow.
         </div>
       )}
 

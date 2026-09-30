@@ -6,15 +6,25 @@ import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { GetWorkflowResponse } from "@/gen/glyph/v1/workflow_pb";
 import type { Issue, IssueEntityType } from "@/gen/glyph/v1/common_pb";
 import { useIsLive } from "@/shared/api/liveness";
+import { toAppError } from "@/shared/api/errors";
 import type { WorkflowListFilter } from "@/shared/api/keys";
 
-/** Live-aware freshness: events keep it fresh while a subscription is open. */
+/** Live-aware freshness: events keep it fresh while a subscription is open.
+ * 404 is terminal for a URL the user typed/shared — never retried (audit
+ * ticket 2: the skeleton must become "not found", not pulse forever). */
 export function useWorkflow(id: string) {
   const live = useIsLive(id);
   return useQuery(
     WorkflowService.method.getWorkflow,
     { id },
-    { staleTime: live ? Infinity : 30_000, enabled: id.length > 0 },
+    {
+      staleTime: live ? Infinity : 30_000,
+      enabled: id.length > 0,
+      retry: (failureCount, error) => {
+        if (toAppError(error).kind === "not_found") return false;
+        return failureCount < 1;
+      },
+    },
   );
 }
 

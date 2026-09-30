@@ -23,9 +23,18 @@ export default defineConfig({
       "@test": fileURLToPath(new URL("./test", import.meta.url)),
       // monaco-editor 0.57's exports map hides the old esm/vs/* deep paths
       // that monaco-worker-manager still references inside its worker.
-      "monaco-editor/esm/vs/editor/editor.worker.js":
-        "monaco-editor/editor/editor.worker.js",
+      "monaco-editor/esm/vs/editor/editor.worker.js": "monaco-editor/editor/editor.worker.js",
+      // Audit ticket 5: monaco-yaml's prebuilt worker imports path-browserify
+      // (CommonJS); the dev server serves it raw into the worker where it
+      // crashes with `module is not defined`, killing the YAML language
+      // worker. The ESM shim provides the posix subset it uses.
+      "path-browserify": fileURLToPath(
+        new URL("./src/features/definition/path-browserify-shim.ts", import.meta.url),
+      ),
     },
+  },
+  optimizeDeps: {
+    include: ["monaco-yaml"],
   },
   server: {
     port: 5173,

@@ -18,8 +18,19 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The mobile drawer must not survive a navigation: picking a workflow from
+  // it has to reveal the destination (audit ticket 6). Every interactive
+  // element in the drawer is a link, so click capture covers mouse, keyboard
+  // (Enter on a focused link fires click) and assistive tech alike.
+  const closeDrawer = () => setDrawerOpen(false);
   return (
     <div data-testid="app-shell" className="flex h-dvh overflow-hidden bg-canvas">
+      <a
+        href="#glyph-main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-1.5 focus:text-sm focus:text-ink focus:shadow-md"
+      >
+        Skip to content
+      </a>
       <aside
         data-testid="app-sidebar"
         className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface md:flex"
@@ -38,6 +49,7 @@ export function AppShell({
           <aside
             className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-surface"
             data-testid="app-sidebar-drawer"
+            onClickCapture={closeDrawer}
           >
             {sidebar}
           </aside>
@@ -60,7 +72,11 @@ export function AppShell({
           </button>
           {header}
         </header>
-        <main data-testid="app-main" className="min-h-0 flex-1 overflow-hidden">
+        <main
+          data-testid="app-main"
+          id="glyph-main-content"
+          className="min-h-0 flex-1 overflow-hidden"
+        >
           {children}
         </main>
       </div>

@@ -345,6 +345,25 @@ describe("WorkflowCanvas (build)", () => {
     );
   });
 
+  // Audit ticket 9: the "+ Step" menu is keyboard-operable (Tab → Enter →
+  // arrows → Enter adds a step) — it is a real menu, not a mouse-only div.
+  it("adds a Pi step from the + Step menu with the keyboard only", async () => {
+    const { recorded } = setupBuild();
+    await screen.findByTestId("step-card-s-research");
+    const trigger = screen.getByTestId("canvas-add-step");
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    const menu = await screen.findByTestId("canvas-add-menu");
+    expect(within(menu).getByRole("menuitem", { name: "Add Pi step" })).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(within(menu).getByRole("menuitem", { name: "Add helper step" })).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}{Enter}");
+    await waitFor(() =>
+      expect(recorded.addStep).toEqual([expect.objectContaining({ workflowId: "wf-1", kind: 1 })]),
+    );
+  });
+
   it("delete from the context menu confirms with the connection count", async () => {
     const confirm = vi.mocked(window.confirm);
     const { recorded } = setupBuild();

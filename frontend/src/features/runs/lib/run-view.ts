@@ -14,15 +14,20 @@ export function isLiveStepRun(status: StepRunStatus): boolean {
   return status === StepRunStatus.QUEUED || status === StepRunStatus.RUNNING;
 }
 
-/** Elapsed time: stored ms when finished, otherwise measured to `now`. */
+/** Elapsed time: stored ms when finished, otherwise measured to `now`.
+ * Live measurement opens the window at `resumedAt ?? startedAt` and adds
+ * `activeMs`, so dead time between a failure and a retry never counts
+ * (audit ticket 4). */
 export function elapsedMs(
-  item: Pick<Run | StepRunSummary, "startedAt" | "endedAt" | "elapsedMs">,
+  item: Pick<Run | StepRunSummary, "startedAt" | "endedAt" | "elapsedMs"> &
+    Partial<Pick<Run, "activeMs" | "resumedAt">>,
   now: number,
 ): number | undefined {
   if (item.elapsedMs !== undefined) return Number(item.elapsedMs);
-  const start = tsToMs(item.startedAt);
+  const start = tsToMs(item.resumedAt) ?? tsToMs(item.startedAt);
   if (start === undefined) return undefined;
-  return (tsToMs(item.endedAt) ?? now) - start;
+  const active = item.activeMs !== undefined ? Number(item.activeMs) : 0;
+  return active + ((tsToMs(item.endedAt) ?? now) - start);
 }
 
 // ---------------------------------------------------------------------------

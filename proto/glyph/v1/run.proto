@@ -232,6 +232,12 @@ message Run {
   // Empty in ListRuns.
   repeated StepRunSummary step_runs = 15;
   google.protobuf.Timestamp created_at = 16;
+  // Execution time accumulated before the current window (retries); the
+  // live duration is active_ms + (now - (resumed_at ?? started_at)).
+  optional int64 active_ms = 17;
+  // When the current execution window opened (the retry time after a
+  // terminal run is revived).
+  optional google.protobuf.Timestamp resumed_at = 18;
 }
 
 message StartRunRequest {

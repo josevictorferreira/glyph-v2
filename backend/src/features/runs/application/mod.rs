@@ -630,8 +630,12 @@ impl RunService {
             .lock_run(run_id)
             .await?
             .ok_or(DomainError::NotFound("run"))?;
+        let now = self.clock.now();
         if run.status.terminal() {
             run.status = RunStatus::Running;
+            // The clock resumes now: the dead time between the original
+            // failure and this retry must not count as execution (audit 4).
+            run.resume_clock(now);
             run.ended_at = None;
             run.elapsed_ms = None;
             run.failure_summary = None;
@@ -645,13 +649,14 @@ impl RunService {
             .cloned()
             .ok_or(DomainError::NotFound("step run"))?;
         let mut requeued = tx
-            .reset_step_runs(&[step_run_id], &[StepRunStatus::Failed])
+            .reset_step_runs(&[step_run_id], &[StepRunStatus::Failed], now)
             .await?;
         let descendants = engine::retry_targets(&run.snapshot, &states, &failed);
         requeued.extend(
             tx.reset_step_runs(
                 &descendants,
                 &[StepRunStatus::Skipped, StepRunStatus::Cancelled],
+                now,
             )
             .await?,
         );

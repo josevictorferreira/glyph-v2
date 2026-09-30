@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { create } from "@bufbuild/protobuf";
 import { AppShell } from "./shell";
@@ -57,5 +57,23 @@ describe("AppShell", () => {
     await user.click(screen.getByRole("link", { name: "Home" }));
     expect(screen.getByTestId("app-shell")).toBeInTheDocument();
     await screen.findByTestId("home-first-run");
+  });
+});
+
+// Audit ticket 6: the mobile drawer closes after navigating (picking a
+// workflow from it must reveal the destination).
+describe("AppShell mobile drawer", () => {
+  it("closes the drawer when a link inside it is activated", async () => {
+    // Start on a workflow page so the drawer's Home link actually navigates.
+    const { router } = renderWithApp(undefined, { route: "/workflows/abc", services });
+    expect(router).toBeDefined();
+    await screen.findByTestId("canvas");
+    fireEvent.click(screen.getByTestId("open-sidebar"));
+    // The real user path: activating a link inside the drawer (mouse click or
+    // Enter on a focused link — both fire click) navigates and closes it.
+    const drawer = screen.getByTestId("app-sidebar-drawer");
+    fireEvent.click(within(drawer).getByRole("link", { name: "Home" }));
+    await waitFor(() => expect(screen.queryByTestId("app-sidebar-drawer")).not.toBeInTheDocument());
+    await waitFor(() => expect(router!.state.location.pathname).toBe("/"));
   });
 });

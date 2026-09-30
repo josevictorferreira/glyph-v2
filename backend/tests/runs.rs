@@ -877,3 +877,66 @@ async fn engine_runs_real_pi_runner_without_leaking_keys(pool: PgPool) {
             .all(|b| !String::from_utf8_lossy(b).contains(key))
     );
 }
+
+// Audit ticket 4: retrying a day-old failed run must report active execution
+// time, not wall-clock from the original start (the "Duration 14h 05m" bug).
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn retry_duration_excludes_dead_time(pool: PgPool) {
+    let runner = ScriptedRunner::new(&[("A", Script::Fail)]);
+    let server = server(pool, runner.clone()).await;
+    let mut b = Builder::new(&server, "RetryClock", false).await;
+    b.pi("A").await;
+    let mut client = runs_client(&server).await;
+
+    // First run fails quickly.
+    let run = settle(&server, &b.id, &start(&server, &b.id, &[]).await.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Failed);
+    let a_run = step(&run, "A").id.clone();
+
+    // Backdate: pretend the failure happened 14 hours ago.
+    sqlx::query(
+        "UPDATE workflow_runs SET started_at = now() - interval '14 hours',
+                ended_at = now() - interval '14 hours' + interval '1 second',
+                elapsed_ms = 1000
+         WHERE id = $1::uuid",
+    )
+    .bind(&run.id)
+    .execute(&server.pool)
+    .await
+    .unwrap();
+
+    // Retry after the (simulated) long gap, with the step now succeeding.
+    runner.set_script("A", ok("retried"));
+    let retried = client
+        .retry_step(pb::RetryStepRequest {
+            workflow_id: b.id.clone(),
+            run_id: run.id.clone(),
+            step_run_id: a_run.clone(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .run
+        .unwrap();
+    assert_eq!(retried.status(), pb::RunStatus::Running);
+    assert!(retried.resumed_at.is_some(), "the clock reopened at retry");
+    assert_eq!(retried.active_ms, Some(1000), "the 1s window was frozen");
+
+    let finished = settle(&server, &b.id, &run.id).await;
+    assert_eq!(finished.status(), pb::RunStatus::Succeeded);
+    let elapsed = finished.elapsed_ms.expect("final duration stored");
+    assert!(
+        elapsed < 60_000,
+        "duration must measure execution, not the 14h gap (got {elapsed}ms)"
+    );
+    assert!(
+        elapsed >= 1000,
+        "the original 1s of work stays in the total (got {elapsed}ms)"
+    );
+    // The requeued step's queue time restarted at the retry, not the backdate.
+    let queued = step(&finished, "A")
+        .queued_at
+        .as_ref()
+        .unwrap();
+    assert!(queued.seconds > 0);
+}

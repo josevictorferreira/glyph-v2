@@ -75,11 +75,13 @@ pub trait RunTx: WorkflowTx {
         from: StepRunStatus,
         finish: &StepFinish,
     ) -> DomainResult<bool>;
-    /// Back to queued with every evidence field cleared (retry).
+    /// Back to queued with every evidence field cleared (retry). `queued_at`
+    /// restarts at `now` so timelines don't stretch across the dead window.
     async fn reset_step_runs(
         &mut self,
         ids: &[StepRunId],
         from: &[StepRunStatus],
+        now: Timestamp,
     ) -> DomainResult<Vec<StepRunId>>;
     async fn set_workflow_last_run(
         &mut self,

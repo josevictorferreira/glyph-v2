@@ -78,6 +78,8 @@ struct RunRow {
     started_at: Option<Timestamp>,
     ended_at: Option<Timestamp>,
     elapsed_ms: Option<i64>,
+    active_ms: i64,
+    resumed_at: Option<Timestamp>,
     failure_summary: Option<String>,
     first_failed_step_run_id: Option<Uuid>,
     created_at: Timestamp,
@@ -102,6 +104,8 @@ fn run_from(cipher: &dyn Cipher, r: RunRow) -> DomainResult<Run> {
         started_at: r.started_at,
         ended_at: r.ended_at,
         elapsed_ms: r.elapsed_ms,
+        active_ms: r.active_ms,
+        resumed_at: r.resumed_at,
         failure_summary: r.failure_summary,
         first_failed_step_run_id: r.first_failed_step_run_id.map(Into::into),
         created_at: r.created_at,
@@ -160,7 +164,7 @@ async fn load_run(
             RunRow,
             "SELECT id, workflow_id, status, trigger, draft_test, snapshot, supplied_values,
                     schedule_occurrence_key, queued_at, started_at, ended_at, elapsed_ms,
-                    failure_summary, first_failed_step_run_id, created_at
+                    active_ms, resumed_at, failure_summary, first_failed_step_run_id, created_at
              FROM workflow_runs WHERE id = $1 FOR UPDATE",
             id.as_uuid()
         )
@@ -171,7 +175,7 @@ async fn load_run(
             RunRow,
             "SELECT id, workflow_id, status, trigger, draft_test, snapshot, supplied_values,
                     schedule_occurrence_key, queued_at, started_at, ended_at, elapsed_ms,
-                    failure_summary, first_failed_step_run_id, created_at
+                    active_ms, resumed_at, failure_summary, first_failed_step_run_id, created_at
              FROM workflow_runs WHERE id = $1",
             id.as_uuid()
         )
@@ -226,7 +230,7 @@ impl RunStore for PgStore {
             RunRow,
             "SELECT id, workflow_id, status, trigger, draft_test, snapshot, supplied_values,
                     schedule_occurrence_key, queued_at, started_at, ended_at, elapsed_ms,
-                    failure_summary, first_failed_step_run_id, created_at
+                    active_ms, resumed_at, failure_summary, first_failed_step_run_id, created_at
              FROM workflow_runs
              WHERE workflow_id = $1 AND ($2::timestamptz IS NULL OR created_at < $2)
              ORDER BY created_at DESC, id DESC
@@ -414,13 +418,16 @@ impl RunTx for PgTx {
     async fn save_run(&mut self, run: &Run) -> DomainResult<()> {
         sqlx::query!(
             "UPDATE workflow_runs SET status = $2, started_at = $3, ended_at = $4, elapsed_ms = $5,
-                    failure_summary = $6, first_failed_step_run_id = $7, updated_at = now()
+                    active_ms = $6, resumed_at = $7, failure_summary = $8,
+                    first_failed_step_run_id = $9, updated_at = now()
              WHERE id = $1",
             run.id.as_uuid(),
             run.status.as_str(),
             run.started_at,
             run.ended_at,
             run.elapsed_ms,
+            run.active_ms,
+            run.resumed_at,
             run.failure_summary,
             run.first_failed_step_run_id.map(|i| i.as_uuid()),
         )
@@ -536,18 +543,20 @@ impl RunTx for PgTx {
         &mut self,
         ids: &[StepRunId],
         from: &[StepRunStatus],
+        now: Timestamp,
     ) -> DomainResult<Vec<StepRunId>> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
         Ok(sqlx::query_scalar!(
-            "UPDATE step_runs SET status = 'queued', started_at = NULL, ended_at = NULL, elapsed_ms = NULL,
+            "UPDATE step_runs SET status = 'queued', queued_at = $3, started_at = NULL, ended_at = NULL, elapsed_ms = NULL,
                     output_text = NULL, output = NULL, messages = NULL, session_content = NULL,
                     human_error = NULL, technical_error = NULL, skipped_reason = NULL, updated_at = now()
              WHERE id = ANY($1) AND status = ANY($2)
              RETURNING id",
             &uuids(ids),
             &statuses(from),
+            now,
         )
         .fetch_all(&mut *self.tx)
         .await

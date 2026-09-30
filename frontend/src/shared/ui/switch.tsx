@@ -26,11 +26,12 @@ export function Switch({
       disabled={disabled}
       aria-label={ariaLabel}
       className={cn(
-        "relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full border border-transparent",
+        // 24px-tall target (WCAG 2.2 target size, audit ticket 8).
+        "relative inline-flex h-[24px] w-10 shrink-0 items-center rounded-full border border-transparent",
         "bg-surface-3 transition-colors data-[state=checked]:bg-accent disabled:opacity-50",
       )}
     >
-      <SwitchPrimitive.Thumb className="block size-3.5 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[1.125rem]" />
+      <SwitchPrimitive.Thumb className="block size-5 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[1.125rem]" />
     </SwitchPrimitive.Root>
   );
   if (!label) return input;

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE workflow_runs SET status = $2, started_at = $3, ended_at = $4, elapsed_ms = $5,\n                    active_ms = $6, resumed_at = $7, failure_summary = $8,\n                    first_failed_step_run_id = $9, updated_at = now()\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0cd11729d288da50a533e18b05a981f219216d749b019e925cf90fb013a7063c"
+}

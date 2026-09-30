@@ -30,7 +30,7 @@ import {
   Skeleton,
   toast,
 } from "@/shared/ui";
-import { useRun } from "./hooks";
+import { useRun, useRunDuration } from "./hooks";
 import { isLiveRun, snapshotOutdated } from "./lib/run-view";
 import { StepRunPanel } from "./StepRunPanel";
 import { RunTimeline } from "./Timeline";
@@ -168,6 +168,7 @@ export function RunLens({ workflowId, runId, stepRunId, view, onNavigate }: RunL
 
 function RunHeader({ workflowId, run }: { workflowId: string; run: Run }) {
   const navigate = useNavigate();
+  const duration = useRunDuration(run);
   const { data } = useWorkflow(workflowId);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const stop = useStopRun((e) => toast({ title: appErrorToast(e), tone: "danger" }));
@@ -196,14 +197,7 @@ function RunHeader({ workflowId, run }: { workflowId: string; run: Run }) {
       {started && <span>Started {formatExact(started)}</span>}
       {ended && <span>Ended {formatExact(ended)}</span>}
       <span>
-        Duration{" "}
-        <Duration
-          ms={run.elapsedMs === undefined ? undefined : Number(run.elapsedMs)}
-          from={run.elapsedMs === undefined ? started : undefined}
-          to={ended}
-          live={live}
-          className="text-ink"
-        />
+        Duration <Duration ms={duration} className="text-ink" data-testid="run-duration" />
       </span>
       {captured && (
         <span data-testid="snapshot-note">
@@ -225,7 +219,7 @@ function RunHeader({ workflowId, run }: { workflowId: string; run: Run }) {
         )}
         <Button
           size="sm"
-          variant="ghost"
+          variant="danger"
           onClick={() => setConfirmDelete(true)}
           data-testid="delete-run"
         >

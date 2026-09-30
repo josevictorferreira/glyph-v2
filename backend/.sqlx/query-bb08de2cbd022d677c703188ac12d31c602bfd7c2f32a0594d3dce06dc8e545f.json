@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, workflow_id, status, trigger, draft_test, snapshot, supplied_values,\n                    schedule_occurrence_key, queued_at, started_at, ended_at, elapsed_ms,\n                    failure_summary, first_failed_step_run_id, created_at\n             FROM workflow_runs WHERE id = $1 FOR UPDATE",
+  "query": "SELECT id, workflow_id, status, trigger, draft_test, snapshot, supplied_values,\n                    schedule_occurrence_key, queued_at, started_at, ended_at, elapsed_ms,\n                    active_ms, resumed_at, failure_summary, first_failed_step_run_id, created_at\n             FROM workflow_runs WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -137,6 +137,28 @@
       },
       {
         "ordinal": 12,
+        "name": "active_ms",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "workflow_runs",
+            "name": "active_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "resumed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "workflow_runs",
+            "name": "resumed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
         "name": "failure_summary",
         "type_info": "Text",
         "origin": {
@@ -147,7 +169,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "first_failed_step_run_id",
         "type_info": "Uuid",
         "origin": {
@@ -158,7 +180,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 16,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -187,10 +209,12 @@
       true,
       true,
       true,
+      false,
+      true,
       true,
       true,
       false
     ]
   },
-  "hash": "0147de647e949167280be07760101988121858b6746769d13d8aff23e97ba048"
+  "hash": "bb08de2cbd022d677c703188ac12d31c602bfd7c2f32a0594d3dce06dc8e545f"
 }

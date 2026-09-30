@@ -65,16 +65,18 @@
   --c-accent-hover: #4c4cc4;
   --c-accent-soft: #ececfb;
   --c-on-accent: #ffffff;
-  --c-queued: #6f6f7c;
+  /* Status colors: dark enough for AA (4.5:1) as small badge/chip text on
+     their 10% tints over white (WCAG audit — ticket 7). */
+  --c-queued: #63636f;
   --c-running: #5b5bd6;
-  --c-succeeded: #146c35;
-  --c-failed: #cf2424;
-  --c-skipped: #9c9ca8;
-  --c-cancelled: #8b8b98;
-  --c-draft: #6f6f7c;
-  --c-active: #146c35;
-  --c-paused: #b05109;
-  --c-attention: #ea580c;
+  --c-succeeded: #0f5a2b;
+  --c-failed: #b81e1e;
+  --c-skipped: #63636f;
+  --c-cancelled: #63636f;
+  --c-draft: #63636f;
+  --c-active: #0f5a2b;
+  --c-paused: #9a4608;
+  --c-attention: #a63d08;
 }
 
 [data-theme="dark"] {
@@ -90,15 +92,17 @@
   --c-ink-subtle: #8d8e98;
   --c-accent: #7b7bee;
   --c-accent-hover: #8f8ff2;
-  --c-accent-soft: #242449;
+  /* Soft accent background darkened so accent text on it reaches AA
+     (canvas "Pi" chips measured 4.15:1 before — WCAG audit ticket 7). */
+  --c-accent-soft: #1d1d36;
   --c-on-accent: #101014;
-  --c-queued: #8b8c9a;
+  --c-queued: #9d9eab;
   --c-running: #8f8ff2;
   --c-succeeded: #4ade80;
   --c-failed: #f87171;
-  --c-skipped: #6f7080;
-  --c-cancelled: #6f7080;
-  --c-draft: #8b8c9a;
+  --c-skipped: #9d9eab;
+  --c-cancelled: #9d9eab;
+  --c-draft: #9d9eab;
   --c-active: #4ade80;
   --c-paused: #fbbf24;
   --c-attention: #fb923c;

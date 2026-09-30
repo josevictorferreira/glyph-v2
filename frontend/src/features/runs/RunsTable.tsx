@@ -27,6 +27,7 @@ import {
 } from "@/shared/ui";
 import { isLiveRun } from "./lib/run-view";
 import { useRunSheet } from "./RunSheet";
+import { useRunDuration } from "./hooks";
 import { useDeleteRun, useStopRun } from "./use-run-actions";
 
 const PAGE = 20;
@@ -110,6 +111,7 @@ export function RunsTable({ workflowId }: { workflowId: string }) {
 }
 
 function RunRow({ workflowId, run }: { workflowId: string; run: Run }) {
+  const duration = useRunDuration(run);
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const stop = useStopRun((e) => toast({ title: appErrorToast(e), tone: "danger" }));
@@ -137,12 +139,7 @@ function RunRow({ workflowId, run }: { workflowId: string; run: Run }) {
       <td className="py-2 text-ink-muted">{started && <RelativeTime date={started} />}</td>
       <td className="py-2 text-ink-muted">{describeRunTrigger(run.trigger).label}</td>
       <td className="py-2 text-ink-muted">
-        <Duration
-          ms={run.elapsedMs === undefined ? undefined : Number(run.elapsedMs)}
-          from={run.elapsedMs === undefined ? tsToDate(run.startedAt) : undefined}
-          to={tsToDate(run.endedAt)}
-          live={live}
-        />
+        <Duration ms={duration} />
       </td>
       <td className="max-w-64 truncate py-2 text-xs text-status-failed" title={run.failureSummary}>
         {run.failureSummary}
@@ -171,7 +168,7 @@ function RunRow({ workflowId, run }: { workflowId: string; run: Run }) {
               Stop
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(true)}>
+          <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>
             Delete
           </Button>
         </div>

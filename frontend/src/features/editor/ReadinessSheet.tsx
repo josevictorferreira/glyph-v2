@@ -38,15 +38,20 @@ export function ReadinessSheet({ workflowId }: { workflowId: string }) {
   // needs_attention after its issues are fixed.
   const canActivate =
     issues.length === 0 && workflow !== undefined && status !== WorkflowStatus.ACTIVE;
+  // A needs_attention workflow with no remaining issues is recoverable now:
+  // say so instead of the generic "everything is ready" (audit ticket 3).
+  const reactivate = issues.length === 0 && status === WorkflowStatus.NEEDS_ATTENTION;
 
   return (
     <Sheet open={readinessOpen} onOpenChange={setReadinessOpen}>
       <SheetContent
         title="Readiness"
         description={
-          issues.length === 0
-            ? "Everything this workflow needs is in place."
-            : `${issues.length} ${issues.length === 1 ? "issue" : "issues"} before this workflow can run.`
+          reactivate
+            ? "The issues are resolved. Reactivate the workflow to clear its status."
+            : issues.length === 0
+              ? "Everything this workflow needs is in place."
+              : `${issues.length} ${issues.length === 1 ? "issue" : "issues"} before this workflow can run.`
         }
         data-testid="readiness-sheet"
       >
@@ -54,7 +59,11 @@ export function ReadinessSheet({ workflowId }: { workflowId: string }) {
           <div className="flex flex-col items-center gap-3 py-10 text-center">
             <CheckCircle className="text-status-succeeded" />
             <p className="text-sm font-medium text-ink">
-              {draft ? "Ready to activate" : "No issues. Everything is ready."}
+              {reactivate
+                ? "Ready to reactivate"
+                : draft
+                  ? "Ready to activate"
+                  : "No issues. Everything is ready."}
             </p>
             {canActivate && (
               <Button
@@ -64,7 +73,7 @@ export function ReadinessSheet({ workflowId }: { workflowId: string }) {
                 loading={activate.isPending}
                 onClick={() => activate.mutate({ id: workflowId })}
               >
-                Activate
+                {reactivate ? "Reactivate" : "Activate"}
               </Button>
             )}
           </div>

@@ -15,7 +15,6 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type ReactNode,
 } from "react";
 import {
   Background,
@@ -49,7 +48,16 @@ import { CanvasEmptyState } from "./CanvasEmptyState";
 import { tidyUp } from "./lib/layout";
 import { toast } from "@/shared/ui/toast";
 import { Button } from "@/shared/ui/button";
-import { cn } from "@/shared/lib/cn";
+import {
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuRoot,
+  ContextMenuTrigger,
+  Dropdown,
+  DropdownContent,
+  DropdownItem,
+  DropdownTrigger,
+} from "@/shared/ui/menu";
 
 const nodeTypes = { step: StepCard };
 
@@ -120,7 +128,6 @@ function LensCanvas({
         deleteKeyCode={null}
         minZoom={0.2}
         maxZoom={2}
-        proOptions={{ hideAttribution: true }}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} gap={20} />
@@ -175,6 +182,9 @@ function BuildCanvas({
   const workflowId = workflow.summary?.id ?? "";
   const { selectedStepId, onSelectStep, onOpenStep } = selection;
   const [menu, setMenu] = useState<{ x: number; y: number; stepId?: string } | null>(null);
+
+  // The "+ Step" menu is the shared Radix Dropdown (keyboard: Enter/Space
+  // opens, ↑/↓ moves, Enter activates — audit ticket 9).
   const [addOpen, setAddOpen] = useState(false);
 
   const { screenToFlowPosition, fitView, setViewport, getViewport, setCenter } = useReactFlow();
@@ -512,11 +522,6 @@ function BuildCanvas({
     [addAt, screenToFlowPosition],
   );
 
-  const menuAction = (fn: () => void) => () => {
-    setMenu(null);
-    fn();
-  };
-
   return (
     <div
       ref={wrapperRef}
@@ -551,7 +556,6 @@ function BuildCanvas({
         connectionLineType={ConnectionLineType.Bezier}
         minZoom={0.2}
         maxZoom={2}
-        proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} />
         <Controls showInteractive={false} />
@@ -567,30 +571,19 @@ function BuildCanvas({
         className="glyph-canvas-toolbar absolute left-2 top-2 z-10 flex items-center gap-1 p-1"
         data-testid="canvas-toolbar"
       >
-        <div className="relative">
-          <Button
-            size="sm"
-            variant="secondary"
-            data-testid="canvas-add-step"
-            onClick={() => setAddOpen((v) => !v)}
-          >
-            + Step
-          </Button>
-          {addOpen && (
-            <div
-              className="absolute left-0 top-9 z-20 w-40 rounded-card border border-border bg-surface p-1 shadow-md"
-              data-testid="canvas-add-menu"
-              role="menu"
-            >
-              <MenuItem onClick={() => (setAddOpen(false), void addAt(StepKindEnum.PI))}>
-                Add Pi step
-              </MenuItem>
-              <MenuItem onClick={() => (setAddOpen(false), void addAt(StepKindEnum.HELPER))}>
-                Add helper step
-              </MenuItem>
-            </div>
-          )}
-        </div>
+        <Dropdown open={addOpen} onOpenChange={setAddOpen}>
+          <DropdownTrigger asChild>
+            <Button size="sm" variant="secondary" data-testid="canvas-add-step">
+              + Step
+            </Button>
+          </DropdownTrigger>
+          <DropdownContent align="start" data-testid="canvas-add-menu">
+            <DropdownItem onSelect={() => void addAt(StepKindEnum.PI)}>Add Pi step</DropdownItem>
+            <DropdownItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
+              Add helper step
+            </DropdownItem>
+          </DropdownContent>
+        </Dropdown>
         <Button
           size="sm"
           variant="secondary"
@@ -601,99 +594,58 @@ function BuildCanvas({
         </Button>
       </div>
 
-      {/* Context menu */}
+      {/* Context menu (Radix ContextMenu anchored at the pointer position) */}
       {menu && (
-        <div
-          data-testid="canvas-context-menu"
-          className="fixed z-30 w-44 rounded-card border border-border bg-surface p-1 shadow-md"
-          style={{ left: menu.x, top: menu.y }}
-          role="menu"
-        >
-          {menu.stepId ? (
-            <>
-              <MenuItem onClick={menuAction(() => onOpenStep?.(menu.stepId!))}>Open step</MenuItem>
-              <MenuItem
-                onClick={menuAction(() =>
-                  duplicateStep.mutate({ workflowId, stepId: menu.stepId! }),
-                )}
-              >
-                Duplicate step
-              </MenuItem>
-              <MenuItem
-                danger
-                onClick={menuAction(() => {
-                  const stepId = menu.stepId!;
-                  const conns = workflow.connections.filter(
-                    (c) => c.sourceStepId === stepId || c.destinationStepId === stepId,
-                  ).length;
-                  const message =
-                    conns > 0
-                      ? `Delete “${stepDisplayName(workflow, stepId)}”? This removes ${conns} connection${conns === 1 ? "" : "s"}.`
-                      : `Delete “${stepDisplayName(workflow, stepId)}”?`;
-                  if (window.confirm(message)) {
-                    deleteStep.mutate({ workflowId, stepId });
-                    onSelectStep?.(null);
-                  }
-                })}
-              >
-                Delete step
-              </MenuItem>
-            </>
-          ) : (
-            <>
-              <MenuItem
-                onClick={() => {
-                  setMenu(null);
-                  void addAt(StepKindEnum.PI);
-                }}
-              >
-                Add Pi step
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  setMenu(null);
-                  void addAt(StepKindEnum.HELPER);
-                }}
-              >
-                Add helper step
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  setMenu(null);
-                  void onTidy();
-                }}
-              >
-                Tidy up
-              </MenuItem>
-            </>
-          )}
-        </div>
+        <ContextMenuRoot open onOpenChange={(open) => (!open ? setMenu(null) : undefined)}>
+          <ContextMenuTrigger asChild>
+            <div className="fixed z-30 size-0" style={{ left: menu.x, top: menu.y }} aria-hidden />
+          </ContextMenuTrigger>
+          <ContextMenuContent data-testid="canvas-context-menu" className="w-44">
+            {menu.stepId ? (
+              <>
+                <ContextMenuItem onSelect={() => onOpenStep?.(menu.stepId!)}>
+                  Open step
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onSelect={() => duplicateStep.mutate({ workflowId, stepId: menu.stepId! })}
+                >
+                  Duplicate step
+                </ContextMenuItem>
+                <ContextMenuItem
+                  className="text-status-failed"
+                  onSelect={() => {
+                    const stepId = menu.stepId!;
+                    const conns = workflow.connections.filter(
+                      (c) => c.sourceStepId === stepId || c.destinationStepId === stepId,
+                    ).length;
+                    const message =
+                      conns > 0
+                        ? `Delete “${stepDisplayName(workflow, stepId)}”? This removes ${conns} connection${conns === 1 ? "" : "s"}.`
+                        : `Delete “${stepDisplayName(workflow, stepId)}”?`;
+                    if (window.confirm(message)) {
+                      deleteStep.mutate({ workflowId, stepId });
+                      onSelectStep?.(null);
+                    }
+                  }}
+                >
+                  Delete step
+                </ContextMenuItem>
+              </>
+            ) : (
+              <>
+                <ContextMenuItem onSelect={() => void addAt(StepKindEnum.PI)}>
+                  Add Pi step
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
+                  Add helper step
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => void onTidy()}>Tidy up</ContextMenuItem>
+              </>
+            )}
+          </ContextMenuContent>
+        </ContextMenuRoot>
       )}
     </div>
-  );
-}
-
-function MenuItem({
-  children,
-  onClick,
-  danger,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className={cn(
-        "glyph-canvas-menu-item rounded px-2 py-1.5 text-xs hover:bg-surface-2",
-        danger ? "text-status-failed" : "text-ink",
-      )}
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }
 

@@ -104,6 +104,22 @@ describe("elapsed and snapshot", () => {
       900,
     );
   });
+  it("counts only active windows across a retry (audit ticket 4)", () => {
+    // Worked 1s (started→ended), retried at 6s, still running at 8s:
+    // 1s frozen + 2s live = 3s — the 5s dead window never counts.
+    expect(
+      elapsedMs(
+        {
+          startedAt: ts(1_000),
+          endedAt: undefined,
+          elapsedMs: undefined,
+          activeMs: 1_000n,
+          resumedAt: ts(6_000),
+        },
+        8_000,
+      ),
+    ).toBe(3_000);
+  });
 
   it("notices a workflow edited after the snapshot", () => {
     const run = create(RunSchema, { snapshot: { capturedAt: ts(1_000) } });

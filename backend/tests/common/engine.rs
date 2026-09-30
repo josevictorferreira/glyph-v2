@@ -48,6 +48,13 @@ impl ScriptedRunner {
             .collect();
         Arc::new(runner)
     }
+    /// Replaces the script for one step (retries run a different outcome).
+    pub fn set_script(&self, step: &str, script: Script) {
+        self.scripts
+            .lock()
+            .unwrap()
+            .insert(step.to_string(), script);
+    }
 
     pub fn calls_for(&self, step: &str) -> Vec<serde_json::Map<String, Value>> {
         self.calls
