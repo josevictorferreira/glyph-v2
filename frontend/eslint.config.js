@@ -6,6 +6,7 @@
 //   - only shared/api (and app/providers) construct the transport
 //   - components never call fetch directly (plain hrefs for downloads)
 import js from "@eslint/js";
+import globals from "globals";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import boundaries from "eslint-plugin-boundaries";
@@ -145,6 +146,21 @@ export default tseslint.config(
     // Node scripts run by Playwright (mock servers).
     files: ["e2e/**/*.mjs"],
     languageOptions: { globals: { process: "readonly" } },
+  },
+  {
+    // Node script run after `vite build` (bundle budget, spec 0022).
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Pre-paint theme bootstrap (CSP: script-src 'self', no inline script).
+    // Classic browser script — no modules, no TS.
+    files: ["public/theme-init.js"],
+    languageOptions: { globals: { ...globals.browser } },
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-empty": ["error", { allowEmptyCatch: true }],
+    },
   },
   prettier,
 );

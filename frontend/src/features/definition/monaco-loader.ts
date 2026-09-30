@@ -20,6 +20,18 @@ export function loadMonaco(): Promise<typeof Monaco> {
         return label === "yaml" ? new YamlWorker() : new EditorWorker();
       },
     };
+    // Base "vs" with accessible line numbers: the default dimmed gutter grays
+    // fail WCAG contrast (axe flags dimmed-line-number, spec 0022).
+    monaco.editor.defineTheme("glyph", {
+      base: "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editorLineNumber.foreground": "#676770",
+        "editorLineNumber.dimmedForeground": "#676770",
+        "editorLineNumber.activeForeground": "#1c1c21",
+      },
+    });
     // The JSON schema is a static asset served by the backend (proxied in
     // dev), not an RPC — a plain same-origin fetch is the right tool here.
     // eslint-disable-next-line no-restricted-globals

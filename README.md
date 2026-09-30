@@ -5,7 +5,7 @@ Visual designer, scheduler and runner for DAG-shaped AI workflows. Each step run
 ```sh
 nix run .#web     # Postgres + backend on :3000, web UI on :5173 (add GLYPH_STEP_RUNNER=fake to run without provider keys)
 nix run .#test    # test suite
-nix run .#check   # buf lint/breaking, fmt, clippy, cargo deny, tests, frontend lint/typecheck/tests
+nix run .#check   # buf lint/breaking, fmt, clippy, cargo deny, tests, frontend lint/typecheck/tests, production build + bundle budget, e2e (incl. axe)
 nix run .#seed    # import the sample "Design POC Tournament" workflow
 ```
 
@@ -15,3 +15,8 @@ Provider keys go in `.env` (gitignored): `VELOX_API_KEY=…`, `OMNIROUTE_API_KEY
 - `backend/` — the server (`backend/README.md` for routes and environment)
 - `frontend/` — the web client (`frontend/README.md`) — React + Vite on :5173, gRPC-Web through the dev proxy
 - `AGENTS.md` — architecture rules and contributor conventions
+
+`nix run .#check` also runs the Playwright e2e suite (fake runner + mock Velox,
+its own stack; see `frontend/README.md`). On NixOS the Playwright-downloaded
+browser cannot run — the check exports `PLAYWRIGHT_CHROMIUM_PATH` pointing at
+nixpkgs chromium automatically.

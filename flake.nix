@@ -334,6 +334,18 @@
             pnpm lint
             pnpm typecheck
             pnpm test
+            # Production build + bundle budget (0022): postbuild runs
+            # scripts/bundle-size.mjs (entry chunk ≤ 850 KB gzip, chunks stay
+            # under dist/assets|workers/).
+            pnpm build
+            # e2e (0022): the suite boots the full stack itself (fake runner +
+            # mock Velox). On NixOS the Playwright-downloaded browser cannot
+            # run (missing system libs); point it at nixpkgs chromium unless
+            # already overridden.
+            export PLAYWRIGHT_CHROMIUM_PATH="''${PLAYWRIGHT_CHROMIUM_PATH:-${pkgs.chromium}/bin/chromium}"
+            # The e2e stack (nested nix run .#web) must use the development
+            # database, not the glyph_test one this check exports for cargo.
+            env -u DATABASE_URL pnpm e2e
           fi
         '';
 

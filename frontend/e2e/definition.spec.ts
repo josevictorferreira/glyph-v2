@@ -81,7 +81,7 @@ test("dry run marks unknown keys on the right line; applying a valid edit reache
   await expect(page.getByText("Applied", { exact: true })).toBeVisible();
   await expect(page.getByTestId("definition-dirty")).toHaveText("Clean");
 
-  await page.getByRole("link", { name: "Build" }).click();
+  await page.getByRole("link", { name: "Build", exact: true }).click();
   await page.locator('[data-testid^="step-card-"]').first().click();
   await expect(page.getByRole("combobox", { name: "Prompt" })).toHaveValue("Prompt from YAML.");
 });
@@ -179,7 +179,7 @@ test("a stale apply opens the conflict; Keep editing then Overwrite wins", async
   await expect(page.getByTestId("definition-conflict")).toHaveCount(0);
 
   // My text won: the name from my (older) document is back.
-  await page.getByRole("link", { name: "Build" }).click();
+  await page.getByRole("link", { name: "Build", exact: true }).click();
   await expect(page.getByTestId("workflow-name")).toHaveValue(
     /E2E definition overwrite \d+/,
   );

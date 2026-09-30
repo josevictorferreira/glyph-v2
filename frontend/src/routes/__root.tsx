@@ -1,11 +1,13 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { AppShell, DefaultHeader } from "@/app/shell";
+import { RouteError } from "@/app/route-error";
 import { CommandPaletteProvider, useAppCommands } from "@/app/commands";
 import { CreateWorkflowDialogProvider, LibrarySidebar } from "@/features/library";
 
 export const Route = createRootRoute({
   component: RootComponent,
   notFoundComponent: NotFound,
+  errorComponent: RouteError,
 });
 
 function RootComponent() {

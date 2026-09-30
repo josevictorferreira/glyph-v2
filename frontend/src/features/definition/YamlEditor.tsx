@@ -63,6 +63,7 @@ export function YamlEditor(props: YamlEditorProps) {
         const editor = monaco.editor.create(hostRef.current, {
           model,
           readOnly,
+          theme: "glyph",
           // Stable accessible name: e2e focuses this textbox to edit.
           ariaLabel: "YAML definition",
           // Documents arrive whole (paste, apply normalization); Monaco's

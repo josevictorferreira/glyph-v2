@@ -405,6 +405,7 @@ export function SettingsTab({ workflowId, step, focus }: StepTabProps) {
         </div>
         <Switch
           id={`allow-failure-${step.id}`}
+          aria-label="Allow failure"
           checked={field.value.allowFailure}
           onCheckedChange={(allowFailure) => field.setValue({ ...field.value, allowFailure })}
         />

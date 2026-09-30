@@ -7,12 +7,15 @@ export function Switch({
   onCheckedChange,
   disabled,
   label,
+  "aria-label": ariaLabel,
   id,
 }: {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
   label?: string;
+  /** Accessible name when there is no visible label (axe button-name). */
+  "aria-label"?: string;
   id?: string;
 }) {
   const input = (
@@ -21,6 +24,7 @@ export function Switch({
       checked={checked}
       onCheckedChange={onCheckedChange}
       disabled={disabled}
+      aria-label={ariaLabel}
       className={cn(
         "relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full border border-transparent",
         "bg-surface-3 transition-colors data-[state=checked]:bg-accent disabled:opacity-50",
