@@ -8,228 +8,228 @@ inputs:
   feature_brief:
     description: The product feature specification (e.g. FEATURES.md) that participants design from and judges evaluate against.
 steps:
-- name: Shared Context
-  kind: helper
-  description: Gathers the feature brief into one structured output shared by every participant and judge.
-  output: context
-  inputs:
-    feature_brief: feature_brief
-- name: Generate — GLM 5.3
-  description: Produce a self-contained HTML POC from the feature brief.
-  model: velox/glm-5-3
-  prompt: |
-    You are a distinguished product designer specializing in polished, intuitive
-    web experiences, recognized for your work at Apple. Prioritize clear user
-    flows, visual hierarchy, accessibility, and realistic interface states.
-    Make the design "sexy".
+  - name: Shared Context
+    kind: helper
+    description: Gathers the feature brief into one structured output shared by every participant and judge.
+    output: context
+    inputs:
+      feature_brief: feature_brief
+  - name: Generate — GLM 5.3
+    description: Produce a self-contained HTML POC from the feature brief.
+    model: velox/glm-5-3
+    prompt: |
+      You are a distinguished product designer specializing in polished, intuitive
+      web experiences, recognized for your work at Apple. Prioritize clear user
+      flows, visual hierarchy, accessibility, and realistic interface states.
+      Make the design "sexy".
 
-    Using the feature brief provided as input, design a polished UI/UX proof of
-    concept for the described web application. Consider the complete user
-    workflow and use mocked data only; do not implement data integrations or
-    authentication.
+      Using the feature brief provided as input, design a polished UI/UX proof of
+      concept for the described web application. Consider the complete user
+      workflow and use mocked data only; do not implement data integrations or
+      authentication.
 
-    The context input is structured JSON; its "feature_brief" key contains the
-    feature brief to design from.
+      The context input is structured JSON; its "feature_brief" key contains the
+      feature brief to design from.
 
-    Produce exactly one self-contained HTML document. You may use inline CSS
-    and JavaScript. Your entire output must be the complete HTML document — no
-    preamble, no explanations, no markdown fences.
-  expect: A complete, self-contained HTML document with inline CSS and JavaScript.
-  output: poc_glm
-  format: html
-  allow_failure: true
-  inputs:
-    context: Shared Context
-- name: Generate — DeepSeek V4
-  description: Produce a self-contained HTML POC from the feature brief.
-  model: velox/deepseek-v4-flash
-  prompt: |
-    You are a distinguished product designer specializing in polished, intuitive
-    web experiences, recognized for your work at Apple. Prioritize clear user
-    flows, visual hierarchy, accessibility, and realistic interface states.
-    Make the design "sexy".
+      Produce exactly one self-contained HTML document. You may use inline CSS
+      and JavaScript. Your entire output must be the complete HTML document — no
+      preamble, no explanations, no markdown fences.
+    expect: A complete, self-contained HTML document with inline CSS and JavaScript.
+    output: poc_glm
+    format: html
+    allow_failure: true
+    inputs:
+      context: Shared Context
+  - name: Generate — DeepSeek V4
+    description: Produce a self-contained HTML POC from the feature brief.
+    model: velox/deepseek-v4-flash
+    prompt: |
+      You are a distinguished product designer specializing in polished, intuitive
+      web experiences, recognized for your work at Apple. Prioritize clear user
+      flows, visual hierarchy, accessibility, and realistic interface states.
+      Make the design "sexy".
 
-    Using the feature brief provided as input, design a polished UI/UX proof of
-    concept for the described web application. Consider the complete user
-    workflow and use mocked data only; do not implement data integrations or
-    authentication.
+      Using the feature brief provided as input, design a polished UI/UX proof of
+      concept for the described web application. Consider the complete user
+      workflow and use mocked data only; do not implement data integrations or
+      authentication.
 
-    The context input is structured JSON; its "feature_brief" key contains the
-    feature brief to design from.
+      The context input is structured JSON; its "feature_brief" key contains the
+      feature brief to design from.
 
-    Produce exactly one self-contained HTML document. You may use inline CSS
-    and JavaScript. Your entire output must be the complete HTML document — no
-    preamble, no explanations, no markdown fences.
-  expect: A complete, self-contained HTML document with inline CSS and JavaScript.
-  output: poc_deepseek
-  format: html
-  allow_failure: true
-  inputs:
-    context: Shared Context
-- name: Generate — Gandalf
-  description: Produce a self-contained HTML POC from the feature brief.
-  model: velox/gandalf
-  prompt: |
-    You are a distinguished product designer specializing in polished, intuitive
-    web experiences, recognized for your work at Apple. Prioritize clear user
-    flows, visual hierarchy, accessibility, and realistic interface states.
-    Make the design "sexy".
+      Produce exactly one self-contained HTML document. You may use inline CSS
+      and JavaScript. Your entire output must be the complete HTML document — no
+      preamble, no explanations, no markdown fences.
+    expect: A complete, self-contained HTML document with inline CSS and JavaScript.
+    output: poc_deepseek
+    format: html
+    allow_failure: true
+    inputs:
+      context: Shared Context
+  - name: Generate — Saruman
+    description: Produce a self-contained HTML POC from the feature brief.
+    model: velox/saruman
+    prompt: |
+      You are a distinguished product designer specializing in polished, intuitive
+      web experiences, recognized for your work at Apple. Prioritize clear user
+      flows, visual hierarchy, accessibility, and realistic interface states.
+      Make the design "sexy".
 
-    Using the feature brief provided as input, design a polished UI/UX proof of
-    concept for the described web application. Consider the complete user
-    workflow and use mocked data only; do not implement data integrations or
-    authentication.
+      Using the feature brief provided as input, design a polished UI/UX proof of
+      concept for the described web application. Consider the complete user
+      workflow and use mocked data only; do not implement data integrations or
+      authentication.
 
-    The context input is structured JSON; its "feature_brief" key contains the
-    feature brief to design from.
+      The context input is structured JSON; its "feature_brief" key contains the
+      feature brief to design from.
 
-    Produce exactly one self-contained HTML document. You may use inline CSS
-    and JavaScript. Your entire output must be the complete HTML document — no
-    preamble, no explanations, no markdown fences.
-  expect: A complete, self-contained HTML document with inline CSS and JavaScript.
-  output: poc_gandalf
-  format: html
-  allow_failure: true
-  inputs:
-    context: Shared Context
-- name: Generate — Radagast
-  description: Produce a self-contained HTML POC from the feature brief.
-  model: velox/radagast
-  prompt: |
-    You are a distinguished product designer specializing in polished, intuitive
-    web experiences, recognized for your work at Apple. Prioritize clear user
-    flows, visual hierarchy, accessibility, and realistic interface states.
-    Make the design "sexy".
+      Produce exactly one self-contained HTML document. You may use inline CSS
+      and JavaScript. Your entire output must be the complete HTML document — no
+      preamble, no explanations, no markdown fences.
+    expect: A complete, self-contained HTML document with inline CSS and JavaScript.
+    output: poc_saruman
+    format: html
+    allow_failure: true
+    inputs:
+      context: Shared Context
+  - name: Generate — Radagast
+    description: Produce a self-contained HTML POC from the feature brief.
+    model: velox/radagast
+    prompt: |
+      You are a distinguished product designer specializing in polished, intuitive
+      web experiences, recognized for your work at Apple. Prioritize clear user
+      flows, visual hierarchy, accessibility, and realistic interface states.
+      Make the design "sexy".
 
-    Using the feature brief provided as input, design a polished UI/UX proof of
-    concept for the described web application. Consider the complete user
-    workflow and use mocked data only; do not implement data integrations or
-    authentication.
+      Using the feature brief provided as input, design a polished UI/UX proof of
+      concept for the described web application. Consider the complete user
+      workflow and use mocked data only; do not implement data integrations or
+      authentication.
 
-    The context input is structured JSON; its "feature_brief" key contains the
-    feature brief to design from.
+      The context input is structured JSON; its "feature_brief" key contains the
+      feature brief to design from.
 
-    Produce exactly one self-contained HTML document. You may use inline CSS
-    and JavaScript. Your entire output must be the complete HTML document — no
-    preamble, no explanations, no markdown fences.
-  expect: A complete, self-contained HTML document with inline CSS and JavaScript.
-  output: poc_radagast
-  format: html
-  allow_failure: true
-  inputs:
-    context: Shared Context
-- name: Judge — Gandalf
-  description: Blind-review all POC entries and score them against the rubric.
-  model: velox/gandalf
-  prompt: |
-    You are conducting a blind UI/UX review. Evaluate each anonymous HTML entry
-    provided as input against the feature brief and the scorecard rubric in the
-    additional context.
+      Produce exactly one self-contained HTML document. You may use inline CSS
+      and JavaScript. Your entire output must be the complete HTML document — no
+      preamble, no explanations, no markdown fences.
+    expect: A complete, self-contained HTML document with inline CSS and JavaScript.
+    output: poc_radagast
+    format: html
+    allow_failure: true
+    inputs:
+      context: Shared Context
+  - name: Judge — Sauron
+    description: Blind-review all POC entries and score them against the rubric.
+    model: velox/sauron
+    prompt: |
+      You are conducting a blind UI/UX review. Evaluate each anonymous HTML entry
+      provided as input against the feature brief and the scorecard rubric in the
+      additional context.
 
-    The context input is structured JSON; its "feature_brief" key contains the
-    feature brief to evaluate against.
+      The context input is structured JSON; its "feature_brief" key contains the
+      feature brief to evaluate against.
 
-    Score every entry with an integer from 1 to 10 in each of the 8 categories.
-    Use this exact table format:
+      Score every entry with an integer from 1 to 10 in each of the 8 categories.
+      Use this exact table format:
 
-    | Entry | User Goal Fit | Clarity & Hierarchy | Interaction & Flow | Visual Design | Consistency | Accessibility | Emotional Quality | Edge Cases |
-    | ----- | ------------- | ------------------- | ------------------ | ------------- | ----------- | ------------- | ----------------- | ---------- |
+      | Entry | User Goal Fit | Clarity & Hierarchy | Interaction & Flow | Visual Design | Consistency | Accessibility | Emotional Quality | Edge Cases |
+      | ----- | ------------- | ------------------- | ------------------ | ------------- | ----------- | ------------- | ----------------- | ---------- |
 
-    Do not change entry names, add model identity guesses, or include any
-    commentary outside the table. Score every entry — do not skip any.
-  context: |
-    # UX/UI Evaluation Scorecard
+      Do not change entry names, add model identity guesses, or include any
+      commentary outside the table. Score every entry — do not skip any.
+    context: |
+      # UX/UI Evaluation Scorecard
 
-    Evaluate every anonymous HTML entry provided as input against the feature brief.
+      Evaluate every anonymous HTML entry provided as input against the feature brief.
 
-    Rate each category from 1 to 10:
+      Rate each category from 1 to 10:
 
-    1. **User Goal Fit** — Does the screen help the user do the thing they came to do?
-    2. **Clarity & Information Hierarchy** — Is the purpose and priority clear in 3–5 seconds?
-    3. **Interaction & Flow** — Is the path smooth, with clear states and feedback?
-    4. **Visual Design Quality** — Typography, spacing, contrast, balance, and polish.
-    5. **Consistency & System Thinking** — Are patterns, language, and components consistent?
-    6. **Accessibility & Inclusiveness** — Contrast, font size, targets, keyboard and screen reader friendliness.
-    7. **Emotional Quality & Brand Fit** — Does the design fit the product's intended feeling?
-    8. **Edge Cases & Error Handling** — Empty, loading, error, long-text, and destructive states.
-  expect: A markdown table scoring every entry across 8 categories (integers 1–10).
-  output: scorecard_gandalf
-  inputs:
-    context: Shared Context
-    poc_glm: Generate — GLM 5.3
-    poc_deepseek: Generate — DeepSeek V4
-    poc_gandalf: Generate — Gandalf
-    poc_radagast: Generate — Radagast
-- name: Judge — Radagast
-  description: Blind-review all POC entries and score them against the rubric.
-  model: velox/radagast
-  prompt: |
-    You are conducting a blind UI/UX review. Evaluate each anonymous HTML entry
-    provided as input against the feature brief and the scorecard rubric in the
-    additional context.
+      1. **User Goal Fit** — Does the screen help the user do the thing they came to do?
+      2. **Clarity & Information Hierarchy** — Is the purpose and priority clear in 3–5 seconds?
+      3. **Interaction & Flow** — Is the path smooth, with clear states and feedback?
+      4. **Visual Design Quality** — Typography, spacing, contrast, balance, and polish.
+      5. **Consistency & System Thinking** — Are patterns, language, and components consistent?
+      6. **Accessibility & Inclusiveness** — Contrast, font size, targets, keyboard and screen reader friendliness.
+      7. **Emotional Quality & Brand Fit** — Does the design fit the product's intended feeling?
+      8. **Edge Cases & Error Handling** — Empty, loading, error, long-text, and destructive states.
+    expect: A markdown table scoring every entry across 8 categories (integers 1–10).
+    output: scorecard_sauron
+    inputs:
+      context: Shared Context
+      poc_glm: Generate — GLM 5.3
+      poc_deepseek: Generate — DeepSeek V4
+      poc_saruman: Generate — Saruman
+      poc_radagast: Generate — Radagast
+  - name: Judge — Radagast
+    description: Blind-review all POC entries and score them against the rubric.
+    model: velox/radagast
+    prompt: |
+      You are conducting a blind UI/UX review. Evaluate each anonymous HTML entry
+      provided as input against the feature brief and the scorecard rubric in the
+      additional context.
 
-    The context input is structured JSON; its "feature_brief" key contains the
-    feature brief to evaluate against.
+      The context input is structured JSON; its "feature_brief" key contains the
+      feature brief to evaluate against.
 
-    Score every entry with an integer from 1 to 10 in each of the 8 categories.
-    Use this exact table format:
+      Score every entry with an integer from 1 to 10 in each of the 8 categories.
+      Use this exact table format:
 
-    | Entry | User Goal Fit | Clarity & Hierarchy | Interaction & Flow | Visual Design | Consistency | Accessibility | Emotional Quality | Edge Cases |
-    | ----- | ------------- | ------------------- | ------------------ | ------------- | ----------- | ------------- | ----------------- | ---------- |
+      | Entry | User Goal Fit | Clarity & Hierarchy | Interaction & Flow | Visual Design | Consistency | Accessibility | Emotional Quality | Edge Cases |
+      | ----- | ------------- | ------------------- | ------------------ | ------------- | ----------- | ------------- | ----------------- | ---------- |
 
-    Do not change entry names, add model identity guesses, or include any
-    commentary outside the table. Score every entry — do not skip any.
-  context: |
-    # UX/UI Evaluation Scorecard
+      Do not change entry names, add model identity guesses, or include any
+      commentary outside the table. Score every entry — do not skip any.
+    context: |
+      # UX/UI Evaluation Scorecard
 
-    Evaluate every anonymous HTML entry provided as input against the feature brief.
+      Evaluate every anonymous HTML entry provided as input against the feature brief.
 
-    Rate each category from 1 to 10:
+      Rate each category from 1 to 10:
 
-    1. **User Goal Fit** — Does the screen help the user do the thing they came to do?
-    2. **Clarity & Information Hierarchy** — Is the purpose and priority clear in 3–5 seconds?
-    3. **Interaction & Flow** — Is the path smooth, with clear states and feedback?
-    4. **Visual Design Quality** — Typography, spacing, contrast, balance, and polish.
-    5. **Consistency & System Thinking** — Are patterns, language, and components consistent?
-    6. **Accessibility & Inclusiveness** — Contrast, font size, targets, keyboard and screen reader friendliness.
-    7. **Emotional Quality & Brand Fit** — Does the design fit the product's intended feeling?
-    8. **Edge Cases & Error Handling** — Empty, loading, error, long-text, and destructive states.
-  expect: A markdown table scoring every entry across 8 categories (integers 1–10).
-  output: scorecard_radagast
-  inputs:
-    context: Shared Context
-    poc_glm: Generate — GLM 5.3
-    poc_deepseek: Generate — DeepSeek V4
-    poc_gandalf: Generate — Gandalf
-    poc_radagast: Generate — Radagast
-- name: Aggregate Rankings
-  description: Compute weighted scores from all judges and produce a ranked table.
-  model: velox/radagast
-  prompt: |
-    You are aggregating blind UI/UX review scores from multiple judges. Each
-    judge scored the same entries across 8 categories using integers from 1 to 10.
+      1. **User Goal Fit** — Does the screen help the user do the thing they came to do?
+      2. **Clarity & Information Hierarchy** — Is the purpose and priority clear in 3–5 seconds?
+      3. **Interaction & Flow** — Is the path smooth, with clear states and feedback?
+      4. **Visual Design Quality** — Typography, spacing, contrast, balance, and polish.
+      5. **Consistency & System Thinking** — Are patterns, language, and components consistent?
+      6. **Accessibility & Inclusiveness** — Contrast, font size, targets, keyboard and screen reader friendliness.
+      7. **Emotional Quality & Brand Fit** — Does the design fit the product's intended feeling?
+      8. **Edge Cases & Error Handling** — Empty, loading, error, long-text, and destructive states.
+    expect: A markdown table scoring every entry across 8 categories (integers 1–10).
+    output: scorecard_radagast
+    inputs:
+      context: Shared Context
+      poc_glm: Generate — GLM 5.3
+      poc_deepseek: Generate — DeepSeek V4
+      poc_saruman: Generate — Saruman
+      poc_radagast: Generate — Radagast
+  - name: Aggregate Rankings
+    description: Compute weighted scores from all judges and produce a ranked table.
+    model: velox/radagast
+    prompt: |
+      You are aggregating blind UI/UX review scores from multiple judges. Each
+      judge scored the same entries across 8 categories using integers from 1 to 10.
 
-    Category weights:
-    1. User Goal Fit — 0.20
-    2. Clarity & Hierarchy — 0.20
-    3. Interaction & Flow — 0.15
-    4. Visual Design — 0.15
-    5. Consistency — 0.10
-    6. Accessibility — 0.10
-    7. Emotional Quality — 0.05
-    8. Edge Cases — 0.00
+      Category weights:
+      1. User Goal Fit — 0.20
+      2. Clarity & Hierarchy — 0.20
+      3. Interaction & Flow — 0.15
+      4. Visual Design — 0.15
+      5. Consistency — 0.10
+      6. Accessibility — 0.10
+      7. Emotional Quality — 0.05
+      8. Edge Cases — 0.00
 
-    For each entry, compute the weighted average across all judges, then produce
-    a final ranking from highest to lowest score.
+      For each entry, compute the weighted average across all judges, then produce
+      a final ranking from highest to lowest score.
 
-    Use this exact format:
+      Use this exact format:
 
-    | Rank | Entry | Weighted Score | User Goal Fit | Clarity | Interaction | Visual Design | Consistency | Accessibility | Emotional | Edge Cases |
-    | ---- | ----- | -------------- | ------------- | ------- | ----------- | -------------- | ----------- | ------------- | --------- | ---------- |
+      | Rank | Entry | Weighted Score | User Goal Fit | Clarity | Interaction | Visual Design | Consistency | Accessibility | Emotional | Edge Cases |
+      | ---- | ----- | -------------- | ------------- | ------- | ----------- | -------------- | ----------- | ------------- | --------- | ---------- |
 
-    Your output must be the ranking table and nothing else.
-  expect: A markdown ranking table with weighted scores, highest to lowest.
-  output: final_rankings
-  inputs:
-    scorecard_gandalf: Judge — Gandalf
-    scorecard_radagast: Judge — Radagast
+      Your output must be the ranking table and nothing else.
+    expect: A markdown ranking table with weighted scores, highest to lowest.
+    output: final_rankings
+    inputs:
+      scorecard_sauron: Judge — Sauron
+      scorecard_radagast: Judge — Radagast

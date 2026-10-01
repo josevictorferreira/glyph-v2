@@ -2,6 +2,10 @@
 # only defined env vars are replaced, so nginx's own $uri/$host survive.
 server {
     listen 8080;
+    # Browsers negotiate HTTP/2 with the Cilium ingress, and its envoy speaks
+    # the downstream protocol upstream — nginx must accept h2 or those
+    # connections fail. Plain HTTP/1.1 clients still work.
+    http2 on;
     server_name _;
 
     root /usr/share/nginx/html;
@@ -33,17 +37,18 @@ server {
         try_files $uri =404;
     }
 
-    # gRPC-Web (Connect) and gRPC health. Mirrors the Vite dev proxy: pass
-    # through with accept-encoding: identity (compressed frames break gRPC-Web
-    # decoders) and no effective read timeout (server streaming would stall).
+    # gRPC (behind an ingress) and gRPC health. The Cilium ingress runs
+    # envoy's grpc_web filter, which translates browser gRPC-Web into native
+    # gRPC before it reaches nginx — so these requests must be forwarded to
+    # the backend over HTTP/2 with grpc_pass, not proxied over HTTP/1.1
+    # (tonic-web rejects native gRPC over h1 with a bare 400).
+    # accept-encoding identity: compressed frames break gRPC-Web decoders.
+    # No effective read timeout: server streaming would stall.
     location ~ ^/(glyph\.v1\.|grpc\.) {
-        proxy_pass ${GLYPH_BACKEND_URL};
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header accept-encoding identity;
-        proxy_buffering off;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
+        grpc_pass ${GLYPH_BACKEND_GRPC_URL};
+        grpc_set_header accept-encoding identity;
+        grpc_read_timeout 86400s;
+        grpc_send_timeout 86400s;
     }
 
     # Step-run artifacts: zip download / preview can be long transfers.
