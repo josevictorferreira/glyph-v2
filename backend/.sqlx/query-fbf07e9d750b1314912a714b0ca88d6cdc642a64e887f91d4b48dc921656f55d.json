@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO step_text_refs AS t\n                 (workflow_step_id, field, workflow_text_id, vars)\n               SELECT u.sid, u.fld, u.tid, u.vars\n               FROM UNNEST($1::uuid[], $2::text[], $3::uuid[], $4::jsonb[]) AS u(sid, fld, tid, vars)\n               ON CONFLICT (workflow_step_id, field) DO UPDATE SET\n                 workflow_text_id = EXCLUDED.workflow_text_id, vars = EXCLUDED.vars, updated_at = now()\n               WHERE (t.workflow_text_id, t.vars)\n                     IS DISTINCT FROM (EXCLUDED.workflow_text_id, EXCLUDED.vars)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "UuidArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fbf07e9d750b1314912a714b0ca88d6cdc642a64e887f91d4b48dc921656f55d"
+}

@@ -10,4 +10,4 @@ export { StepCard } from "./StepCard";
 export { CanvasEmptyState } from "./CanvasEmptyState";
 export { wouldCreateCycle, topologicalOrder } from "./lib/dag";
 export { buildNodes, buildEdges, lensNodes, lensEdges } from "./lib/mapping";
-export type { StepNode, StepNodeData, InputPort } from "./lib/mapping";
+export type { StepNode, StepNodeData, InputPort, TextMarker } from "./lib/mapping";

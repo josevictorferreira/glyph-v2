@@ -26,6 +26,9 @@ export function BuildTab({
   const { focus } = useEditorChrome();
   const [tab, setTab] = useState<StepEditorTab>("instructions");
   const [appliedNonce, setAppliedNonce] = useState(0);
+  // The shared text hovered in the workflow panel (spec 0023): the canvas
+  // gives its steps a highlight ring.
+  const [highlightTextId, setHighlightTextId] = useState<string | null>(null);
   const panelRef = useRef<PanelImperativeHandle>(null);
 
   // Deep links adjust the tab during render (React's adjust-state pattern);
@@ -105,6 +108,7 @@ export function BuildTab({
           onSelectStep={onSelectStep}
           onOpenStep={onSelectStep}
           panToStepId={focus?.stepId}
+          highlightTextId={highlightTextId}
         />
       </Panel>
       <PanelHandle />
@@ -128,7 +132,7 @@ export function BuildTab({
             focus={focus}
           />
         ) : (
-          <WorkflowPanel workflow={workflow} focus={focus} />
+          <WorkflowPanel workflow={workflow} focus={focus} onHighlightText={setHighlightTextId} />
         )}
       </Panel>
     </PanelGroup>

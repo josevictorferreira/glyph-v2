@@ -1,6 +1,8 @@
 //! Ports of spec/domain/workflows/{validator,lifecycle,snapshot_builder}_spec.rb
 //! and the editor mutation scenarios, as pure unit tests.
 
+use std::collections::BTreeMap;
+
 use chrono::Utc;
 use serde_json::json;
 
@@ -870,4 +872,360 @@ fn create_defaults_the_name() {
         .unwrap();
     assert_eq!(wf.name, "Named");
     assert!(wf.description.is_none());
+}
+
+// --- shared texts -----------------------------------------------------------
+
+/// A complete step whose prompt is linked to a new shared text.
+fn linked_step(
+    wf: &mut Workflow,
+    name: &str,
+    body: &str,
+    vars: &[(&str, &str)],
+) -> (StepId, SharedTextId) {
+    let step = complete_step(wf, name);
+    let (text, _) = wf.add_text("designer_brief", None, body).unwrap();
+    let mut map = BTreeMap::new();
+    for (k, v) in vars {
+        map.insert(k.to_string(), v.to_string());
+    }
+    wf.set_step_text_ref(
+        step,
+        TextField::Prompt,
+        Some(TextRef {
+            text_id: text,
+            vars: map,
+        }),
+    )
+    .unwrap();
+    (step, text)
+}
+
+#[test]
+fn effective_fields_render_the_shared_text() {
+    let mut wf = workflow();
+    let (step, text) = linked_step(
+        &mut wf,
+        "Step 1",
+        "Hello {{who}}, keep {{missing}}.",
+        &[("who", "Ada")],
+    );
+    let s = wf.step(step).unwrap();
+    assert_eq!(s.prompt, None, "the own column is NULL while linked");
+    assert_eq!(
+        wf.effective_prompt(s).as_deref(),
+        Some("Hello Ada, keep {{missing}}.")
+    );
+    assert!(wf.effective_context(s).is_none());
+    assert_eq!(wf.effective_expect(s).as_deref(), Some("The result"));
+    assert!(s.configured(&wf), "a linked prompt configures the step");
+    assert_eq!(wf.steps_using_text(text).len(), 1);
+}
+
+#[test]
+fn shared_text_key_validation() {
+    let mut wf = workflow();
+    let (id, _) = wf
+        .add_text("designer brief", Some("A brief".into()), "Body")
+        .unwrap();
+    assert_eq!(
+        wf.add_text("  ", None, "Body").unwrap_err().to_string(),
+        "Unable to save — name the shared text."
+    );
+    assert_eq!(
+        wf.add_text("Designer Brief", None, "Body")
+            .unwrap_err()
+            .to_string(),
+        "Unable to save — Name has already been taken."
+    );
+    assert_eq!(
+        wf.add_text("9bad", None, "Body").unwrap_err().to_string(),
+        "Unable to save — Name must start with a letter and use letters, numbers, spaces or underscores."
+    );
+    wf.update_text(id, "renamed", None, "New body").unwrap();
+    let text = wf.text(id).unwrap();
+    assert_eq!(
+        (text.key.as_str(), text.body.as_str()),
+        ("renamed", "New body")
+    );
+    assert!(matches!(
+        wf.update_text(SharedTextId::new(), "x", None, "y"),
+        Err(DomainError::NotFound(_))
+    ));
+    // Positions grow.
+    let (second, _) = wf.add_text("other", None, "Body").unwrap();
+    assert_eq!(wf.text(second).unwrap().position, 2);
+}
+
+#[test]
+fn remove_text_refused_while_in_use() {
+    let mut wf = workflow();
+    let (step, text) = linked_step(&mut wf, "Step 1", "Body", &[]);
+    let other = complete_step(&mut wf, "Step 2");
+    wf.set_step_text_ref(
+        other,
+        TextField::Context,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::new(),
+        }),
+    )
+    .unwrap();
+    let err = wf.remove_text(text).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "“designer_brief” is used by 2 steps. Detach them first."
+    );
+    assert!(matches!(err, DomainError::Precondition { .. }));
+    wf.set_step_text_ref(step, TextField::Prompt, None).unwrap();
+    wf.set_step_text_ref(other, TextField::Context, None)
+        .unwrap();
+    let events = wf.remove_text(text).unwrap();
+    assert_eq!(events[0].event_type, "WorkflowUpdated");
+    assert!(wf.texts.is_empty());
+}
+
+#[test]
+fn detach_copies_the_rendered_text() {
+    let mut wf = workflow();
+    let (step, _text) = linked_step(
+        &mut wf,
+        "Step 1",
+        "Hello {{who}} and {{topic}}.",
+        &[("who", "Ada")],
+    );
+    wf.set_step_text_ref(step, TextField::Prompt, None).unwrap();
+    let s = wf.step(step).unwrap();
+    assert!(s.prompt_ref.is_none());
+    assert_eq!(
+        s.prompt.as_deref(),
+        Some("Hello Ada and {{topic}}."),
+        "the rendered text is copied, unfilled tokens stay for run time"
+    );
+    // Detaching a field that is not linked leaves it alone.
+    wf.set_step_text_ref(step, TextField::Prompt, None).unwrap();
+    assert_eq!(
+        wf.step(step).unwrap().prompt.as_deref(),
+        Some("Hello Ada and {{topic}}.")
+    );
+    assert!(matches!(
+        wf.set_step_text_ref(StepId::new(), TextField::Prompt, None),
+        Err(DomainError::NotFound(_))
+    ));
+    assert!(matches!(
+        wf.set_step_text_ref(
+            step,
+            TextField::Prompt,
+            Some(TextRef {
+                text_id: SharedTextId::new(),
+                vars: BTreeMap::new()
+            }),
+        ),
+        Err(DomainError::NotFound(_))
+    ));
+}
+
+#[test]
+fn plain_prompt_update_clears_the_ref() {
+    let mut wf = workflow();
+    let (step, text) = linked_step(&mut wf, "Step 1", "Shared body", &[]);
+    // A blank prompt leaves the link in place.
+    wf.update_step_prompt(step, Some("   ".into()), None)
+        .unwrap();
+    assert!(wf.step(step).unwrap().prompt_ref.is_some());
+    // Plain text replaces it.
+    wf.update_step_prompt(step, Some("Own words".into()), None)
+        .unwrap();
+    let s = wf.step(step).unwrap();
+    assert_eq!(s.prompt.as_deref(), Some("Own words"));
+    assert!(s.prompt_ref.is_none());
+    // Same for expect through the output update; a blank expect keeps the link.
+    wf.set_step_text_ref(
+        step,
+        TextField::Expect,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::new(),
+        }),
+    )
+    .unwrap();
+    wf.update_step_output(
+        step,
+        "result",
+        None,
+        None,
+        OutputFileFormat::FreeTextMarkdown,
+    )
+    .unwrap();
+    assert!(wf.step(step).unwrap().expect_ref.is_some());
+    wf.update_step_output(
+        step,
+        "result",
+        None,
+        Some("Own words".into()),
+        OutputFileFormat::FreeTextMarkdown,
+    )
+    .unwrap();
+    assert!(wf.step(step).unwrap().expect_ref.is_none());
+}
+
+#[test]
+fn extract_text_creates_links_and_clears_the_field() {
+    let mut wf = workflow();
+    let step = complete_step(&mut wf, "Step 1");
+    wf.step_mut(step).unwrap().prompt = None;
+    let err = wf
+        .extract_text(step, TextField::Prompt, "brief")
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "There is nothing to share yet. Write the text first."
+    );
+    wf.step_mut(step).unwrap().prompt = Some("Write a brief".into());
+    let (text, events) = wf.extract_text(step, TextField::Prompt, "brief").unwrap();
+    assert_eq!(
+        events
+            .iter()
+            .map(|e| e.event_type.as_str())
+            .collect::<Vec<_>>(),
+        vec!["WorkflowUpdated", "WorkflowStepUpdated"]
+    );
+    let s = wf.step(step).unwrap();
+    assert_eq!(wf.text(text).unwrap().body, "Write a brief");
+    assert_eq!(s.prompt, None);
+    assert_eq!(
+        s.prompt_ref,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::new()
+        })
+    );
+    assert_eq!(
+        wf.extract_text(step, TextField::Prompt, "other")
+            .unwrap_err()
+            .to_string(),
+        "There is nothing to share yet. Write the text first.",
+        "a linked field has nothing of its own to share"
+    );
+    let other = complete_step(&mut wf, "Step 2");
+    wf.step_mut(other).unwrap().prompt = Some("Again".into());
+    assert_eq!(
+        wf.extract_text(other, TextField::Prompt, "Brief")
+            .unwrap_err()
+            .to_string(),
+        "Unable to save — Name has already been taken."
+    );
+}
+
+#[test]
+fn duplicate_step_copies_text_refs_with_vars() {
+    let mut wf = workflow();
+    let (step, text) = linked_step(
+        &mut wf,
+        "Step 1",
+        "Judge {{judge_name}}",
+        &[("judge_name", "Sauron")],
+    );
+    let (copy, _) = wf.duplicate_step(step, now()).unwrap();
+    let c = wf.step(copy).unwrap();
+    assert_eq!(
+        c.prompt_ref,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::from([("judge_name".to_string(), "Sauron".to_string())])
+        })
+    );
+    assert_eq!(wf.effective_prompt(c).as_deref(), Some("Judge Sauron"));
+    assert_eq!(wf.steps_using_text(text).len(), 2);
+}
+
+#[test]
+fn validator_reports_shared_text_problems() {
+    let mut wf = workflow();
+    let (text, _) = wf.add_text("brief", None, "Hello {{who}}.").unwrap();
+    let step = complete_step(&mut wf, "Step 1");
+    wf.set_step_text_ref(
+        step,
+        TextField::Prompt,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::from([
+                ("who".to_string(), "Ada".to_string()),
+                ("unused".to_string(), "x".to_string()),
+            ]),
+        }),
+    )
+    .unwrap();
+    wf.set_step_text_ref(
+        step,
+        TextField::Expect,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::new(),
+        }),
+    )
+    .unwrap();
+    let m = messages(&wf);
+    assert!(
+        m.contains(&"“Step 1” sets “unused”, which the shared text “brief” doesn’t use.".into()),
+        "{m:?}"
+    );
+    assert!(
+        m.contains(
+            &"“Step 1” leaves “{{who}}” unfilled in its expected output. Set it in vars.".into()
+        ),
+        "{m:?}"
+    );
+
+    // A dangling ref reads as a missing prompt.
+    wf.step_mut(step).unwrap().prompt_ref = Some(TextRef {
+        text_id: SharedTextId::new(),
+        vars: BTreeMap::new(),
+    });
+    wf.step_mut(step).unwrap().expect_ref = None;
+    wf.step_mut(step).unwrap().expected_output = Some("The result".into());
+    assert!(messages(&wf).contains(&"“Step 1” needs a prompt.".into()));
+
+    // A var filled by the ref is not reported by the unknown-token check.
+    let mut wf = workflow();
+    let (text, _) = wf.add_text("brief", None, "Hello {{who}}.").unwrap();
+    let step = complete_step(&mut wf, "Step 1");
+    wf.set_step_text_ref(
+        step,
+        TextField::Prompt,
+        Some(TextRef {
+            text_id: text,
+            vars: BTreeMap::from([("who".to_string(), "Ada".to_string())]),
+        }),
+    )
+    .unwrap();
+    assert!(messages(&wf).is_empty(), "vars satisfy the token");
+}
+
+#[test]
+fn snapshot_freezes_the_rendered_text() {
+    let mut wf = workflow();
+    let (step, _) = linked_step(
+        &mut wf,
+        "Step 1",
+        "Hello {{who}} and {{topic}}.",
+        &[("who", "Ada")],
+    );
+    let snap = snapshot::build(&wf, &catalog(), now());
+    assert_eq!(
+        snap.steps[0].prompt.as_deref(),
+        Some("Hello Ada and {{topic}}."),
+        "snapshot renders vars and leaves run-time tokens"
+    );
+    // Editing the shared text after the snapshot changes nothing.
+    wf.texts[0].body = "Rewritten".into();
+    assert_eq!(
+        snap.steps[0].prompt.as_deref(),
+        Some("Hello Ada and {{topic}}.")
+    );
+    assert_eq!(
+        wf.effective_prompt(wf.step(step).unwrap()).as_deref(),
+        Some("Rewritten"),
+        "future runs see the new body"
+    );
 }

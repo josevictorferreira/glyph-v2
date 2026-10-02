@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM step_text_refs r\n         USING workflow_steps s\n         WHERE s.id = r.workflow_step_id AND s.workflow_id = $1\n           AND NOT EXISTS (\n             SELECT 1 FROM UNNEST($2::uuid[], $3::text[]) AS k(sid, fld)\n             WHERE k.sid = r.workflow_step_id AND k.fld = r.field\n           )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f40b037ecf921263ed47413024540da005133b9d6d5dda1a36a7130df8c1bc7"
+}

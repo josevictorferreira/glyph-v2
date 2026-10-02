@@ -83,7 +83,9 @@ test("dry run marks unknown keys on the right line; applying a valid edit reache
 
   await page.getByRole("link", { name: "Build", exact: true }).click();
   await page.locator('[data-testid^="step-card-"]').first().click();
-  await expect(page.getByRole("combobox", { name: "Prompt" })).toHaveValue("Prompt from YAML.");
+  await expect(page.getByRole("combobox", { name: "Prompt", exact: true })).toHaveValue(
+    "Prompt from YAML.",
+  );
 });
 
 test("applying an unchanged export is a no-op round trip", async ({ page }) => {
@@ -131,9 +133,7 @@ test("a concurrent edit warns while dirty; Discard adopts the server version", a
   await expect(await downloadYaml(page)).toContain("E2E definition conflict renamed");
 });
 
-test("a stale apply opens the conflict; Keep editing then Overwrite wins", async ({
-  browser,
-}) => {
+test("a stale apply opens the conflict; Keep editing then Overwrite wins", async ({ browser }) => {
   const page = await browser.newPage();
   const page2 = await browser.newPage();
   const id = await createWorkflow("E2E definition overwrite");
@@ -180,9 +180,7 @@ test("a stale apply opens the conflict; Keep editing then Overwrite wins", async
 
   // My text won: the name from my (older) document is back.
   await page.getByRole("link", { name: "Build", exact: true }).click();
-  await expect(page.getByTestId("workflow-name")).toHaveValue(
-    /E2E definition overwrite \d+/,
-  );
+  await expect(page.getByTestId("workflow-name")).toHaveValue(/E2E definition overwrite \d+/);
 });
 
 test("the Rails seed YAML imports through the dialog", async ({ page }) => {

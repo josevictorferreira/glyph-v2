@@ -207,11 +207,13 @@ pub fn build(workflow: &Workflow, catalog: &CatalogView, now: Timestamp) -> Snap
                 allow_failure: step.allow_failure,
                 name: step.name.clone(),
                 description: step.description.clone(),
-                prompt: step.prompt.clone(),
-                additional_context: step.additional_context.clone(),
+                // Shared-text references are resolved here: runs only ever see
+                // the rendered text, so they are immutable evidence.
+                prompt: workflow.effective_prompt(step),
+                additional_context: workflow.effective_context(step),
                 output_name: step.output_name.clone(),
                 output_description: step.output_description.clone(),
-                expected_output: step.expected_output.clone(),
+                expected_output: workflow.effective_expect(step),
                 output_file_format: step.output_file_format,
                 model_id: step.model_id.clone(),
                 model_settings: step.model_settings.clone(),

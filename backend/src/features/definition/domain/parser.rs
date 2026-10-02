@@ -10,6 +10,7 @@ use crate::features::definition::domain::types::*;
 use crate::features::definition::domain::{schema, yaml};
 use crate::features::workflows::model::StepKind;
 use crate::features::workflows::schedule_calculator;
+use crate::features::workflows::shared_text::variable_tokens;
 use crate::shared::ids::StepId;
 use crate::shared::output_format::OutputFileFormat;
 
@@ -105,6 +106,31 @@ fn from_of(spec: &Value) -> Option<String> {
     .filter(|s| !s.trim().is_empty())
 }
 
+/// A prompt / context / expect spec: inline text or `{ref, vars?}`.
+fn text_field_of(value: Option<&Value>) -> Option<TextField> {
+    match value? {
+        Value::Null => None,
+        Value::Object(o) => {
+            let key = str_of(o.get("ref"));
+            if key.trim().is_empty() {
+                return None;
+            }
+            let vars = o
+                .get("vars")
+                .and_then(Value::as_object)
+                .map(|m| {
+                    m.iter()
+                        .map(|(k, v)| (k.clone(), str_of(Some(v))))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(TextField::Ref { key, vars })
+        }
+        Value::String(s) => Some(TextField::Inline(s.clone())),
+        other => Some(TextField::Inline(other.to_string())),
+    }
+}
+
 static EMPTY: std::sync::LazyLock<Map<String, Value>> = std::sync::LazyLock::new(Map::new);
 
 struct References<'a> {
@@ -136,6 +162,27 @@ impl<'a> References<'a> {
             .get("inputs")
             .and_then(Value::as_object)
             .unwrap_or(&EMPTY)
+    }
+
+    fn texts(&self) -> &'a Map<String, Value> {
+        self.root
+            .get("texts")
+            .and_then(Value::as_object)
+            .unwrap_or(&EMPTY)
+    }
+
+    /// A shared text by case-insensitive key: (key, body).
+    fn find_text(&self, key: &str) -> Option<(&'a str, String)> {
+        let lower = key.to_lowercase();
+        self.texts().iter().find_map(|(name, spec)| {
+            (name.to_lowercase() == lower).then(|| {
+                let body = match spec {
+                    Value::Object(o) => str_of(o.get("body")),
+                    other => str_of(Some(other)),
+                };
+                (name.as_str(), body)
+            })
+        })
     }
 
     fn step_inputs(step: &'a Value) -> &'a Map<String, Value> {
@@ -202,6 +249,17 @@ impl<'a> References<'a> {
                 );
             }
         }
+        // unique shared-text keys
+        let mut seen = HashSet::new();
+        for name in self.texts().keys() {
+            let key = name.to_lowercase();
+            if !seen.insert(key.clone()) {
+                self.add(
+                    &format!("/texts/{}", yaml::escape(name)),
+                    format!("The workflow already has a shared text named “{key}”."),
+                );
+            }
+        }
         // unique step names
         let mut seen = HashSet::new();
         for (index, step) in self.steps().iter().enumerate() {
@@ -246,6 +304,36 @@ impl<'a> References<'a> {
                                 "The workflow already has two steps named “{name}”. Download the YAML to get their ids."
                             ),
                         ),
+                    }
+                }
+            }
+        }
+        // shared-text references
+        for (index, step) in self.steps().iter().enumerate() {
+            for field in ["prompt", "context", "expect"] {
+                let Some(Value::Object(spec)) = step.get(field) else {
+                    continue;
+                };
+                let Some(key) = opt_str(spec.get("ref")).filter(|s| !s.trim().is_empty()) else {
+                    continue;
+                };
+                let pointer = format!("/steps/{index}/{field}");
+                let Some((_, body)) = self.find_text(&key) else {
+                    self.add(
+                        &pointer,
+                        format!("“{key}” is not a shared text. Check the spelling."),
+                    );
+                    continue;
+                };
+                let tokens = variable_tokens(&body);
+                if let Some(vars) = spec.get("vars").and_then(Value::as_object) {
+                    for name in vars.keys() {
+                        if !tokens.iter().any(|t| t == name.trim()) {
+                            self.add(
+                                &format!("{pointer}/vars/{}", yaml::escape(name)),
+                                format!("“{name}” is not used by the shared text “{key}”."),
+                            );
+                        }
                     }
                 }
             }
@@ -384,6 +472,23 @@ impl<'a> References<'a> {
                     .unwrap_or_default(),
             });
 
+        let texts = self
+            .texts()
+            .iter()
+            .map(|(name, spec)| match spec {
+                Value::Object(o) => TextDef {
+                    key: name.clone(),
+                    description: opt_str(o.get("description")),
+                    body: str_of(o.get("body")),
+                },
+                other => TextDef {
+                    key: name.clone(),
+                    description: None,
+                    body: str_of(Some(other)),
+                },
+            })
+            .collect();
+
         let steps = self
             .steps()
             .iter()
@@ -414,9 +519,21 @@ impl<'a> References<'a> {
                         .and_then(Value::as_array)
                         .map(|t| t.iter().map(|v| str_of(Some(v))).collect())
                         .unwrap_or_default(),
-                    prompt: opt_str(step.get("prompt")),
-                    context: opt_str(step.get("context")),
-                    expect: opt_str(step.get("expect")),
+                    prompt: if helper {
+                        None
+                    } else {
+                        text_field_of(step.get("prompt"))
+                    },
+                    context: if helper {
+                        None
+                    } else {
+                        text_field_of(step.get("context"))
+                    },
+                    expect: if helper {
+                        None
+                    } else {
+                        text_field_of(step.get("expect"))
+                    },
                     output: opt_str(step.get("output")).unwrap_or_else(|| name.clone()),
                     output_description: opt_str(step.get("output_description")),
                     format: match pick("format").and_then(Value::as_str) {
@@ -462,6 +579,7 @@ impl<'a> References<'a> {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
             inputs,
+            texts,
             schedule,
             steps,
         }

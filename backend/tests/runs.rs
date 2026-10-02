@@ -934,9 +934,67 @@ async fn retry_duration_excludes_dead_time(pool: PgPool) {
         "the original 1s of work stays in the total (got {elapsed}ms)"
     );
     // The requeued step's queue time restarted at the retry, not the backdate.
-    let queued = step(&finished, "A")
-        .queued_at
-        .as_ref()
-        .unwrap();
+    let queued = step(&finished, "A").queued_at.as_ref().unwrap();
     assert!(queued.seconds > 0);
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn shared_text_vars_interpolate_at_run_time(pool: PgPool) {
+    let runner = ScriptedRunner::new(&[]);
+    let server = server(pool, runner.clone()).await;
+    let mut b = Builder::new(&server, "Shared text", false).await;
+    let src = b.pi("Src").await;
+    let design = b.pi("Gen").await;
+    b.connect(&src, &design, "brief").await;
+
+    // A shared text with a var the ref does not fill.
+    let text = b
+        .client
+        .add_shared_text(pb::AddSharedTextRequest {
+            workflow_id: b.id.clone(),
+            key: "designer_brief".into(),
+            description: None,
+            body: "Design for {{judge}}, from {{brief}}.".into(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .new_text_id;
+    b.client
+        .set_step_text_ref(pb::SetStepTextRefRequest {
+            workflow_id: b.id.clone(),
+            step_id: design.clone(),
+            field: pb::TextField::Prompt as i32,
+            r#ref: Some(pb::TextRef {
+                text_id: text.clone(),
+                vars: [("judge".to_string(), "Sauron".to_string())].into(),
+            }),
+        })
+        .await
+        .unwrap();
+
+    let run = settle(&server, &b.id, &start(&server, &b.id, &[]).await.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Succeeded);
+
+    // The snapshot froze the rendered text: judge filled by vars, brief left
+    // for run time.
+    assert_eq!(
+        runner.prompt_for("Gen").as_deref(),
+        Some("Design for Sauron, from {{brief}}.")
+    );
+    // At run time the remaining token is filled by the step input, exactly as
+    // the Pi runner builds the user prompt.
+    let inputs = runner.calls_for("Gen")[0].clone();
+    assert_eq!(inputs["brief"], json!("Src output"));
+    let final_prompt = glyph_backend::features::runs::domain::prompt::user_prompt(
+        runner.prompt_for("Gen").as_deref(),
+        None,
+        &inputs,
+        &serde_json::Map::new(),
+    );
+    assert!(
+        final_prompt.contains("Design for Sauron, from Src output."),
+        "{final_prompt}"
+    );
+    let _ = text;
 }

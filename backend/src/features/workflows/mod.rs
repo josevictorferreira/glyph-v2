@@ -13,6 +13,7 @@ pub use domain::catalog_view::{self, CatalogView};
 pub use domain::events;
 pub use domain::model::{self, Workflow, WorkflowStatus};
 pub use domain::schedule_calculator;
+pub use domain::shared_text;
 pub use domain::snapshot::{self, Snapshot};
 pub use domain::validator;
 pub use domain::workflow::{Events, WorkflowInputFields};

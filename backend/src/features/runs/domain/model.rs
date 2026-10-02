@@ -243,9 +243,11 @@ mod clock_tests {
     use super::*;
 
     fn run(started: &str, ended: Option<&str>) -> Run {
-        let ts = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-            .unwrap()
-            .and_utc();
+        let ts = |s: &str| {
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
+                .unwrap()
+                .and_utc()
+        };
         Run {
             id: RunId::new(),
             workflow_id: crate::shared::ids::WorkflowId::new(),
@@ -276,12 +278,10 @@ mod clock_tests {
         let mut r = run("2026-09-29 09:00:00", Some("2026-09-29 09:00:01"));
         assert_eq!(r.elapsed_until(r.ended_at.unwrap()), 1_000);
         // Retried 14h later: the dead window is frozen, the clock reopens.
-        let retry_at = chrono::NaiveDateTime::parse_from_str(
-            "2026-09-29 23:05:00",
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .unwrap()
-        .and_utc();
+        let retry_at =
+            chrono::NaiveDateTime::parse_from_str("2026-09-29 23:05:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap()
+                .and_utc();
         r.resume_clock(retry_at);
         assert_eq!(r.active_ms, 1_000);
         assert_eq!(r.resumed_at, Some(retry_at));
@@ -294,12 +294,10 @@ mod clock_tests {
     fn resume_clock_ignores_unfinished_windows() {
         // A live run (no ended_at) revived by retry: nothing to freeze.
         let mut r = run("2026-09-29 09:00:00", None);
-        let retry_at = chrono::NaiveDateTime::parse_from_str(
-            "2026-09-29 09:00:30",
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .unwrap()
-        .and_utc();
+        let retry_at =
+            chrono::NaiveDateTime::parse_from_str("2026-09-29 09:00:30", "%Y-%m-%d %H:%M:%S")
+                .unwrap()
+                .and_utc();
         r.resume_clock(retry_at);
         assert_eq!(r.active_ms, 0);
         let ended = retry_at + chrono::Duration::seconds(5);

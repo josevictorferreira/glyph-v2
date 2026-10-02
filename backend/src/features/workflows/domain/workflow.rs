@@ -2,7 +2,7 @@
 //! `Activation`, `Pauser`, `Resumer`, `Revalidator`). Pure: callers pass `now`
 //! and catalog facts; each method returns the events to append.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -15,7 +15,9 @@ use crate::features::workflows::domain::schedule_calculator::{self, Recurrence};
 use crate::features::workflows::domain::validator;
 use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::events::DomainEvent;
-use crate::shared::ids::{ConnectionId, StepId, StepInputId, WorkflowId, WorkflowInputId};
+use crate::shared::ids::{
+    ConnectionId, SharedTextId, StepId, StepInputId, WorkflowId, WorkflowInputId,
+};
 use crate::shared::issue::{Issue, any_blocking, blocking_messages};
 use crate::shared::output_format::OutputFileFormat;
 use crate::shared::time::Timestamp;
@@ -94,6 +96,7 @@ impl Workflow {
             created_at: now,
             updated_at: now,
             inputs: Vec::new(),
+            texts: Vec::new(),
             steps: Vec::new(),
             connections: Vec::new(),
             schedule: None,
@@ -149,8 +152,9 @@ impl Workflow {
         (id, events)
     }
 
-    /// Copies kind, name, description, prompt, context, allow_failure and the
-    /// inputs (unconnected). Model, tools and output fields are not copied.
+    /// Copies kind, name, description, prompt, context (including shared-text
+    /// links with their vars), allow_failure and the inputs (unconnected).
+    /// Model, tools and output fields are not copied.
     pub fn duplicate_step(
         &mut self,
         step_id: StepId,
@@ -168,6 +172,8 @@ impl Workflow {
         step.description = source.description.clone();
         step.prompt = source.prompt.clone();
         step.additional_context = source.additional_context.clone();
+        step.prompt_ref = source.prompt_ref.clone();
+        step.context_ref = source.context_ref.clone();
         step.allow_failure = source.allow_failure;
         step.inputs = source
             .inputs
@@ -215,6 +221,8 @@ impl Workflow {
         Ok(vec![self.step_updated(step_id)])
     }
 
+    /// A blank field leaves a linked shared text in place; plain text
+    /// replaces the link.
     pub fn update_step_prompt(
         &mut self,
         step_id: StepId,
@@ -222,8 +230,18 @@ impl Workflow {
         additional_context: Option<String>,
     ) -> DomainResult<Events> {
         let step = self.step_mut(step_id).ok_or_else(not_found_step)?;
-        step.prompt = opt(prompt);
-        step.additional_context = opt(additional_context);
+        if step.prompt_ref.is_none() || prompt.as_deref().is_some_and(|p| !p.trim().is_empty()) {
+            step.prompt = opt(prompt);
+            step.prompt_ref = None;
+        }
+        if step.context_ref.is_none()
+            || additional_context
+                .as_deref()
+                .is_some_and(|c| !c.trim().is_empty())
+        {
+            step.additional_context = opt(additional_context);
+            step.context_ref = None;
+        }
         Ok(vec![self.step_updated(step_id)])
     }
 
@@ -241,7 +259,14 @@ impl Workflow {
         let changed = step.output_name.as_deref().unwrap_or("") != new_name;
         step.output_name = opt(Some(new_name.clone()));
         step.output_description = opt(output_description);
-        step.expected_output = opt(expected_output);
+        if step.expect_ref.is_none()
+            || expected_output
+                .as_deref()
+                .is_some_and(|e| !e.trim().is_empty())
+        {
+            step.expected_output = opt(expected_output);
+            step.expect_ref = None;
+        }
         step.output_file_format = format;
         if changed {
             for connection in self
@@ -539,6 +564,236 @@ impl Workflow {
             events::WORKFLOW_UPDATED,
             json!({ "removed_workflow_input_id": input_id.to_string() }),
         )])
+    }
+
+    // --- shared texts --------------------------------------------------------
+
+    /// Key validation, mirroring the `WorkflowInput` name rules.
+    fn shared_text_key_errors(&self, key: &str, except: Option<SharedTextId>) -> Vec<String> {
+        let mut errors = Vec::new();
+        let lower = key.to_lowercase();
+        if self
+            .texts
+            .iter()
+            .any(|t| Some(t.id) != except && t.key.to_lowercase() == lower)
+        {
+            errors.push("Name has already been taken".into());
+        }
+        if !INPUT_NAME_PATTERN.is_match(key) {
+            errors.push(
+                "Name must start with a letter and use letters, numbers, spaces or underscores"
+                    .into(),
+            );
+        }
+        errors
+    }
+
+    pub fn add_text(
+        &mut self,
+        key: &str,
+        description: Option<String>,
+        body: &str,
+    ) -> DomainResult<(SharedTextId, Events)> {
+        let key = key.trim();
+        if blank(key) {
+            return Err(DomainError::invalid(
+                "Unable to save — name the shared text.",
+            ));
+        }
+        let errors = self.shared_text_key_errors(key, None);
+        if !errors.is_empty() {
+            return Err(unable(&errors));
+        }
+        let text = SharedText {
+            id: SharedTextId::new(),
+            key: key.to_string(),
+            description: opt(description),
+            body: body.to_string(),
+            position: self.next_text_position(),
+        };
+        let id = text.id;
+        self.texts.push(text);
+        Ok((id, vec![self.ev(events::WORKFLOW_UPDATED, json!({}))]))
+    }
+
+    pub fn update_text(
+        &mut self,
+        text_id: SharedTextId,
+        key: &str,
+        description: Option<String>,
+        body: &str,
+    ) -> DomainResult<Events> {
+        if self.text(text_id).is_none() {
+            return Err(DomainError::NotFound("shared text"));
+        }
+        let key = key.trim();
+        if blank(key) {
+            return Err(DomainError::invalid(
+                "Unable to save — name the shared text.",
+            ));
+        }
+        let errors = self.shared_text_key_errors(key, Some(text_id));
+        if !errors.is_empty() {
+            return Err(unable(&errors));
+        }
+        let text = self
+            .text_mut(text_id)
+            .ok_or(DomainError::NotFound("shared text"))?;
+        text.key = key.to_string();
+        text.description = opt(description);
+        text.body = body.to_string();
+        Ok(vec![self.ev(events::WORKFLOW_UPDATED, json!({}))])
+    }
+
+    /// Refused while any step still links the text.
+    pub fn remove_text(&mut self, text_id: SharedTextId) -> DomainResult<Events> {
+        let text = self
+            .text(text_id)
+            .ok_or(DomainError::NotFound("shared text"))?;
+        let used_by = self.steps_using_text(text_id).len();
+        if used_by > 0 {
+            return Err(DomainError::precondition(
+                "SHARED_TEXT_IN_USE",
+                format!(
+                    "“{}” is used by {} steps. Detach them first.",
+                    text.key, used_by
+                ),
+            ));
+        }
+        self.texts.retain(|t| t.id != text_id);
+        Ok(vec![self.ev(events::WORKFLOW_UPDATED, json!({}))])
+    }
+
+    /// Links (or detaches) a step field. Detaching copies the rendered text
+    /// into the step's own field, so nothing is lost.
+    pub fn set_step_text_ref(
+        &mut self,
+        step_id: StepId,
+        field: TextField,
+        text_ref: Option<TextRef>,
+    ) -> DomainResult<Events> {
+        let Some(step) = self.step(step_id) else {
+            return Err(not_found_step());
+        };
+        if step.kind == StepKind::Helper {
+            return Err(DomainError::invalid(
+                "Unable to save — helper steps don't use prompts, context or expected output.",
+            ));
+        }
+        if let Some(r) = &text_ref
+            && self.text(r.text_id).is_none()
+        {
+            return Err(DomainError::NotFound("shared text"));
+        }
+        let has_ref = match field {
+            TextField::Prompt => step.prompt_ref.is_some(),
+            TextField::Context => step.context_ref.is_some(),
+            TextField::Expect => step.expect_ref.is_some(),
+        };
+        // The rendered copy for a detach, taken before the mutable borrow.
+        let detached = match (&text_ref, has_ref) {
+            (None, true) => Some(match field {
+                TextField::Prompt => self.effective_prompt(step),
+                TextField::Context => self.effective_context(step),
+                TextField::Expect => self.effective_expect(step),
+            }),
+            _ => None,
+        };
+        let step = self.step_mut(step_id).ok_or_else(not_found_step)?;
+        match (field, text_ref, detached) {
+            (TextField::Prompt, Some(r), _) => {
+                step.prompt = None;
+                step.prompt_ref = Some(r);
+            }
+            (TextField::Prompt, None, Some(rendered)) => {
+                step.prompt = rendered;
+                step.prompt_ref = None;
+            }
+            (TextField::Context, Some(r), _) => {
+                step.additional_context = None;
+                step.context_ref = Some(r);
+            }
+            (TextField::Context, None, Some(rendered)) => {
+                step.additional_context = rendered;
+                step.context_ref = None;
+            }
+            (TextField::Expect, Some(r), _) => {
+                step.expected_output = None;
+                step.expect_ref = Some(r);
+            }
+            (TextField::Expect, None, Some(rendered)) => {
+                step.expected_output = rendered;
+                step.expect_ref = None;
+            }
+            // Detaching a field that is not linked changes nothing.
+            (_, None, None) => {}
+        }
+        Ok(vec![self.step_updated(step_id)])
+    }
+
+    /// "Make shared": creates a shared text from the step's own field, links
+    /// the step with empty vars and clears the field, in one change.
+    pub fn extract_text(
+        &mut self,
+        step_id: StepId,
+        field: TextField,
+        key: &str,
+    ) -> DomainResult<(SharedTextId, Events)> {
+        let step = self.step(step_id).ok_or_else(not_found_step)?;
+        if step.kind == StepKind::Helper {
+            return Err(DomainError::invalid(
+                "Unable to save — helper steps don't use prompts, context or expected output.",
+            ));
+        }
+        let Some(body) = self.own_text(step, field).cloned().filter(|b| !blank(b)) else {
+            return Err(DomainError::invalid(
+                "There is nothing to share yet. Write the text first.",
+            ));
+        };
+        let key = key.trim();
+        if blank(key) {
+            return Err(DomainError::invalid(
+                "Unable to save — name the shared text.",
+            ));
+        }
+        let errors = self.shared_text_key_errors(key, None);
+        if !errors.is_empty() {
+            return Err(unable(&errors));
+        }
+        let text_id = SharedTextId::new();
+        self.texts.push(SharedText {
+            id: text_id,
+            key: key.to_string(),
+            description: None,
+            body,
+            position: self.next_text_position(),
+        });
+        let step = self.step_mut(step_id).ok_or_else(not_found_step)?;
+        let text_ref = TextRef {
+            text_id,
+            vars: BTreeMap::new(),
+        };
+        match field {
+            TextField::Prompt => {
+                step.prompt = None;
+                step.prompt_ref = Some(text_ref);
+            }
+            TextField::Context => {
+                step.additional_context = None;
+                step.context_ref = Some(text_ref);
+            }
+            TextField::Expect => {
+                step.expected_output = None;
+                step.expect_ref = Some(text_ref);
+            }
+        }
+        Ok((
+            text_id,
+            vec![
+                self.ev(events::WORKFLOW_UPDATED, json!({})),
+                self.step_updated(step_id),
+            ],
+        ))
     }
 
     // --- connections ---------------------------------------------------------

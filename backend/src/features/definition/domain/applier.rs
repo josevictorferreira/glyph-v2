@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use serde_json::{Map, Value, json};
 
 use crate::features::definition::domain::layout;
-use crate::features::definition::domain::types::*;
+use crate::features::definition::domain::types::{TextField as TextFieldDef, *};
 use crate::features::workflows::Events;
 use crate::features::workflows::events::{self, event};
 use crate::features::workflows::model::*;
@@ -26,11 +26,14 @@ pub fn apply(workflow: &mut Workflow, document: &Document, now: Timestamp) -> Ev
         doc: document,
         now,
         events: Vec::new(),
+        text_ids: HashMap::new(),
     };
     a.attributes();
     a.delete_absent_steps();
     a.inputs();
+    a.texts();
     let step_ids = a.upsert_steps();
+    a.remove_absent_texts();
     a.step_inputs(&step_ids);
     a.connections(&step_ids);
     a.schedule();
@@ -42,6 +45,8 @@ struct Applier<'a> {
     doc: &'a Document,
     now: Timestamp,
     events: Events,
+    /// ci-key → id of the workflow's texts after `texts()`.
+    text_ids: HashMap<String, SharedTextId>,
 }
 
 impl Applier<'_> {
@@ -160,6 +165,84 @@ impl Applier<'_> {
         self.wf.inputs.sort_by_key(|i| (i.position, i.created_at));
     }
 
+    /// Upserts shared texts by ci-key; removal happens after the steps, so
+    /// their refs are already gone.
+    fn texts(&mut self) {
+        let mut remaining: Vec<SharedTextId> = self.wf.texts.iter().map(|t| t.id).collect();
+        for (index, def) in self.doc.texts.iter().enumerate() {
+            let position = index as i32 + 1;
+            let lower = def.key.to_lowercase();
+            let description = opt(&def.description);
+            let id = match self
+                .wf
+                .texts
+                .iter()
+                .position(|t| remaining.contains(&t.id) && t.key.to_lowercase() == lower)
+            {
+                Some(i) => {
+                    let id = self.wf.texts[i].id;
+                    remaining.retain(|r| *r != id);
+                    let record = &mut self.wf.texts[i];
+                    let changed = record.key != def.key
+                        || record.description != description
+                        || record.body != def.body;
+                    record.position = position;
+                    if changed {
+                        record.key = def.key.clone();
+                        record.description = description;
+                        record.body = def.body.clone();
+                        self.publish(events::WORKFLOW_UPDATED, json!({}));
+                    }
+                    id
+                }
+                None => {
+                    let id = SharedTextId::new();
+                    self.wf.texts.push(SharedText {
+                        id,
+                        key: def.key.clone(),
+                        description,
+                        body: def.body.clone(),
+                        position,
+                    });
+                    self.publish(events::WORKFLOW_UPDATED, json!({}));
+                    id
+                }
+            };
+            self.text_ids.insert(lower, id);
+        }
+        self.wf.texts.sort_by_key(|t| t.position);
+    }
+
+    /// Removes texts the document no longer lists. Runs after the steps so
+    /// their refs no longer point at the removed texts.
+    fn remove_absent_texts(&mut self) {
+        let wanted: Vec<String> = self
+            .doc
+            .texts
+            .iter()
+            .map(|t| t.key.to_lowercase())
+            .collect();
+        let gone: Vec<SharedTextId> = self
+            .wf
+            .texts
+            .iter()
+            .filter(|t| !wanted.contains(&t.key.to_lowercase()))
+            .map(|t| t.id)
+            .collect();
+        if gone.is_empty() {
+            return;
+        }
+        self.wf
+            .texts
+            .retain(|t| wanted.contains(&t.key.to_lowercase()));
+        for id in gone {
+            self.publish(
+                events::WORKFLOW_UPDATED,
+                json!({ "removed_shared_text_id": id.to_string() }),
+            );
+        }
+    }
+
     fn step_edges(&self) -> Vec<(String, String)> {
         self.doc
             .steps
@@ -216,7 +299,7 @@ impl Applier<'_> {
                 Some(i) => {
                     let before = self.wf.steps[i].clone();
                     let step = &mut self.wf.steps[i];
-                    assign(step, def, settings);
+                    assign(step, def, settings, &self.text_ids);
                     step.position = position;
                     let id = step.id;
                     let new_output = step.output_name.clone().unwrap_or_default();
@@ -245,7 +328,7 @@ impl Applier<'_> {
                         .copied()
                         .unwrap_or((layout::ROOT_X, layout::ROOT_Y));
                     let mut step = Step::new(def.kind, position, x, y, self.now);
-                    assign(&mut step, def, settings);
+                    assign(&mut step, def, settings, &self.text_ids);
                     let id = step.id;
                     self.wf.steps.push(step);
                     self.publish(
@@ -526,13 +609,33 @@ impl Applier<'_> {
     }
 }
 
-fn assign(step: &mut Step, def: &StepDef, settings: Map<String, Value>) {
+fn assign(
+    step: &mut Step,
+    def: &StepDef,
+    settings: Map<String, Value>,
+    text_ids: &HashMap<String, SharedTextId>,
+) {
     step.name = def.name.clone();
     step.kind = def.kind;
     step.description = opt(&def.description);
-    step.prompt = opt(&def.prompt);
-    step.additional_context = opt(&def.context);
-    step.expected_output = opt(&def.expect);
+    assign_text_field(
+        &mut step.prompt,
+        &mut step.prompt_ref,
+        &def.prompt,
+        text_ids,
+    );
+    assign_text_field(
+        &mut step.additional_context,
+        &mut step.context_ref,
+        &def.context,
+        text_ids,
+    );
+    assign_text_field(
+        &mut step.expected_output,
+        &mut step.expect_ref,
+        &def.expect,
+        text_ids,
+    );
     step.output_name = Some(def.output.clone()).filter(|o| !o.is_empty());
     step.output_description = opt(&def.output_description);
     step.output_file_format = def.format;
@@ -540,4 +643,30 @@ fn assign(step: &mut Step, def: &StepDef, settings: Map<String, Value>) {
     step.model_settings = settings;
     step.enabled_tool_ids = def.tools.clone();
     step.allow_failure = def.allow_failure;
+}
+
+/// Inline text replaces the ref; a ref clears the step's own column.
+fn assign_text_field(
+    own: &mut Option<String>,
+    text_ref: &mut Option<TextRef>,
+    def: &Option<TextFieldDef>,
+    text_ids: &HashMap<String, SharedTextId>,
+) {
+    match def {
+        Some(TextFieldDef::Inline(text)) => {
+            *own = opt(&Some(text.clone()));
+            *text_ref = None;
+        }
+        Some(TextFieldDef::Ref { key, vars }) => {
+            *own = None;
+            *text_ref = text_ids.get(&key.to_lowercase()).map(|id| TextRef {
+                text_id: *id,
+                vars: vars.clone(),
+            });
+        }
+        None => {
+            *own = None;
+            *text_ref = None;
+        }
+    }
 }

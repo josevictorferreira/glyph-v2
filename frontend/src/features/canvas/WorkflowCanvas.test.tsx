@@ -10,6 +10,7 @@ import {
   StepSchema,
   StepInputSchema,
   ConnectionSchema,
+  SharedTextSchema,
 } from "@/gen/glyph/v1/workflow_pb";
 import { IssueSchema, IssueEntityType, StepKind, StepRunStatus } from "@/gen/glyph/v1/common_pb";
 import type { Issue } from "@/gen/glyph/v1/common_pb";
@@ -148,6 +149,7 @@ function clone(wf: Workflow): Workflow {
   return create(WorkflowSchema, {
     summary: wf.summary,
     inputs: wf.inputs.map((i) => create(WorkflowInputSchema, { ...i })),
+    texts: wf.texts.map((t) => create(SharedTextSchema, { ...t })),
     steps: wf.steps.map((s) =>
       create(StepSchema, { ...s, inputs: s.inputs.map((i) => create(StepInputSchema, { ...i })) }),
     ),
@@ -329,6 +331,45 @@ describe("WorkflowCanvas (build)", () => {
     await waitFor(() =>
       expect(recorded.addStep).toEqual([expect.objectContaining({ kind: StepKind.HELPER })]),
     );
+  });
+
+  it("renders a marker per field linked to a shared text (spec 0023)", async () => {
+    const wf = create(WorkflowSchema, {
+      summary: create(WorkflowSummarySchema, { id: "wf-1", name: "Shared", updatedAt: bump }),
+      texts: [
+        create(SharedTextSchema, {
+          id: "t-1",
+          key: "designer_brief",
+          body: "Design.",
+          position: 0,
+        }),
+      ],
+      steps: [
+        create(StepSchema, {
+          id: "s-linked",
+          kind: StepKind.PI,
+          name: "Designer",
+          promptRef: { textId: "t-1", vars: {} },
+          contextRef: { textId: "t-1", vars: {} },
+          expectRef: { textId: "t-1", vars: {} },
+          canvasX: 40,
+          canvasY: 60,
+          inputs: [],
+        }),
+      ],
+    });
+    const { services } = makeServices(wf);
+    renderWithApp(<Harness />, { services });
+    const card = await screen.findByTestId("step-card-s-linked");
+    for (const [field, label] of [
+      ["prompt", "Prompt"],
+      ["context", "Context"],
+      ["expect", "Expected output"],
+    ] as const) {
+      const marker = within(card).getByTestId(`step-text-s-linked-${field}`);
+      expect(marker).toHaveTextContent("⧉ designer_brief");
+      expect(marker).toHaveAttribute("title", `${label} from shared text “designer_brief”`);
+    }
   });
 
   it("opens the context menu on a node and duplicates", async () => {

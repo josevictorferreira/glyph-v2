@@ -4,7 +4,13 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 import type { Issue, StepKind } from "@/gen/glyph/v1/common_pb";
-import type { Workflow, WorkflowInput, Connection, Step } from "@/gen/glyph/v1/workflow_pb";
+import type {
+  Workflow,
+  WorkflowInput,
+  Connection,
+  Step,
+  TextRef,
+} from "@/gen/glyph/v1/workflow_pb";
 import type { RunSnapshot, StepRunSummary } from "@/gen/glyph/v1/run_pb";
 import { StepRunStatus } from "@/gen/glyph/v1/common_pb";
 import { tsToMs } from "@/shared/lib/time";
@@ -19,6 +25,13 @@ export type InputPort = {
   connected: boolean;
 };
 
+/** A shared-text link shown on the card (spec 0023). */
+export type TextMarker = {
+  field: "prompt" | "context" | "expect";
+  key: string;
+  textId: string;
+};
+
 export type StepNodeData = {
   stepId: string;
   kind: StepKind;
@@ -29,6 +42,8 @@ export type StepNodeData = {
   allowFailure: boolean;
   inputs: InputPort[];
   outputName: string;
+  /** Build: shared texts linked from the step's fields (spec 0023). */
+  textMarkers: TextMarker[];
   /** Build: readiness badge count (issues for this step or its inputs). */
   issueCount: number;
   /** Build: joined issue messages for the badge tooltip. */
@@ -100,6 +115,21 @@ function stepPurpose(step: { description?: string; prompt?: string }): string {
   return step.description?.trim() || firstLine(step.prompt);
 }
 
+/** One marker per field linked to a shared text (spec 0023). */
+function textMarkersFor(step: Step, keysById: Map<string, string>): TextMarker[] {
+  const markers: TextMarker[] = [];
+  const refs: ReadonlyArray<[TextMarker["field"], TextRef | undefined]> = [
+    ["prompt", step.promptRef],
+    ["context", step.contextRef],
+    ["expect", step.expectRef],
+  ];
+  for (const [field, ref] of refs) {
+    const key = ref ? keysById.get(ref.textId) : undefined;
+    if (ref && key) markers.push({ field, key, textId: ref.textId });
+  }
+  return markers;
+}
+
 /** Issues that belong to a step card: the step itself and its inputs. */
 export function issuesForStep(issues: readonly Issue[], step: Step): Issue[] {
   const inputIds = new Set(step.inputs.map((i) => i.id));
@@ -113,6 +143,7 @@ export function issuesForStep(issues: readonly Issue[], step: Step): Issue[] {
 export function buildNodes(workflow: Workflow, issues: readonly Issue[]): StepNode[] {
   const connectedInputIds = new Set<string>();
   for (const c of workflow.connections) connectedInputIds.add(c.destinationInputId);
+  const textKeys = new Map(workflow.texts.map((t) => [t.id, t.key]));
   return workflow.steps.map((step) => {
     const stepIssues = issuesForStep(issues, step);
     return {
@@ -129,6 +160,7 @@ export function buildNodes(workflow: Workflow, issues: readonly Issue[]): StepNo
         allowFailure: step.allowFailure,
         inputs: inputPorts(step.inputs, connectedInputIds, workflow.inputs),
         outputName: step.outputName || DEFAULT_OUTPUT,
+        textMarkers: textMarkersFor(step, textKeys),
         issueCount: stepIssues.length,
         issueTitle: stepIssues.map((i) => i.message).join("\n") || undefined,
         configured: step.configured,
@@ -172,6 +204,7 @@ export function lensNodes(
         allowFailure: step.allowFailure,
         inputs: inputPorts(step.inputs, connectedInputIds, workflowInputs),
         outputName: step.outputName || DEFAULT_OUTPUT,
+        textMarkers: [],
         issueCount: 0,
         configured: true,
         status: run?.status ?? StepRunStatus.QUEUED,

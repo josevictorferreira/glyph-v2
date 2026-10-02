@@ -2,6 +2,25 @@ use crate::features::workflows::domain::model::*;
 use crate::proto::convert::{opt_timestamp, timestamp};
 use crate::proto::pb;
 use crate::shared::output_format::OutputFileFormat;
+use tonic::Status;
+
+fn text_ref(r: &TextRef) -> pb::TextRef {
+    pb::TextRef {
+        text_id: r.text_id.to_string(),
+        vars: r.vars.clone().into_iter().collect(),
+    }
+}
+
+pub fn text_field_from_pb(raw: i32) -> Result<TextField, Status> {
+    match pb::TextField::try_from(raw) {
+        Ok(pb::TextField::Prompt) => Ok(TextField::Prompt),
+        Ok(pb::TextField::Context) => Ok(TextField::Context),
+        Ok(pb::TextField::Expect) => Ok(TextField::Expect),
+        _ => Err(Status::invalid_argument(
+            "field must be prompt, context or expect",
+        )),
+    }
+}
 
 pub fn status(s: WorkflowStatus) -> pb::WorkflowStatus {
     match s {
@@ -109,9 +128,9 @@ pub fn workflow(wf: &Workflow) -> pb::Workflow {
                 kind: kind(s.kind) as i32,
                 name: s.name.clone(),
                 description: s.description.clone(),
-                prompt: s.prompt.clone(),
-                additional_context: s.additional_context.clone(),
-                expected_output: s.expected_output.clone(),
+                prompt: wf.effective_prompt(s),
+                additional_context: wf.effective_context(s),
+                expected_output: wf.effective_expect(s),
                 output_name: s.output_name.clone(),
                 output_description: s.output_description.clone(),
                 output_file_format: format(s.output_file_format) as i32,
@@ -137,7 +156,21 @@ pub fn workflow(wf: &Workflow) -> pb::Workflow {
                             .map(|c| c.id.to_string()),
                     })
                     .collect(),
-                configured: s.configured(),
+                configured: s.configured(wf),
+                prompt_ref: s.prompt_ref.as_ref().map(text_ref),
+                context_ref: s.context_ref.as_ref().map(text_ref),
+                expect_ref: s.expect_ref.as_ref().map(text_ref),
+            })
+            .collect(),
+        texts: wf
+            .texts
+            .iter()
+            .map(|t| pb::SharedText {
+                id: t.id.to_string(),
+                key: t.key.clone(),
+                description: t.description.clone(),
+                body: t.body.clone(),
+                position: t.position,
             })
             .collect(),
         connections: wf

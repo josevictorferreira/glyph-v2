@@ -887,3 +887,411 @@ async fn vanished_models_flag_active_workflows(pool: PgPool) {
         .unwrap();
     assert_eq!(status(&draft), pb::WorkflowStatus::Draft);
 }
+
+// --- shared texts -----------------------------------------------------------
+
+/// Adds a shared text and returns its id.
+async fn add_text(client: &mut Client, workflow_id: &str, key: &str, body: &str) -> String {
+    client
+        .add_shared_text(pb::AddSharedTextRequest {
+            workflow_id: workflow_id.into(),
+            key: key.into(),
+            description: None,
+            body: body.into(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .new_text_id
+}
+
+async fn set_ref(
+    client: &mut Client,
+    workflow_id: &str,
+    step_id: &str,
+    field: pb::TextField,
+    text_id: Option<&str>,
+    vars: Vec<(String, String)>,
+) {
+    client
+        .set_step_text_ref(pb::SetStepTextRefRequest {
+            workflow_id: workflow_id.into(),
+            step_id: step_id.into(),
+            field: field as i32,
+            r#ref: text_id.map(|text_id| pb::TextRef {
+                text_id: text_id.into(),
+                vars: vars.into_iter().collect(),
+            }),
+        })
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn shared_texts_crud_and_refs(pool: PgPool) {
+    let (server, mut client) = setup(pool).await;
+    let wf = create(&mut client, "Shared").await;
+    let id = wid(&wf);
+    let step_id = complete_step(&mut client, &id, "Generate").await;
+
+    // Add + duplicate key refused.
+    let text = add_text(&mut client, &id, "designer_brief", "Design {{judge_name}}").await;
+    let err = client
+        .add_shared_text(pb::AddSharedTextRequest {
+            workflow_id: id.clone(),
+            key: "Designer_Brief".into(),
+            description: None,
+            body: "Body".into(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Code::InvalidArgument);
+    assert_eq!(
+        err.message(),
+        "Unable to save — Name has already been taken."
+    );
+
+    // Update the body; link the step prompt with a var.
+    client
+        .update_shared_text(pb::UpdateSharedTextRequest {
+            workflow_id: id.clone(),
+            text_id: text.clone(),
+            key: "designer_brief".into(),
+            description: Some("Shared brief".into()),
+            body: "Design well, {{judge_name}}.".into(),
+        })
+        .await
+        .unwrap();
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Prompt,
+        Some(&text),
+        vec![("judge_name".to_string(), "Sauron".to_string())],
+    )
+    .await;
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    assert_eq!(got.texts.len(), 1);
+    assert_eq!(got.texts[0].key, "designer_brief");
+    assert_eq!(got.texts[0].body, "Design well, {{judge_name}}.");
+    let s = step(&got, &step_id);
+    assert_eq!(
+        s.prompt.as_deref(),
+        Some("Design well, Sauron."),
+        "the step carries the effective prompt"
+    );
+    assert_eq!(
+        s.prompt_ref.as_ref().unwrap().text_id,
+        text,
+        "and the ref tells the editor it is linked"
+    );
+    assert_eq!(
+        s.prompt_ref
+            .as_ref()
+            .unwrap()
+            .vars
+            .get("judge_name")
+            .map(String::as_str),
+        Some("Sauron")
+    );
+
+    // Update the text body: the effective prompt follows.
+    client
+        .update_shared_text(pb::UpdateSharedTextRequest {
+            workflow_id: id.clone(),
+            text_id: text.clone(),
+            key: "designer_brief".into(),
+            description: None,
+            body: "Rewritten {{judge_name}}.".into(),
+        })
+        .await
+        .unwrap();
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    assert_eq!(
+        step(&got, &step_id).prompt.as_deref(),
+        Some("Rewritten Sauron.")
+    );
+
+    // Detach copies the rendered text.
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Prompt,
+        None,
+        vec![],
+    )
+    .await;
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    let s = step(&got, &step_id);
+    assert!(s.prompt_ref.is_none());
+    assert_eq!(s.prompt.as_deref(), Some("Rewritten Sauron."));
+
+    // Remove while linked → FAILED_PRECONDITION; after detaching, removed.
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Prompt,
+        Some(&text),
+        vec![],
+    )
+    .await;
+    let err = client
+        .remove_shared_text(pb::RemoveSharedTextRequest {
+            workflow_id: id.clone(),
+            text_id: text.clone(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Code::FailedPrecondition);
+    assert_eq!(
+        err.message(),
+        "“designer_brief” is used by 1 steps. Detach them first."
+    );
+    assert_eq!(
+        error_info(&err).as_ref().map(|i| i.reason.as_str()),
+        Some("SHARED_TEXT_IN_USE")
+    );
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Prompt,
+        None,
+        vec![],
+    )
+    .await;
+    client
+        .remove_shared_text(pb::RemoveSharedTextRequest {
+            workflow_id: id.clone(),
+            text_id: text.clone(),
+        })
+        .await
+        .unwrap();
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    assert!(got.texts.is_empty());
+
+    let types = event_types(&server.pool, &id).await;
+    assert!(types.iter().filter(|t| *t == "WorkflowUpdated").count() >= 3);
+
+    // Unknown ids.
+    assert_eq!(
+        client
+            .remove_shared_text(pb::RemoveSharedTextRequest {
+                workflow_id: id.clone(),
+                text_id: text.clone(),
+            })
+            .await
+            .unwrap_err()
+            .code(),
+        Code::NotFound
+    );
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn extract_and_duplicate_share_the_text(pool: PgPool) {
+    let (server, mut client) = setup(pool).await;
+    let _ = server;
+    let wf = create(&mut client, "Shared").await;
+    let id = wid(&wf);
+    let step_id = complete_step(&mut client, &id, "Generate — GLM").await;
+
+    // "Make shared" from the step's own prompt.
+    let text = client
+        .extract_shared_text(pb::ExtractSharedTextRequest {
+            workflow_id: id.clone(),
+            step_id: step_id.clone(),
+            field: pb::TextField::Prompt as i32,
+            key: "generate_glm_5_3_prompt".into(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .new_text_id;
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    assert_eq!(got.texts[0].id, text);
+    assert_eq!(got.texts[0].body, "Do the thing");
+    let s = step(&got, &step_id);
+    assert_eq!(s.prompt.as_deref(), Some("Do the thing"), "effective text");
+    assert_eq!(s.prompt_ref.as_ref().unwrap().text_id, text);
+
+    // Blank field is refused.
+    let empty = complete_step(&mut client, &id, "Empty").await;
+    client
+        .update_step_prompt(pb::UpdateStepPromptRequest {
+            workflow_id: id.clone(),
+            step_id: empty.clone(),
+            prompt: None,
+            additional_context: None,
+        })
+        .await
+        .unwrap();
+    let err = client
+        .extract_shared_text(pb::ExtractSharedTextRequest {
+            workflow_id: id.clone(),
+            step_id: empty.clone(),
+            field: pb::TextField::Prompt as i32,
+            key: "empty_prompt".into(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.message(),
+        "There is nothing to share yet. Write the text first."
+    );
+
+    // Duplicate keeps the copy linked with the same vars.
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Prompt,
+        Some(&text),
+        vec![("judge_name".to_string(), "Sauron".to_string())],
+    )
+    .await;
+    let copy = client
+        .duplicate_step(pb::DuplicateStepRequest {
+            workflow_id: id.clone(),
+            step_id: step_id.clone(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .new_step_id;
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    let original = step(&got, &step_id).prompt_ref.clone().unwrap();
+    let copied = step(&got, &copy).prompt_ref.clone().unwrap();
+    assert_eq!(copied.text_id, original.text_id);
+    assert_eq!(copied.vars, original.vars);
+
+    // Deleting a step that shares the text leaves the text usable.
+    client
+        .delete_step(pb::DeleteStepRequest {
+            workflow_id: id.clone(),
+            step_id: copy,
+        })
+        .await
+        .unwrap();
+    client
+        .remove_shared_text(pb::RemoveSharedTextRequest {
+            workflow_id: id.clone(),
+            text_id: text,
+        })
+        .await
+        .unwrap_err();
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn texts_round_trip_through_the_store_and_cascade(pool: PgPool) {
+    let (server, mut client) = setup(pool).await;
+    let wf = create(&mut client, "Round trip").await;
+    let id = wid(&wf);
+    let step_id = complete_step(&mut client, &id, "Gen").await;
+    let text = add_text(&mut client, &id, "brief", "Hello {{who}}").await;
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Prompt,
+        Some(&text),
+        vec![("who".to_string(), "Ada".to_string())],
+    )
+    .await;
+    set_ref(
+        &mut client,
+        &id,
+        &step_id,
+        pb::TextField::Context,
+        Some(&text),
+        vec![],
+    )
+    .await;
+
+    // Reloaded from the store: texts, refs and vars survive.
+    let got = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap()
+        .into_inner()
+        .workflow
+        .unwrap();
+    assert_eq!(got.texts.len(), 1);
+    let s = step(&got, &step_id);
+    assert_eq!(
+        s.prompt_ref
+            .as_ref()
+            .unwrap()
+            .vars
+            .get("who")
+            .map(String::as_str),
+        Some("Ada")
+    );
+    assert_eq!(s.context_ref.as_ref().unwrap().text_id, text);
+    let refs: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM step_text_refs r JOIN workflow_steps s ON s.id = r.workflow_step_id WHERE s.workflow_id = $1::uuid",
+    )
+    .bind(id.parse::<uuid::Uuid>().unwrap())
+    .fetch_one(&server.pool)
+    .await
+    .unwrap();
+    assert_eq!(refs, 2);
+
+    // Deleting the workflow cascades texts (refs go with the steps).
+    client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM workflows WHERE id = $1")
+        .bind(id.parse::<uuid::Uuid>().unwrap())
+        .execute(&server.pool)
+        .await
+        .unwrap();
+    let texts: i64 = sqlx::query_scalar("SELECT count(*) FROM workflow_texts")
+        .fetch_one(&server.pool)
+        .await
+        .unwrap();
+    let refs: i64 = sqlx::query_scalar("SELECT count(*) FROM step_text_refs")
+        .fetch_one(&server.pool)
+        .await
+        .unwrap();
+    assert_eq!((texts, refs), (0, 0));
+}

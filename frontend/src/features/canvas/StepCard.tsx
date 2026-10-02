@@ -6,12 +6,23 @@
  * Lens mode paints the same card by step-run status: running pulse with live
  * elapsed, failed error line, skipped/cancelled muted.
  */
-import { memo } from "react";
+import { createContext, memo, useContext } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { StepKind, StepRunStatus } from "@/gen/glyph/v1/common_pb";
 import { formatDuration, useNow } from "@/shared/lib/time";
-import type { StepNode } from "./lib/mapping";
+import type { StepNode, TextMarker } from "./lib/mapping";
 import { cn } from "@/shared/lib/cn";
+
+/** The shared text hovered in the workflow panel (spec 0023): its steps
+ * glow. Provided by the build canvas so cards re-render without rebuilding
+ * the node array. */
+export const TextHighlightContext = createContext<string | null>(null);
+
+const MARKER_LABEL: Record<TextMarker["field"], string> = {
+  prompt: "Prompt",
+  context: "Context",
+  expect: "Expected output",
+};
 
 const LENS_CLASS: Record<StepRunStatus, string> = {
   [StepRunStatus.UNSPECIFIED]: "",
@@ -45,6 +56,9 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
   const lens = data.status !== undefined;
   const untitled = data.name.trim().length === 0;
   const stepLabel = describeStepKindShort(data.kind);
+  const highlightTextId = useContext(TextHighlightContext);
+  const textHighlighted =
+    highlightTextId != null && data.textMarkers.some((m) => m.textId === highlightTextId);
 
   return (
     <div
@@ -57,6 +71,7 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
         lens && LENS_CLASS[data.status ?? StepRunStatus.UNSPECIFIED],
         data.firstFailed && "glyph-node-first-failed",
         selected && "glyph-node-selected",
+        textHighlighted && "ring-2 ring-accent",
       )}
     >
       {/* Input handles: one per step input, ordered by position (top→bottom). */}
@@ -141,6 +156,21 @@ export const StepCard = memo(function StepCard({ data, selected }: NodeProps<Ste
         )}
         {data.status === StepRunStatus.SKIPPED && (
           <p className="mt-1 text-[11px] text-ink-subtle">Did not run</p>
+        )}
+
+        {data.textMarkers.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-ink-subtle">
+            {data.textMarkers.map((m) => (
+              <span
+                key={m.field}
+                data-testid={`step-text-${data.stepId}-${m.field}`}
+                title={`${MARKER_LABEL[m.field]} from shared text “${m.key}”`}
+                className="rounded border border-border bg-surface-2 px-1 font-mono"
+              >
+                {`⧉ ${m.key}`}
+              </span>
+            ))}
+          </div>
         )}
 
         <div className="mt-1.5 flex items-center gap-1 text-[10px] text-ink-subtle">

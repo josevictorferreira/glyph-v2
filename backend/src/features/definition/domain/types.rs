@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::features::workflows::model::StepKind;
 use crate::shared::ids::StepId;
 use crate::shared::output_format::OutputFileFormat;
@@ -40,9 +42,9 @@ pub struct StepDef {
     pub model: Option<String>,
     pub temperature: Option<f64>,
     pub tools: Vec<String>,
-    pub prompt: Option<String>,
-    pub context: Option<String>,
-    pub expect: Option<String>,
+    pub prompt: Option<TextField>,
+    pub context: Option<TextField>,
+    pub expect: Option<TextField>,
     pub output: String,
     pub output_description: Option<String>,
     pub format: OutputFileFormat,
@@ -58,6 +60,25 @@ pub struct InputDef {
     pub value: Option<String>,
     pub required: bool,
     pub ask: bool,
+}
+
+/// A workflow-level shared text (`texts:` in the document).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextDef {
+    pub key: String,
+    pub description: Option<String>,
+    pub body: String,
+}
+
+/// A prompt / context / expect field: inline text or a shared-text reference
+/// with per-step variables.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextField {
+    Inline(String),
+    Ref {
+        key: String,
+        vars: BTreeMap<String, String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,6 +97,7 @@ pub struct Document {
     pub description: Option<String>,
     pub fail_fast: bool,
     pub inputs: Vec<InputDef>,
+    pub texts: Vec<TextDef>,
     pub schedule: Option<ScheduleDef>,
     pub steps: Vec<StepDef>,
 }

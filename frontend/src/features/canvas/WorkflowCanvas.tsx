@@ -43,7 +43,7 @@ import type { RunSnapshot, StepRunSummary } from "@/gen/glyph/v1/run_pb";
 import { useWorkflowMutation } from "@/features/workflows";
 import { topologicalOrder, wouldCreateCycle, type EdgeLike } from "./lib/dag";
 import { buildEdges, buildNodes, lensEdges, lensNodes, type StepNode } from "./lib/mapping";
-import { StepCard } from "./StepCard";
+import { StepCard, TextHighlightContext } from "./StepCard";
 import { CanvasEmptyState } from "./CanvasEmptyState";
 import { tidyUp } from "./lib/layout";
 import { toast } from "@/shared/ui/toast";
@@ -77,6 +77,8 @@ export interface WorkflowCanvasBuildProps extends SelectionProps {
   onImportYaml?: () => void;
   /** Center the viewport on this step (readiness deep links). */
   panToStepId?: string;
+  /** Shared text hovered in the panel: its steps get a highlight ring (spec 0023). */
+  highlightTextId?: string | null;
 }
 
 export interface WorkflowCanvasLensProps extends SelectionProps {
@@ -177,6 +179,7 @@ function BuildCanvas({
   issues,
   onImportYaml,
   panToStepId,
+  highlightTextId,
   ...selection
 }: WorkflowCanvasBuildProps) {
   const workflowId = workflow.summary?.id ?? "";
@@ -531,36 +534,38 @@ function BuildCanvas({
       onKeyDown={onKeyDown}
       onDoubleClick={onPaneDoubleClick}
     >
-      <ReactFlow<StepNode>
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onConnectEnd={onConnectEnd}
-        isValidConnection={isValidConnection}
-        onBeforeDelete={onBeforeDelete}
-        onSelectionChange={
-          onSelectStep
-            ? (p: OnSelectionChangeParams) => onSelectStep(singleSelection(p))
-            : undefined
-        }
-        onNodeDoubleClick={(_e, node) => onOpenStep?.(node.id)}
-        onNodeContextMenu={(e, node) => openMenu(e, node.id)}
-        onPaneContextMenu={(e) => openMenu(e)}
-        onNodeDragStart={() => (interactingRef.current = true)}
-        onNodeDragStop={onNodeDragStop}
-        onPaneClick={() => onSelectStep?.(null)}
-        onMoveEnd={() => localStorage.setItem(storageKey, JSON.stringify(getViewport()))}
-        connectionLineType={ConnectionLineType.Bezier}
-        minZoom={0.2}
-        maxZoom={2}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={20} />
-        <Controls showInteractive={false} />
-        <MiniMap pannable zoomable nodeColor={miniMapNodeColor} />
-      </ReactFlow>
+      <TextHighlightContext.Provider value={highlightTextId ?? null}>
+        <ReactFlow<StepNode>
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
+          isValidConnection={isValidConnection}
+          onBeforeDelete={onBeforeDelete}
+          onSelectionChange={
+            onSelectStep
+              ? (p: OnSelectionChangeParams) => onSelectStep(singleSelection(p))
+              : undefined
+          }
+          onNodeDoubleClick={(_e, node) => onOpenStep?.(node.id)}
+          onNodeContextMenu={(e, node) => openMenu(e, node.id)}
+          onPaneContextMenu={(e) => openMenu(e)}
+          onNodeDragStart={() => (interactingRef.current = true)}
+          onNodeDragStop={onNodeDragStop}
+          onPaneClick={() => onSelectStep?.(null)}
+          onMoveEnd={() => localStorage.setItem(storageKey, JSON.stringify(getViewport()))}
+          connectionLineType={ConnectionLineType.Bezier}
+          minZoom={0.2}
+          maxZoom={2}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={20} />
+          <Controls showInteractive={false} />
+          <MiniMap pannable zoomable nodeColor={miniMapNodeColor} />
+        </ReactFlow>
+      </TextHighlightContext.Provider>
 
       {workflow.steps.length === 0 && (
         <CanvasEmptyState onAddStep={addAt} onImportYaml={onImportYaml} />

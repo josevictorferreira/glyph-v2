@@ -4,8 +4,10 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::features::definition::domain::{emit, schema};
-use crate::features::workflows::model::{Step, StepInput, StepKind, Workflow};
+use crate::features::workflows::model::{Step, StepInput, StepKind, TextRef, Workflow};
+use crate::shared::ids::SharedTextId;
 use crate::shared::output_format::OutputFileFormat;
+use std::collections::HashMap;
 
 const FOLDABLE_KEYS: [&str; 4] = ["model", "temperature", "tools", "format"];
 
@@ -45,6 +47,21 @@ pub fn document_hash(workflow: &Workflow) -> Value {
             })
             .collect();
         doc.insert("inputs".into(), Value::Object(inputs));
+    }
+    if !workflow.texts.is_empty() {
+        let texts: Map<String, Value> = workflow
+            .texts
+            .iter()
+            .map(|t| {
+                // Scalar shorthand only when there is no description.
+                let value = match &t.description {
+                    None => json!(t.body),
+                    Some(d) => json!({ "description": d, "body": t.body }),
+                };
+                (t.key.clone(), value)
+            })
+            .collect();
+        doc.insert("texts".into(), Value::Object(texts));
     }
     if let Some(schedule) = &workflow.schedule {
         let mut s = Map::new();
@@ -100,16 +117,42 @@ fn input_object(i: &crate::features::workflows::model::WorkflowInput) -> Value {
 }
 
 fn step_hash(workflow: &Workflow, step: &Step) -> Map<String, Value> {
+    let keys: HashMap<SharedTextId, &str> = workflow
+        .texts
+        .iter()
+        .map(|t| (t.id, t.key.as_str()))
+        .collect();
+    let text_field = |own: &Option<String>, text_ref: &Option<TextRef>| match text_ref {
+        Some(r) => {
+            let mut h = Map::new();
+            if let Some(key) = keys.get(&r.text_id) {
+                h.insert("ref".into(), json!(key));
+            }
+            if !r.vars.is_empty() {
+                h.insert(
+                    "vars".into(),
+                    Value::Object(r.vars.iter().map(|(k, v)| (k.clone(), json!(v))).collect()),
+                );
+            }
+            Value::Object(h)
+        }
+        None => json!(own),
+    };
     let mut h = Map::new();
     h.insert("id".into(), json!(step.id.to_string()));
     h.insert("name".into(), json!(step.name));
-    if step.kind == StepKind::Helper {
-        h.insert("kind".into(), json!("helper"));
-        h.insert("inputs".into(), step_inputs(workflow, step));
-        return h;
-    }
     if let Some(d) = &step.description {
         h.insert("description".into(), json!(d));
+    }
+    if step.kind == StepKind::Helper {
+        h.insert("kind".into(), json!("helper"));
+        if let Some(o) = &step.output_name
+            && *o != step.name
+        {
+            h.insert("output".into(), json!(o));
+        }
+        h.insert("inputs".into(), step_inputs(workflow, step));
+        return h;
     }
     if let Some(m) = &step.model_id {
         h.insert("model".into(), json!(m));
@@ -120,14 +163,20 @@ fn step_hash(workflow: &Workflow, step: &Step) -> Map<String, Value> {
     if !step.enabled_tool_ids.is_empty() {
         h.insert("tools".into(), json!(step.enabled_tool_ids));
     }
-    if let Some(p) = &step.prompt {
-        h.insert("prompt".into(), json!(p));
+    if step.prompt.is_some() || step.prompt_ref.is_some() {
+        h.insert("prompt".into(), text_field(&step.prompt, &step.prompt_ref));
     }
-    if let Some(c) = &step.additional_context {
-        h.insert("context".into(), json!(c));
+    if step.additional_context.is_some() || step.context_ref.is_some() {
+        h.insert(
+            "context".into(),
+            text_field(&step.additional_context, &step.context_ref),
+        );
     }
-    if let Some(e) = &step.expected_output {
-        h.insert("expect".into(), json!(e));
+    if step.expected_output.is_some() || step.expect_ref.is_some() {
+        h.insert(
+            "expect".into(),
+            text_field(&step.expected_output, &step.expect_ref),
+        );
     }
     if let Some(o) = &step.output_name
         && *o != step.name

@@ -62,6 +62,7 @@ id_type!(
     ConnectionId,
     ScheduleId,
     ScheduleValueId,
+    SharedTextId,
     RunId,
     StepRunId,
 );

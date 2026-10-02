@@ -110,7 +110,7 @@ test("readiness deep link focuses the step's prompt", async ({ page }) => {
   await page.goto(`/workflows/${id}`);
   await page.getByTestId("readiness-pill").click();
   await page.getByRole("button", { name: "“Summarizer” needs a prompt." }).click();
-  await expect(page.getByRole("combobox", { name: "Prompt" })).toBeFocused();
+  await expect(page.getByRole("combobox", { name: "Prompt", exact: true })).toBeFocused();
 });
 
 test("draft → activate blocked → fix → activate → pause → resume", async ({ page }) => {
@@ -120,7 +120,7 @@ test("draft → activate blocked → fix → activate → pause → resume", asy
   await page.goto(`/workflows/${id}?step=${step}`);
   await expect(page.getByTestId("activate")).toBeDisabled();
 
-  const prompt = page.getByRole("combobox", { name: "Prompt" });
+  const prompt = page.getByRole("combobox", { name: "Prompt", exact: true });
   await prompt.fill("Say hello.");
   await prompt.blur();
   await expect(page.getByTestId("activate")).toBeEnabled();

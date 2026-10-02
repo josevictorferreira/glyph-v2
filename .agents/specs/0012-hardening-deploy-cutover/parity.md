@@ -64,6 +64,7 @@ Editor / API
 - The validator's unknown-step-kind check is unreachable: kind is an enum and a DB check constraint.
 
 YAML
+- **`schema.json` adds `texts` and the `{ref, vars}` form for `prompt`/`context`/`expect`** (shared texts, spec 0023 — new behaviour, no Rails counterpart). Documents with neither still validate against the Rails schema unchanged.
 - The exporter uses the scalar input shorthand only when it reads back identically (required constant without description) and writes `ask` accurately; Rails' shorthand/`ask: false` could turn an asked input into a constant on re-import.
 - The applier's "schedule unchanged" check compares values by input id; Rails compared a name-keyed map to an id-keyed map, so any schedule with values always re-applied.
 - Fingerprints hash the route-relative export (`/schemas/workflow.json` header); the downloadable export uses `GLYPH_PUBLIC_URL` when set.

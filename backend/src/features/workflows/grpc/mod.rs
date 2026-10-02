@@ -367,6 +367,107 @@ impl Rpc for WorkflowGrpc {
         mutation!(MapStepInputResponse, m)
     }
 
+    async fn add_shared_text(
+        &self,
+        r: Request<pb::AddSharedTextRequest>,
+    ) -> Rsp<pb::AddSharedTextResponse> {
+        let r = r.into_inner();
+        let m = self
+            .service
+            .add_shared_text(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                r.key,
+                r.description,
+                r.body,
+            )
+            .await?;
+        mutation!(AddSharedTextResponse, m, |v| { new_text_id: v.to_string() })
+    }
+
+    async fn update_shared_text(
+        &self,
+        r: Request<pb::UpdateSharedTextRequest>,
+    ) -> Rsp<pb::UpdateSharedTextResponse> {
+        let r = r.into_inner();
+        let m = self
+            .service
+            .update_shared_text(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.text_id, "text_id")?,
+                r.key,
+                r.description,
+                r.body,
+            )
+            .await?;
+        mutation!(UpdateSharedTextResponse, m)
+    }
+
+    async fn remove_shared_text(
+        &self,
+        r: Request<pb::RemoveSharedTextRequest>,
+    ) -> Rsp<pb::RemoveSharedTextResponse> {
+        let r = r.into_inner();
+        let m = self
+            .service
+            .remove_shared_text(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.text_id, "text_id")?,
+            )
+            .await?;
+        mutation!(RemoveSharedTextResponse, m)
+    }
+
+    async fn set_step_text_ref(
+        &self,
+        r: Request<pb::SetStepTextRefRequest>,
+    ) -> Rsp<pb::SetStepTextRefResponse> {
+        let r = r.into_inner();
+        let field = convert::text_field_from_pb(r.field)?;
+        let text_ref = r
+            .r#ref
+            .map(
+                |r| -> Result<crate::features::workflows::domain::model::TextRef, Status> {
+                    let mut vars = std::collections::BTreeMap::new();
+                    for (k, v) in r.vars {
+                        vars.insert(k, v);
+                    }
+                    Ok(crate::features::workflows::domain::model::TextRef {
+                        text_id: parse_id(&r.text_id, "text_id")?,
+                        vars,
+                    })
+                },
+            )
+            .transpose()?;
+        let m = self
+            .service
+            .set_step_text_ref(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.step_id, "step_id")?,
+                field,
+                text_ref,
+            )
+            .await?;
+        mutation!(SetStepTextRefResponse, m)
+    }
+
+    async fn extract_shared_text(
+        &self,
+        r: Request<pb::ExtractSharedTextRequest>,
+    ) -> Rsp<pb::ExtractSharedTextResponse> {
+        let r = r.into_inner();
+        let field = convert::text_field_from_pb(r.field)?;
+        let m = self
+            .service
+            .extract_shared_text(
+                parse_id(&r.workflow_id, "workflow_id")?,
+                parse_id(&r.step_id, "step_id")?,
+                field,
+                r.key,
+            )
+            .await?;
+        mutation!(ExtractSharedTextResponse, m, |v| { new_text_id: v.to_string() })
+    }
+
     async fn add_workflow_input(
         &self,
         r: Request<pb::AddWorkflowInputRequest>,

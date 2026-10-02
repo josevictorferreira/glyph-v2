@@ -1,11 +1,13 @@
 //! Ports of spec/domain/workflows/definition/{parser,exporter,applier,round_trip}_spec.rb.
 
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 
 use super::applier::apply;
 use super::exporter::{document_hash, export, filename, fingerprint};
 use super::parser::{ExistingStep, parse};
-use super::types::*;
+use super::types::{TextField as TextFieldDef, *};
 use super::yaml;
 use crate::features::workflows::model::*;
 use crate::shared::output_format::OutputFileFormat;
@@ -755,4 +757,187 @@ fn applier_schedule() {
     );
     assert_eq!(events, vec!["WorkflowScheduleChanged"]);
     assert!(wf.schedule.is_none() && wf.next_run_at.is_none());
+}
+
+// --- shared texts -----------------------------------------------------------
+
+const TEXTS: &str = "name: W\ntexts:\n  designer_brief: |\n    You are a designer, {{judge_name}}.\n  scorecard:\n    description: Rubric shown to every judge.\n    body: |\n      Rate from 1 to 10.\nsteps:\n- name: Generate\n  model: openai/gpt-5\n  prompt: { ref: designer_brief, vars: { judge_name: Sauron } }\n  expect: Rate honestly.\n  output: poc\n- name: Judge\n  model: openai/gpt-5\n  prompt: { ref: designer_brief }\n  context: { ref: scorecard }\n  expect: Rate honestly.\n  output: score\n";
+
+#[test]
+fn parses_texts_and_references() {
+    let doc = parse(TEXTS, None).unwrap();
+    assert_eq!(
+        doc.texts,
+        vec![
+            TextDef {
+                key: "designer_brief".into(),
+                description: None,
+                body: "You are a designer, {{judge_name}}.\n".into(),
+            },
+            TextDef {
+                key: "scorecard".into(),
+                description: Some("Rubric shown to every judge.".into()),
+                body: "Rate from 1 to 10.\n".into(),
+            },
+        ]
+    );
+    assert_eq!(
+        doc.steps[0].prompt,
+        Some(TextFieldDef::Ref {
+            key: "designer_brief".into(),
+            vars: BTreeMap::from([("judge_name".to_string(), "Sauron".to_string())]),
+        })
+    );
+    assert_eq!(
+        doc.steps[1].prompt,
+        Some(TextFieldDef::Ref {
+            key: "designer_brief".into(),
+            vars: BTreeMap::new(),
+        })
+    );
+    assert_eq!(
+        doc.steps[1].context,
+        Some(TextFieldDef::Ref {
+            key: "scorecard".into(),
+            vars: BTreeMap::new(),
+        })
+    );
+}
+
+#[test]
+fn text_reference_errors_carry_lines() {
+    let e = one(
+        "name: W\ntexts:\n  brief: |\n    Body\n  Brief: |\n    Body\nsteps:\n- name: s\n  prompt: Find\n",
+    );
+    assert_eq!(e.path.as_deref(), Some("/texts/Brief"));
+    assert_eq!(e.line, Some(5));
+    assert_eq!(
+        e.message,
+        "The workflow already has a shared text named “brief”."
+    );
+
+    let e =
+        one("name: W\ntexts:\n  brief: |\n    Body\nsteps:\n- name: s\n  prompt: { ref: nope }\n");
+    assert_eq!(e.path.as_deref(), Some("/steps/0/prompt"));
+    assert_eq!(e.line, Some(7));
+    assert_eq!(
+        e.message,
+        "“nope” is not a shared text. Check the spelling."
+    );
+
+    let e = one(
+        "name: W\ntexts:\n  brief: |\n    Hello {{who}}.\nsteps:\n- name: s\n  prompt:\n    ref: brief\n    vars:\n      what: x\n",
+    );
+    assert_eq!(e.path.as_deref(), Some("/steps/0/prompt/vars/what"));
+    assert_eq!(e.line, Some(10));
+    assert_eq!(e.message, "“what” is not used by the shared text “brief”.");
+}
+
+#[test]
+fn applies_and_exports_texts() {
+    let mut wf = import(TEXTS);
+    let generate = wf.steps.iter().find(|s| s.name == "Generate").unwrap();
+    let brief = wf
+        .texts
+        .iter()
+        .find(|t| t.key == "designer_brief")
+        .unwrap()
+        .id;
+    let scorecard = wf.texts.iter().find(|t| t.key == "scorecard").unwrap().id;
+    assert_eq!(
+        generate.prompt_ref,
+        Some(TextRef {
+            text_id: brief,
+            vars: BTreeMap::from([("judge_name".to_string(), "Sauron".to_string())])
+        })
+    );
+    assert_eq!(generate.prompt, None);
+    let judge = wf.steps.iter().find(|s| s.name == "Judge").unwrap();
+    assert_eq!(
+        judge.context_ref,
+        Some(TextRef {
+            text_id: scorecard,
+            vars: BTreeMap::new()
+        })
+    );
+    assert_eq!(
+        wf.effective_prompt(judge).as_deref(),
+        Some("You are a designer, {{judge_name}}.\n")
+    );
+
+    let doc = document_hash(&wf);
+    assert_eq!(
+        keys(&doc),
+        vec!["name", "defaults", "texts", "steps"],
+        "texts sit between inputs and schedule"
+    );
+    assert_eq!(
+        doc["texts"]["designer_brief"],
+        "You are a designer, {{judge_name}}.\n"
+    );
+    assert_eq!(
+        doc["texts"]["scorecard"],
+        json!({ "description": "Rubric shown to every judge.", "body": "Rate from 1 to 10.\n" })
+    );
+    assert_eq!(
+        doc["steps"][0]["prompt"],
+        json!({ "ref": "designer_brief", "vars": { "judge_name": "Sauron" } })
+    );
+    assert_eq!(doc["steps"][0].get("context"), None);
+    assert_eq!(doc["steps"][1]["context"], json!({ "ref": "scorecard" }));
+
+    // Export → apply unchanged is a no-op.
+    let text = export(&wf, None);
+    let before = fingerprint(&wf);
+    let events = reapply(&mut wf, &text);
+    assert!(events.is_empty(), "{events:?}");
+    assert_eq!(fingerprint(&wf), before);
+}
+
+#[test]
+fn renaming_a_text_relinks_its_steps() {
+    let mut wf = import(TEXTS);
+    let renamed = TEXTS.replace("designer_brief", "participant_brief");
+    let events = reapply(&mut wf, &renamed);
+    assert_eq!(
+        events,
+        vec![
+            "WorkflowUpdated",
+            "WorkflowStepUpdated",
+            "WorkflowStepUpdated",
+            "WorkflowUpdated"
+        ],
+        "{events:?}"
+    );
+    assert!(wf.texts.iter().all(|t| t.key != "designer_brief"));
+    let brief = wf
+        .texts
+        .iter()
+        .find(|t| t.key == "participant_brief")
+        .unwrap()
+        .id;
+    for name in ["Generate", "Judge"] {
+        let step = wf.steps.iter().find(|s| s.name == name).unwrap();
+        assert_eq!(step.prompt_ref.as_ref().unwrap().text_id, brief);
+    }
+
+    // Dropping the text from the document (and its refs) detaches the steps.
+    let detached = renamed
+        .replace(
+            "  participant_brief: |\n    You are a designer, {{judge_name}}.\n",
+            "",
+        )
+        .replace(
+            "prompt: { ref: participant_brief, vars: { judge_name: Sauron } }",
+            "prompt: Inline words",
+        )
+        .replace("prompt: { ref: participant_brief }", "prompt: Inline words");
+    reapply(&mut wf, &detached);
+    assert!(wf.texts.iter().all(|t| t.key != "participant_brief"));
+    assert!(wf.steps.iter().all(|s| s.prompt_ref.is_none()));
+    assert!(
+        wf.steps
+            .iter()
+            .all(|s| s.prompt.as_deref() == Some("Inline words"))
+    );
 }

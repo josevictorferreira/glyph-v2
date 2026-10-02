@@ -37,6 +37,8 @@ pub fn ok(text: &str) -> Script {
 pub struct ScriptedRunner {
     scripts: Mutex<HashMap<String, Script>>,
     pub calls: Mutex<Vec<(String, serde_json::Map<String, Value>)>>,
+    /// (step name, snapshot prompt) per call.
+    pub prompts: Mutex<Vec<(String, Option<String>)>>,
 }
 
 impl ScriptedRunner {
@@ -68,6 +70,17 @@ impl ScriptedRunner {
 
     pub fn call_count(&self) -> usize {
         self.calls.lock().unwrap().len()
+    }
+
+    /// The snapshot prompt recorded for a step's latest call.
+    pub fn prompt_for(&self, step: &str) -> Option<String> {
+        self.prompts
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(s, _)| s == step)
+            .and_then(|(_, p)| p.clone())
     }
 }
 
@@ -108,6 +121,10 @@ impl StepRunner for ScriptedRunner {
             .lock()
             .unwrap()
             .push((ctx.step_name.clone(), ctx.inputs.clone()));
+        self.prompts
+            .lock()
+            .unwrap()
+            .push((ctx.step_name.clone(), ctx.prompt.clone()));
         progress.report("{\"progress\":true}".into()).await;
         let script = self
             .scripts

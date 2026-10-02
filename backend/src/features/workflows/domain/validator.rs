@@ -3,19 +3,12 @@
 //! structured issues; never fails for invalid configuration.
 
 use std::collections::HashSet;
-use std::sync::LazyLock;
-
-use regex::Regex;
 
 use crate::features::workflows::domain::catalog_view::CatalogView;
-use crate::features::workflows::domain::model::{StepKind, Workflow, blank, present};
+use crate::features::workflows::domain::model::{StepKind, TextField, Workflow, blank, present};
 use crate::features::workflows::domain::schedule_calculator;
+use crate::features::workflows::domain::shared_text::variable_tokens;
 use crate::shared::issue::{EntityType, Issue};
-
-/// `{{name}}` references; the restricted charset keeps brace-heavy literals
-/// such as `{{"a": 1}}` out of the scan.
-pub static VARIABLE_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\{\{([A-Za-z0-9_ -]+)\}\}").unwrap());
 
 /// Model settings Glyph understands, gated per model by capability.
 const SUPPORTED_SETTING_KEYS: &[(&str, &str)] = &[("temperature", "temperature")];
@@ -30,22 +23,11 @@ pub fn validate(workflow: &Workflow, catalog: &CatalogView) -> Vec<Issue> {
     v.check_steps();
     v.check_step_inputs();
     v.check_prompt_variables();
+    v.check_shared_texts();
     v.check_workflow_values();
     v.check_connections();
     v.check_schedule();
     v.issues
-}
-
-/// Variable tokens used in a text, stripped and de-duplicated in order.
-pub fn variable_tokens(text: &str) -> Vec<String> {
-    let mut seen = Vec::new();
-    for capture in VARIABLE_PATTERN.captures_iter(text) {
-        let token = capture[1].trim().to_string();
-        if !seen.contains(&token) {
-            seen.push(token);
-        }
-    }
-    seen
 }
 
 struct Validator<'a> {
@@ -101,7 +83,7 @@ impl Validator<'_> {
             if step.kind == StepKind::Helper {
                 continue;
             }
-            if !present(&step.prompt) {
+            if !present(&self.workflow.effective_prompt(step)) {
                 self.error(
                     EntityType::WorkflowStep,
                     step.id,
@@ -109,7 +91,7 @@ impl Validator<'_> {
                     format!("“{label}” needs a prompt."),
                 );
             }
-            if !present(&step.expected_output) {
+            if !present(&self.workflow.effective_expect(step)) {
                 self.error(
                     EntityType::WorkflowStep,
                     step.id,
@@ -215,11 +197,13 @@ impl Validator<'_> {
             let mut known = workflow_names.clone();
             known.extend(step.inputs.iter().map(|i| i.name.as_str()));
             let label = step.label().to_string();
-            for text in [&step.prompt, &step.additional_context]
+            // The effective texts: shared-text variables are already filled in,
+            // so only the tokens left for run time are checked.
+            for text in [wf.effective_prompt(step), wf.effective_context(step)]
                 .into_iter()
                 .flatten()
             {
-                for token in variable_tokens(text) {
+                for token in variable_tokens(&text) {
                     if known.contains(token.as_str()) {
                         continue;
                     }
@@ -231,6 +215,59 @@ impl Validator<'_> {
                             "“{label}” uses “{{{{{token}}}}}” but no workflow value or input provides it. Add one or fix the spelling."
                         ),
                     );
+                }
+            }
+        }
+    }
+
+    /// Shared-text references: vars the text doesn't use, and tokens left
+    /// unfilled in an expected output (`expect` is never interpolated at run
+    /// time, so its ref must fill every token itself).
+    fn check_shared_texts(&mut self) {
+        let wf = self.workflow;
+        for step in &wf.steps {
+            if step.kind == StepKind::Helper {
+                continue;
+            }
+            let label = step.label().to_string();
+            for field in [TextField::Prompt, TextField::Context, TextField::Expect] {
+                let Some(text_ref) = (match field {
+                    TextField::Prompt => &step.prompt_ref,
+                    TextField::Context => &step.context_ref,
+                    TextField::Expect => &step.expect_ref,
+                }) else {
+                    continue;
+                };
+                let Some(text) = wf.text(text_ref.text_id) else {
+                    continue;
+                };
+                let tokens = variable_tokens(&text.body);
+                for var in text_ref.vars.keys() {
+                    if !tokens.iter().any(|t| t == var.trim()) {
+                        self.error(
+                            EntityType::WorkflowStep,
+                            step.id,
+                            field.as_str(),
+                            format!(
+                                "“{label}” sets “{var}”, which the shared text “{}” doesn’t use.",
+                                text.key
+                            ),
+                        );
+                    }
+                }
+                if field == TextField::Expect {
+                    for token in &tokens {
+                        if !text_ref.vars.keys().any(|var| var.trim() == token) {
+                            self.error(
+                                EntityType::WorkflowStep,
+                                step.id,
+                                "expected_output",
+                                format!(
+                                    "“{label}” leaves “{{{{{token}}}}}” unfilled in its expected output. Set it in vars."
+                                ),
+                            );
+                        }
+                    }
                 }
             }
         }

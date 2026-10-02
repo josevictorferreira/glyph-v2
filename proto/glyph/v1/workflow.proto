@@ -42,6 +42,19 @@ service WorkflowService {
   rpc RemoveStepInput(RemoveStepInputRequest) returns (RemoveStepInputResponse);
   rpc MapStepInput(MapStepInputRequest) returns (MapStepInputResponse);
 
+  // Shared texts: workflow-level prompt constants steps reference from their
+  // prompt / context / expect fields.
+  rpc AddSharedText(AddSharedTextRequest) returns (AddSharedTextResponse);
+  rpc UpdateSharedText(UpdateSharedTextRequest) returns (UpdateSharedTextResponse);
+  // FAILED_PRECONDITION (SHARED_TEXT_IN_USE) while any step still links it.
+  rpc RemoveSharedText(RemoveSharedTextRequest) returns (RemoveSharedTextResponse);
+  // Links (or, with ref absent, detaches) a step field. Detaching copies the
+  // rendered text into the step's own field.
+  rpc SetStepTextRef(SetStepTextRefRequest) returns (SetStepTextRefResponse);
+  // "Make shared": creates a shared text from the step's own field and links
+  // the step to it.
+  rpc ExtractSharedText(ExtractSharedTextRequest) returns (ExtractSharedTextResponse);
+
   rpc AddWorkflowInput(AddWorkflowInputRequest) returns (AddWorkflowInputResponse);
   rpc UpdateWorkflowInput(UpdateWorkflowInputRequest) returns (UpdateWorkflowInputResponse);
   rpc RemoveWorkflowInput(RemoveWorkflowInputRequest) returns (RemoveWorkflowInputResponse);
@@ -103,11 +116,28 @@ message StepInput {
   optional string incoming_connection_id = 7;
 }
 
+// A workflow-level named text steps reference from their prompt, context or
+// expect field.
+message SharedText {
+  string id = 1;
+  string key = 2;
+  optional string description = 3;
+  string body = 4;
+  int32 position = 5;
+}
+
+// A step field's link to a shared text, with the per-step {{variable}} values.
+message TextRef {
+  string text_id = 1;
+  map<string, string> vars = 2;
+}
+
 message Step {
   string id = 1;
   StepKind kind = 2;
   string name = 3;
   optional string description = 4;
+  // The effective text: the rendered shared text when prompt_ref is set.
   optional string prompt = 5;
   optional string additional_context = 6;
   optional string expected_output = 7;
@@ -124,6 +154,10 @@ message Step {
   int32 position = 17;
   repeated StepInput inputs = 18;
   bool configured = 19;
+  // Present when the prompt / context / expect comes from a shared text.
+  optional TextRef prompt_ref = 20;
+  optional TextRef context_ref = 21;
+  optional TextRef expect_ref = 22;
 }
 
 message Connection {
@@ -156,6 +190,7 @@ message Workflow {
   repeated Step steps = 3;
   repeated Connection connections = 4;
   optional Schedule schedule = 5;
+  repeated SharedText texts = 6;
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +406,83 @@ message MapStepInputRequest {
 message MapStepInputResponse {
   Workflow workflow = 1;
   repeated Issue issues = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Shared texts
+// ---------------------------------------------------------------------------
+
+// Which step field a shared text feeds.
+enum TextField {
+  TEXT_FIELD_UNSPECIFIED = 0;
+  TEXT_FIELD_PROMPT = 1;
+  TEXT_FIELD_CONTEXT = 2;
+  TEXT_FIELD_EXPECT = 3;
+}
+
+message AddSharedTextRequest {
+  string workflow_id = 1;
+  // Starts with a letter; letters, digits, spaces, underscores. Unique per
+  // workflow ignoring case.
+  string key = 2;
+  optional string description = 3;
+  string body = 4;
+}
+
+message AddSharedTextResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_text_id = 3;
+}
+
+message UpdateSharedTextRequest {
+  string workflow_id = 1;
+  string text_id = 2;
+  string key = 3;
+  optional string description = 4;
+  string body = 5;
+}
+
+message UpdateSharedTextResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message RemoveSharedTextRequest {
+  string workflow_id = 1;
+  string text_id = 2;
+}
+
+message RemoveSharedTextResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message SetStepTextRefRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  TextField field = 3;
+  // Absent detaches: the rendered text is copied into the step's own field.
+  optional TextRef ref = 4;
+}
+
+message SetStepTextRefResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+}
+
+message ExtractSharedTextRequest {
+  string workflow_id = 1;
+  string step_id = 2;
+  TextField field = 3;
+  // The key of the shared text to create from the step's field.
+  string key = 4;
+}
+
+message ExtractSharedTextResponse {
+  Workflow workflow = 1;
+  repeated Issue issues = 2;
+  string new_text_id = 3;
 }
 
 // ---------------------------------------------------------------------------

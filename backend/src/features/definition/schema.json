@@ -43,6 +43,17 @@
     ]
    }
   },
+  "texts": {
+   "type": "object",
+   "description": "Shared texts keyed by name: written once and referenced from steps' prompt, context and expect with {ref: name}. A scalar value is the text body; an object adds a description.",
+   "propertyNames": { "$ref": "#/$defs/inputName" },
+   "additionalProperties": {
+    "oneOf": [
+     { "type": "string" },
+     { "$ref": "#/$defs/sharedText" }
+    ]
+   }
+  },
   "schedule": {
    "type": "object",
    "additionalProperties": false,
@@ -144,6 +155,45 @@
     }
    }
   },
+  "sharedText": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["body"],
+   "description": "A shared text with an optional description.",
+   "properties": {
+    "description": {
+     "type": "string",
+     "description": "Shown above the text in the editor."
+    },
+    "body": {
+     "type": "string",
+     "description": "The text. {{name}} tokens are filled per step by the referencing step's vars, then by step inputs and workflow values at run time."
+    }
+   }
+  },
+  "textField": {
+   "description": "A prompt / context / expect field: inline text, or a reference to a shared text with per-step variable values.",
+   "oneOf": [
+    { "type": "string" },
+    {
+     "type": "object",
+     "additionalProperties": false,
+     "required": ["ref"],
+     "properties": {
+      "ref": {
+       "type": "string",
+       "minLength": 1,
+       "description": "Key of a shared text in texts:."
+      },
+      "vars": {
+       "type": "object",
+       "description": "Values for the {{name}} tokens in the text, keyed by token name. Scalars are stored as text; unfilled tokens fall back to step inputs and workflow values at run time.",
+       "additionalProperties": { "$ref": "#/$defs/scalar" }
+      }
+     }
+    }
+   ]
+  },
   "stepInput": {
    "description": "Where a step input gets its value. A bare name refers to a step (its output) or to a workflow input; the object form adds required and description. An object without from is an unconnected input.",
    "oneOf": [
@@ -195,16 +245,16 @@
     "temperature": { "$ref": "#/$defs/temperature" },
     "tools": { "$ref": "#/$defs/tools" },
     "prompt": {
-     "type": "string",
+     "$ref": "#/$defs/textField",
      "description": "Instructions for the agent. {{name}} interpolates a workflow value or one of this step's inputs."
     },
     "context": {
-     "type": "string",
+     "$ref": "#/$defs/textField",
      "description": "Additional context appended to the prompt. Supports the same {{name}} tokens."
     },
     "expect": {
-     "type": "string",
-     "description": "What a correct output looks like. Used to check and guide the agent."
+     "$ref": "#/$defs/textField",
+     "description": "What a correct output looks like. Used to check and guide the agent. Not interpolated at run time: a shared-text reference must fill every {{name}} token itself."
     },
     "output": {
      "type": "string",

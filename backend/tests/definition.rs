@@ -214,7 +214,13 @@ async fn import_apply_export(pool: PgPool) {
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn tournament_seed_imports_and_validates(pool: PgPool) {
-    for model in ["glm-5-3", "deepseek-v4-flash", "gandalf", "radagast"] {
+    for model in [
+        "glm-5-3",
+        "deepseek-v4-flash",
+        "saruman",
+        "radagast",
+        "sauron",
+    ] {
         sqlx::query("INSERT INTO available_models (provider, model_id, available, fetched_at) VALUES ('velox', $1, true, now())")
             .bind(model)
             .execute(&pool)
@@ -258,7 +264,7 @@ async fn tournament_seed_imports_and_validates(pool: PgPool) {
         vec![
             "Generate — GLM 5.3",
             "Generate — DeepSeek V4",
-            "Generate — Gandalf",
+            "Generate — Saruman",
             "Generate — Radagast"
         ]
     );
@@ -291,7 +297,7 @@ async fn tournament_seed_imports_and_validates(pool: PgPool) {
     let judge = wf
         .steps
         .iter()
-        .find(|s| s.name == "Judge — Gandalf")
+        .find(|s| s.name == "Judge — Sauron")
         .unwrap();
     assert!(
         judge
@@ -301,4 +307,112 @@ async fn tournament_seed_imports_and_validates(pool: PgPool) {
             .starts_with("# UX/UI Evaluation Scorecard")
     );
     assert_eq!(judge.inputs.len(), 5);
+
+    // Shared texts: every participant and judge shares one text each.
+    let by_key = |k: &str| wf.texts.iter().find(|t| t.key == k).unwrap().clone();
+    let brief = by_key("designer_brief");
+    let judge_prompt = by_key("judge_prompt");
+    let scorecard = by_key("scorecard");
+    assert_eq!(wf.texts.len(), 3);
+    assert_eq!(
+        scorecard.description.as_deref(),
+        Some("Rubric shown to every judge.")
+    );
+    assert!(
+        brief
+            .body
+            .starts_with("You are a distinguished product designer")
+    );
+    for s in &generate {
+        let r = s.prompt_ref.as_ref().unwrap();
+        assert_eq!(r.text_id, brief.id);
+        assert!(r.vars.is_empty());
+        assert!(
+            s.prompt
+                .as_deref()
+                .unwrap()
+                .starts_with("You are a distinguished product designer")
+        );
+    }
+    for name in ["Judge — Sauron", "Judge — Radagast"] {
+        let s = wf.steps.iter().find(|s| s.name == name).unwrap();
+        assert_eq!(s.prompt_ref.as_ref().unwrap().text_id, judge_prompt.id);
+        assert_eq!(s.context_ref.as_ref().unwrap().text_id, scorecard.id);
+        assert!(
+            s.additional_context
+                .as_deref()
+                .unwrap()
+                .contains("Rate each category from 1 to 10")
+        );
+    }
+    assert!(
+        aggregate.prompt_ref.is_none(),
+        "the aggregation prompt stays inline"
+    );
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn texts_export_apply_round_trip(pool: PgPool) {
+    let server = common::spawn(pool).await;
+    let mut defs = DefinitionServiceClient::new(server.channel().await);
+    let imported = defs
+        .import_workflow(pb::ImportWorkflowRequest {
+            yaml: TOURNAMENT.into(),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let wf = imported.workflow.unwrap();
+    let id = wf.summary.unwrap().id;
+
+    // Export keeps the references; re-applying it is a no-op.
+    let export = defs
+        .export_definition(pb::ExportDefinitionRequest {
+            workflow_id: id.clone(),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(export.yaml.contains("ref: designer_brief"));
+    assert!(export.yaml.contains("ref: scorecard"));
+    let baseline = events(&server.pool, &id).await;
+    let applied = defs
+        .apply_definition(pb::ApplyDefinitionRequest {
+            workflow_id: id.clone(),
+            yaml: export.yaml.clone(),
+            fingerprint: export.fingerprint.clone(),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(applied.new_fingerprint, export.fingerprint);
+    assert_eq!(events(&server.pool, &id).await, baseline);
+
+    // Unlinking a step in the YAML keeps its rendered text.
+    let unlinked = export.yaml.replace(
+        "prompt:\n    ref: designer_brief",
+        "prompt: You are a distinguished product designer.",
+    );
+    let applied = defs
+        .apply_definition(pb::ApplyDefinitionRequest {
+            workflow_id: id.clone(),
+            yaml: unlinked,
+            fingerprint: String::new(),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let wf = applied.workflow.unwrap();
+    let glm = wf
+        .steps
+        .iter()
+        .find(|s| s.name == "Generate — GLM 5.3")
+        .unwrap();
+    assert!(glm.prompt_ref.is_none());
+    assert!(
+        glm.prompt
+            .as_deref()
+            .unwrap()
+            .starts_with("You are a distinguished product designer")
+    );
 }

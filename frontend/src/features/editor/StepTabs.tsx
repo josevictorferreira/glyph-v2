@@ -3,7 +3,7 @@
 // validator messages for its fields inline (backend copy verbatim).
 import { useCallback } from "react";
 import { IssueEntityType, OutputFileFormat, StepKind } from "@/gen/glyph/v1/common_pb";
-import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
+import { TextField, WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Step, Workflow } from "@/gen/glyph/v1/workflow_pb";
 import {
   findModel,
@@ -21,6 +21,7 @@ import type { EditorFocus } from "./chrome";
 import { useEditorFocusField } from "./chrome";
 import { availableVariables } from "./lib/variables";
 import { PromptEditor } from "./PromptEditor";
+import { SharedTextField } from "./SharedTextField";
 import { useStepDetailsField } from "./step-details";
 
 export interface StepTabProps {
@@ -69,10 +70,12 @@ export function InstructionsTab({ workflowId, workflow, step, focus }: StepTabPr
       mutateAsync({
         workflowId,
         stepId: step.id,
-        prompt: next.prompt || undefined,
-        additionalContext: next.additionalContext || undefined,
+        // Linked fields never ride along: a non-blank value would detach the
+        // shared text (spec 0023).
+        prompt: step.promptRef ? undefined : next.prompt || undefined,
+        additionalContext: step.contextRef ? undefined : next.additionalContext || undefined,
       }).then(() => undefined),
-    [mutateAsync, workflowId, step.id],
+    [mutateAsync, workflowId, step.id, step.promptRef, step.contextRef],
   );
   const field = useAutosaveField<PromptValue>({
     value: { prompt: step.prompt ?? "", additionalContext: step.additionalContext ?? "" },
@@ -83,33 +86,59 @@ export function InstructionsTab({ workflowId, workflow, step, focus }: StepTabPr
 
   return (
     <>
-      <PromptEditor
+      <SharedTextField
+        workflowId={workflowId}
+        workflow={workflow}
+        step={step}
+        field={TextField.PROMPT}
         label="Prompt"
-        field="prompt"
-        value={field.value.prompt}
-        onChange={(prompt) => field.setValue({ ...field.value, prompt })}
-        onFocus={field.onFocus}
-        onBlur={field.onBlur}
-        variables={variables}
+        editorField="prompt"
+        rendered={step.prompt ?? ""}
+        own={field.value.prompt}
         errors={issuesAt("prompt")}
-        placeholder="What should the agent do? Type {{ to insert a variable."
-        rows={8}
-      />
+      >
+        <PromptEditor
+          label="Prompt"
+          field="prompt"
+          value={field.value.prompt}
+          onChange={(prompt) => field.setValue({ ...field.value, prompt })}
+          onFocus={field.onFocus}
+          onBlur={field.onBlur}
+          variables={variables}
+          errors={issuesAt("prompt")}
+          placeholder="What should the agent do? Type {{ to insert a variable."
+          rows={8}
+        />
+      </SharedTextField>
       <Disclosure title="Additional context" defaultOpen={!!step.additionalContext}>
         <div className="py-2">
-          <PromptEditor
+          <SharedTextField
+            workflowId={workflowId}
+            workflow={workflow}
+            step={step}
+            field={TextField.CONTEXT}
             label="Additional context"
-            field="additional_context"
-            value={field.value.additionalContext}
-            onChange={(additionalContext) => field.setValue({ ...field.value, additionalContext })}
-            onFocus={field.onFocus}
-            onBlur={field.onBlur}
-            variables={variables}
+            editorField="additional_context"
+            rendered={step.additionalContext ?? ""}
+            own={field.value.additionalContext}
             errors={issuesAt("additional_context")}
-            placeholder="Background the agent should know."
-            rows={4}
-            chips={false}
-          />
+          >
+            <PromptEditor
+              label="Additional context"
+              field="additional_context"
+              value={field.value.additionalContext}
+              onChange={(additionalContext) =>
+                field.setValue({ ...field.value, additionalContext })
+              }
+              onFocus={field.onFocus}
+              onBlur={field.onBlur}
+              variables={variables}
+              errors={issuesAt("additional_context")}
+              placeholder="Background the agent should know."
+              rows={4}
+              chips={false}
+            />
+          </SharedTextField>
         </div>
       </Disclosure>
       <SaveState field={field} />
@@ -264,10 +293,12 @@ export function OutputTab({ workflowId, workflow, step, focus }: StepTabProps) {
         stepId: step.id,
         outputName: next.outputName,
         outputDescription: next.outputDescription || undefined,
-        expectedOutput: next.expectedOutput || undefined,
+        // A linked expect never rides along: a non-blank value would detach
+        // the shared text (spec 0023).
+        expectedOutput: step.expectRef ? undefined : next.expectedOutput || undefined,
         outputFileFormat: next.format,
       }).then(() => undefined),
-    [mutateAsync, workflowId, step.id],
+    [mutateAsync, workflowId, step.id, step.expectRef],
   );
   const field = useAutosaveField<OutputValue>({
     value: {
@@ -341,17 +372,29 @@ export function OutputTab({ workflowId, workflow, step, focus }: StepTabProps) {
       )}
 
       {isPi && (
-        <Textarea
+        <SharedTextField
+          workflowId={workflowId}
+          workflow={workflow}
+          step={step}
+          field={TextField.EXPECT}
           label="Expected output"
-          data-editor-field="expected_output"
-          hint="Required. Tells the agent what a finished result looks like."
-          error={issuesAt("expected_output").join(" ") || undefined}
-          value={field.value.expectedOutput}
-          onChange={(e) => set({ expectedOutput: e.target.value })}
-          onFocus={field.onFocus}
-          onBlur={field.onBlur}
-          rows={3}
-        />
+          editorField="expected_output"
+          rendered={step.expectedOutput ?? ""}
+          own={field.value.expectedOutput}
+          errors={issuesAt("expected_output")}
+        >
+          <Textarea
+            label="Expected output"
+            data-editor-field="expected_output"
+            hint="Required. Tells the agent what a finished result looks like."
+            error={issuesAt("expected_output").join(" ") || undefined}
+            value={field.value.expectedOutput}
+            onChange={(e) => set({ expectedOutput: e.target.value })}
+            onFocus={field.onFocus}
+            onBlur={field.onBlur}
+            rows={3}
+          />
+        </SharedTextField>
       )}
 
       <Textarea

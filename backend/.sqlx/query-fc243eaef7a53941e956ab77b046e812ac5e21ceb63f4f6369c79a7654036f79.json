@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO workflow_texts AS t\n                 (id, workflow_id, \"key\", description, body, position)\n               SELECT u.id, $1, u.key, u.description, u.body, u.position\n               FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::int[])\n                 AS u(id, key, description, body, position)\n               ON CONFLICT (id) DO UPDATE SET\n                 \"key\" = EXCLUDED.\"key\", description = EXCLUDED.description, body = EXCLUDED.body,\n                 position = EXCLUDED.position, updated_at = now()\n               WHERE (t.\"key\", t.description, t.body, t.position)\n                     IS DISTINCT FROM\n                     (EXCLUDED.\"key\", EXCLUDED.description, EXCLUDED.body, EXCLUDED.position)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc243eaef7a53941e956ab77b046e812ac5e21ceb63f4f6369c79a7654036f79"
+}

@@ -1,7 +1,10 @@
+use std::collections::BTreeMap;
+
 use serde_json::{Map, Value};
 
 use crate::shared::ids::{
-    ConnectionId, ScheduleId, ScheduleValueId, StepId, StepInputId, WorkflowId, WorkflowInputId,
+    ConnectionId, ScheduleId, ScheduleValueId, SharedTextId, StepId, StepInputId, WorkflowId,
+    WorkflowInputId,
 };
 use crate::shared::output_format::OutputFileFormat;
 use crate::shared::time::Timestamp;
@@ -87,6 +90,51 @@ impl WorkflowInput {
     }
 }
 
+/// A workflow-level named text that steps reference from their prompt,
+/// context or expect fields.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SharedText {
+    pub id: SharedTextId,
+    pub key: String,
+    pub description: Option<String>,
+    pub body: String,
+    pub position: i32,
+}
+
+/// A step's link to a shared text, with the per-step `{{variable}}` values.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextRef {
+    pub text_id: SharedTextId,
+    pub vars: BTreeMap<String, String>,
+}
+
+/// The three step fields a shared text can feed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextField {
+    Prompt,
+    Context,
+    Expect,
+}
+
+impl TextField {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Prompt => "prompt",
+            Self::Context => "context",
+            Self::Expect => "expect",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "prompt" => Some(Self::Prompt),
+            "context" => Some(Self::Context),
+            "expect" => Some(Self::Expect),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StepInput {
     pub id: StepInputId,
@@ -107,6 +155,12 @@ pub struct Step {
     pub prompt: Option<String>,
     pub additional_context: Option<String>,
     pub expected_output: Option<String>,
+    /// Linked shared text for the prompt; `prompt` is NULL while set.
+    pub prompt_ref: Option<TextRef>,
+    /// Linked shared text for the context; `additional_context` is NULL while set.
+    pub context_ref: Option<TextRef>,
+    /// Linked shared text for the expect; `expected_output` is NULL while set.
+    pub expect_ref: Option<TextRef>,
     pub output_name: Option<String>,
     pub output_description: Option<String>,
     pub output_file_format: OutputFileFormat,
@@ -138,6 +192,9 @@ impl Step {
             prompt: None,
             additional_context: None,
             expected_output: None,
+            prompt_ref: None,
+            context_ref: None,
+            expect_ref: None,
             output_name: None,
             output_description: None,
             output_file_format: OutputFileFormat::default(),
@@ -153,14 +210,16 @@ impl Step {
         }
     }
 
-    pub fn configured(&self) -> bool {
+    /// Whether the step has everything it needs. Text fields count through
+    /// their linked shared texts, so pass the owning workflow.
+    pub fn configured(&self, workflow: &Workflow) -> bool {
         let named = !blank(&self.name) && present(&self.output_name);
         match self.kind {
             StepKind::Helper => named,
             StepKind::Pi => {
                 named
-                    && present(&self.prompt)
-                    && present(&self.expected_output)
+                    && present(&workflow.effective_prompt(self))
+                    && present(&workflow.effective_expect(self))
                     && present(&self.model_id)
             }
         }
@@ -259,6 +318,8 @@ pub struct Workflow {
     pub updated_at: Timestamp,
     /// Ordered by (position, created_at).
     pub inputs: Vec<WorkflowInput>,
+    /// Shared texts, ordered by (position, created_at).
+    pub texts: Vec<SharedText>,
     /// Ordered by (position, created_at); each step's inputs likewise.
     pub steps: Vec<Step>,
     /// Ordered by created_at.
@@ -277,6 +338,31 @@ impl Workflow {
 
     pub fn input(&self, id: WorkflowInputId) -> Option<&WorkflowInput> {
         self.inputs.iter().find(|i| i.id == id)
+    }
+
+    pub fn text(&self, id: SharedTextId) -> Option<&SharedText> {
+        self.texts.iter().find(|t| t.id == id)
+    }
+
+    pub fn text_mut(&mut self, id: SharedTextId) -> Option<&mut SharedText> {
+        self.texts.iter_mut().find(|t| t.id == id)
+    }
+
+    /// Steps whose field is linked to the shared text `id`.
+    pub fn steps_using_text(&self, id: SharedTextId) -> Vec<&Step> {
+        self.steps
+            .iter()
+            .filter(|s| {
+                [&s.prompt_ref, &s.context_ref, &s.expect_ref]
+                    .into_iter()
+                    .flatten()
+                    .any(|r| r.text_id == id)
+            })
+            .collect()
+    }
+
+    pub fn next_text_position(&self) -> i32 {
+        self.texts.iter().map(|t| t.position).max().unwrap_or(0) + 1
     }
 
     /// The step input with `id` and the step owning it.

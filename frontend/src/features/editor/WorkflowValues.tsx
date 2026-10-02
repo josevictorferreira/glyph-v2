@@ -26,8 +26,8 @@ import {
 } from "@/shared/ui";
 import { variableTokens } from "./lib/variables";
 
-/** backend INPUT_NAME_PATTERN */
-const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_ ]*$/;
+/** backend INPUT_NAME_PATTERN (shared-text keys use the same rule). */
+export const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_ ]*$/;
 export const NAME_RULE =
   "Name must start with a letter and use letters, numbers, spaces or underscores";
 

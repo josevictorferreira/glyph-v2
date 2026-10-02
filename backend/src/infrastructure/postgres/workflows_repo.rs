@@ -33,6 +33,9 @@ pub(crate) fn save_error(error: sqlx::Error) -> DomainError {
             Some(c) if c.contains("lower_name") => {
                 DomainError::invalid("Unable to save — Name has already been taken.")
             }
+            Some("index_workflow_texts_on_workflow_id_and_lower_key") => {
+                DomainError::invalid("Unable to save — Name has already been taken.")
+            }
             Some("index_workflow_connections_on_destination_input_id") => {
                 DomainError::invalid("Unable to save — Destination input has already been taken.")
             }
@@ -91,6 +94,7 @@ pub(crate) async fn load(
                         created_at: r.created_at,
                         updated_at: r.updated_at,
                         inputs: Vec::new(),
+                        texts: Vec::new(),
                         steps: Vec::new(),
                         connections: Vec::new(),
                         schedule: None,
@@ -135,6 +139,24 @@ pub(crate) async fn load(
     })
     .collect();
 
+    workflow.texts = sqlx::query!(
+        "SELECT id, \"key\", description, body, position, created_at
+         FROM workflow_texts WHERE workflow_id = $1 ORDER BY position, created_at",
+        uuid
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(db)?
+    .into_iter()
+    .map(|r| SharedText {
+        id: r.id.into(),
+        key: r.key,
+        description: r.description,
+        body: r.body,
+        position: r.position,
+    })
+    .collect();
+
     let mut steps = Vec::new();
     for r in sqlx::query!(
         "SELECT id, kind, name, description, prompt, additional_context, expected_output, output_name,
@@ -155,6 +177,9 @@ pub(crate) async fn load(
             prompt: r.prompt,
             additional_context: r.additional_context,
             expected_output: r.expected_output,
+            prompt_ref: None,
+            context_ref: None,
+            expect_ref: None,
             output_name: r.output_name,
             output_description: r.output_description,
             output_file_format: OutputFileFormat::parse_or_default(&r.output_file_format),
@@ -194,6 +219,31 @@ pub(crate) async fn load(
                 workflow_input_id: r.workflow_input_id.map(Into::into),
                 created_at: r.created_at,
             });
+        }
+    }
+    for r in sqlx::query!(
+        "SELECT sr.id, sr.workflow_step_id, sr.workflow_text_id, sr.field, sr.vars
+         FROM step_text_refs sr JOIN workflow_steps s ON s.id = sr.workflow_step_id
+         WHERE s.workflow_id = $1",
+        uuid
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(db)?
+    {
+        let step_id = StepId::from(r.workflow_step_id);
+        let Some(step) = steps.iter_mut().find(|s| s.id == step_id) else {
+            continue;
+        };
+        let text_ref = TextRef {
+            text_id: r.workflow_text_id.into(),
+            vars: serde_json::from_value(r.vars).unwrap_or_default(),
+        };
+        match TextField::parse(&r.field) {
+            Some(TextField::Prompt) => step.prompt_ref = Some(text_ref),
+            Some(TextField::Context) => step.context_ref = Some(text_ref),
+            Some(TextField::Expect) => step.expect_ref = Some(text_ref),
+            None => return Err(corrupt("step text ref field")),
         }
     }
     workflow.steps = steps;
@@ -364,6 +414,46 @@ pub(crate) async fn save(
     .execute(&mut *conn)
     .await
     .map_err(db)?;
+    // Text refs of surviving steps first, then the texts (RESTRICT): steps
+    // deleted above already cascaded their refs.
+    let mut ref_steps: Vec<Uuid> = Vec::new();
+    let mut ref_fields: Vec<String> = Vec::new();
+    for step in &wf.steps {
+        for (field, text_ref) in [
+            (TextField::Prompt, &step.prompt_ref),
+            (TextField::Context, &step.context_ref),
+            (TextField::Expect, &step.expect_ref),
+        ] {
+            if text_ref.is_some() {
+                ref_steps.push(step.id.as_uuid());
+                ref_fields.push(field.as_str().to_string());
+            }
+        }
+    }
+    sqlx::query!(
+        "DELETE FROM step_text_refs r
+         USING workflow_steps s
+         WHERE s.id = r.workflow_step_id AND s.workflow_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM UNNEST($2::uuid[], $3::text[]) AS k(sid, fld)
+             WHERE k.sid = r.workflow_step_id AND k.fld = r.field
+           )",
+        wid,
+        &ref_steps,
+        &ref_fields
+    )
+    .execute(&mut *conn)
+    .await
+    .map_err(db)?;
+    let text_ids: Vec<Uuid> = wf.texts.iter().map(|t| t.id.as_uuid()).collect();
+    sqlx::query!(
+        "DELETE FROM workflow_texts WHERE workflow_id = $1 AND NOT (id = ANY($2))",
+        wid,
+        &text_ids
+    )
+    .execute(&mut *conn)
+    .await
+    .map_err(db)?;
 
     // --- upserts --------------------------------------------------------------
     if !wf.inputs.is_empty() {
@@ -391,6 +481,32 @@ pub(crate) async fn save(
             &i.iter().map(|x| x.value.clone()).collect::<Vec<_>>() as &[Option<String>],
             &i.iter().map(|x| x.position).collect::<Vec<_>>(),
             &i.iter().map(|x| x.created_at).collect::<Vec<_>>(),
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(save_error)?;
+    }
+
+    if !wf.texts.is_empty() {
+        let t = &wf.texts;
+        sqlx::query!(
+            r#"INSERT INTO workflow_texts AS t
+                 (id, workflow_id, "key", description, body, position)
+               SELECT u.id, $1, u.key, u.description, u.body, u.position
+               FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::int[])
+                 AS u(id, key, description, body, position)
+               ON CONFLICT (id) DO UPDATE SET
+                 "key" = EXCLUDED."key", description = EXCLUDED.description, body = EXCLUDED.body,
+                 position = EXCLUDED.position, updated_at = now()
+               WHERE (t."key", t.description, t.body, t.position)
+                     IS DISTINCT FROM
+                     (EXCLUDED."key", EXCLUDED.description, EXCLUDED.body, EXCLUDED.position)"#,
+            wid,
+            &t.iter().map(|x| x.id.as_uuid()).collect::<Vec<_>>(),
+            &t.iter().map(|x| x.key.clone()).collect::<Vec<_>>(),
+            &t.iter().map(|x| x.description.clone()).collect::<Vec<_>>() as &[Option<String>],
+            &t.iter().map(|x| x.body.clone()).collect::<Vec<_>>(),
+            &t.iter().map(|x| x.position).collect::<Vec<_>>(),
         )
         .execute(&mut *conn)
         .await
@@ -488,6 +604,42 @@ pub(crate) async fn save(
         .execute(&mut *conn)
         .await
         .map_err(save_error)?;
+    }
+
+    let step_text_refs: Vec<(Uuid, TextField, &TextRef)> = wf
+        .steps
+        .iter()
+        .flat_map(|s| {
+            [
+                (TextField::Prompt, &s.prompt_ref),
+                (TextField::Context, &s.context_ref),
+                (TextField::Expect, &s.expect_ref),
+            ]
+            .into_iter()
+            .filter_map(|(f, r)| r.as_ref().map(|r| (s.id.as_uuid(), f, r)))
+        })
+        .collect();
+    if !step_text_refs.is_empty() {
+        let sr = &step_text_refs;
+        sqlx::query!(
+            r#"INSERT INTO step_text_refs AS t
+                 (workflow_step_id, field, workflow_text_id, vars)
+               SELECT u.sid, u.fld, u.tid, u.vars
+               FROM UNNEST($1::uuid[], $2::text[], $3::uuid[], $4::jsonb[]) AS u(sid, fld, tid, vars)
+               ON CONFLICT (workflow_step_id, field) DO UPDATE SET
+                 workflow_text_id = EXCLUDED.workflow_text_id, vars = EXCLUDED.vars, updated_at = now()
+               WHERE (t.workflow_text_id, t.vars)
+                     IS DISTINCT FROM (EXCLUDED.workflow_text_id, EXCLUDED.vars)"#,
+            &sr.iter().map(|(s, _, _)| *s).collect::<Vec<_>>(),
+            &sr.iter().map(|(_, f, _)| f.as_str().to_string()).collect::<Vec<_>>(),
+            &sr.iter().map(|(_, _, r)| r.text_id.as_uuid()).collect::<Vec<_>>(),
+            &sr.iter()
+                .map(|(_, _, r)| serde_json::to_value(&r.vars).unwrap_or_default())
+                .collect::<Vec<_>>(),
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(db)?;
     }
 
     if !wf.connections.is_empty() {

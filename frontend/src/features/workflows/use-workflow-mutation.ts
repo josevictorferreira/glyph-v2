@@ -49,6 +49,11 @@ export type WorkflowMutationRpc =
   | typeof m.addWorkflowInput
   | typeof m.updateWorkflowInput
   | typeof m.removeWorkflowInput
+  | typeof m.addSharedText
+  | typeof m.updateSharedText
+  | typeof m.removeSharedText
+  | typeof m.setStepTextRef
+  | typeof m.extractSharedText
   | typeof m.createConnection
   | typeof m.connectOutputToStep
   | typeof m.removeConnection

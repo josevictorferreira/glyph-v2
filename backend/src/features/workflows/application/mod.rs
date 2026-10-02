@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use crate::features::workflows::domain::catalog_view::CatalogView;
-use crate::features::workflows::domain::model::{StepKind, Workflow, WorkflowSummary};
+use crate::features::workflows::domain::model::{
+    StepKind, TextField, TextRef, Workflow, WorkflowSummary,
+};
 use crate::features::workflows::domain::schedule_calculator::Recurrence;
 use crate::features::workflows::domain::validator;
 use crate::features::workflows::domain::workflow::{Events, WorkflowInputFields};
@@ -317,6 +319,68 @@ impl WorkflowService {
             Ok(((), wf.map_step_input(input, workflow_input)?))
         })
         .await
+    }
+
+    // --- shared texts ------------------------------------------------------
+
+    pub async fn add_shared_text(
+        &self,
+        id: WorkflowId,
+        key: String,
+        description: Option<String>,
+        body: String,
+    ) -> DomainResult<Mutation<SharedTextId>> {
+        self.mutate(id, true, move |wf, _, _| {
+            wf.add_text(&key, description, &body)
+        })
+        .await
+    }
+
+    pub async fn update_shared_text(
+        &self,
+        id: WorkflowId,
+        text: SharedTextId,
+        key: String,
+        description: Option<String>,
+        body: String,
+    ) -> DomainResult<Mutation> {
+        self.mutate(id, true, move |wf, _, _| {
+            Ok(((), wf.update_text(text, &key, description, &body)?))
+        })
+        .await
+    }
+
+    pub async fn remove_shared_text(
+        &self,
+        id: WorkflowId,
+        text: SharedTextId,
+    ) -> DomainResult<Mutation> {
+        self.mutate(id, true, move |wf, _, _| Ok(((), wf.remove_text(text)?)))
+            .await
+    }
+
+    pub async fn set_step_text_ref(
+        &self,
+        id: WorkflowId,
+        step: StepId,
+        field: TextField,
+        text_ref: Option<TextRef>,
+    ) -> DomainResult<Mutation> {
+        self.mutate(id, true, move |wf, _, _| {
+            Ok(((), wf.set_step_text_ref(step, field, text_ref)?))
+        })
+        .await
+    }
+
+    pub async fn extract_shared_text(
+        &self,
+        id: WorkflowId,
+        step: StepId,
+        field: TextField,
+        key: String,
+    ) -> DomainResult<Mutation<SharedTextId>> {
+        self.mutate(id, true, move |wf, _, _| wf.extract_text(step, field, &key))
+            .await
     }
 
     // --- workflow inputs ---------------------------------------------------
