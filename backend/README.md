@@ -29,8 +29,7 @@ nix build .#image        # OCI image (binary + Pi), load with `podman load < res
 | `GLYPH_ENCRYPTION_KEY` | insecure dev key (warned) | base64 of 32 bytes; AES-256-GCM key for evidence at rest |
 | `GLYPH_CORS_ORIGINS` | `http://localhost:5173` | comma list of browser origins allowed for gRPC-Web |
 | `GLYPH_PUBLIC_URL` | unset | absolute base URL for the schema header in exported YAML |
-| `VELOX_BASE_URL` / `VELOX_API_KEY` | `https://velox.josevictor.me/v1` / unset | default model provider |
-| `OMNIROUTE_BASE_URL` / `OMNIROUTE_API_KEY` | `https://omniroute.josevictor.me/v1` / unset | secondary provider |
+| `VELOX_BASE_URL` / `VELOX_API_KEY` | `https://velox.josevictor.me/v1` / unset | model provider |
 | `GLYPH_MODELS_CACHE_TTL` | `300` | seconds before the model catalog reports `stale` |
 | `GLYPH_STEP_RUNNER` | `pi` | `pi` or `fake` (deterministic, for development) |
 | `GLYPH_PI_BIN` | `pi` | Pi CLI path (the flake sets it) |
@@ -43,7 +42,7 @@ nix build .#image        # OCI image (binary + Pi), load with `podman load < res
 | `GLYPH_LOG_JSON` | `false` | JSON log lines |
 | `RUST_LOG` | `info,sqlx=warn,tower_http=info` | log filter |
 
-Secret values (`VELOX_API_KEY`, `OMNIROUTE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GLYPH_DATABASE_PASSWORD`, `GLYPH_ENCRYPTION_KEY`, the `DATABASE_URL` password) are redacted from every agent output before it is stored, logged or published.
+Secret values (`VELOX_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GLYPH_DATABASE_PASSWORD`, `GLYPH_ENCRYPTION_KEY`, the `DATABASE_URL` password) are redacted from every agent output before it is stored, logged or published.
 
 ## Jobs
 

@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use glyph_backend::features::catalog::{FetchedModel, GatewayError, ModelGateway, Provider};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, json};
 
 /// A gateway returning scripted model lists (or an error).
 pub struct FakeGateway {
@@ -28,15 +28,11 @@ impl FakeGateway {
 }
 
 pub fn model(provider: Provider, id: &str) -> FetchedModel {
-    let mut capabilities = Map::new();
-    if provider == Provider::Omniroute {
-        capabilities.insert("temperature".into(), Value::Bool(true));
-    }
     FetchedModel {
         provider,
         model_id: id.into(),
         display_name: id.into(),
-        capabilities,
+        capabilities: Map::new(),
         raw: json!({ "id": id }),
     }
 }

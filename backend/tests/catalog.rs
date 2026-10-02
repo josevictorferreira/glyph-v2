@@ -34,45 +34,14 @@ async fn gateway(
 }
 
 #[tokio::test]
-async fn omniroute_normalizes_the_model_list() {
+async fn velox_ignores_names_and_capabilities() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/models"))
         .and(header("authorization", "Bearer key"))
         .and(header("accept", "application/json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": [
-                { "id": "glm-4.7", "capabilities": { "temperature": true } },
-                { "id": "auto/best-coding", "name": "Best", "capabilities": { "temperature": true, "tool_calling": true } },
-                { "id": "" }
-            ]
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let models = gateway(Provider::Omniroute, &server, Some("key"))
-        .await
-        .fetch_models()
-        .await
-        .unwrap();
-    assert_eq!(models.len(), 2);
-    assert_eq!(models[0].provider, Provider::Omniroute);
-    assert_eq!(models[0].model_id, "glm-4.7");
-    assert_eq!(models[0].display_name, "glm-4.7");
-    assert_eq!(
-        json!(models[0].capabilities),
-        json!({ "temperature": true })
-    );
-    assert_eq!(models[1].display_name, "Best");
-}
-
-#[tokio::test]
-async fn velox_ignores_names_and_capabilities() {
-    let server = MockServer::start().await;
-    Mock::given(path("/v1/models"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": [{ "id": "combo", "name": "ignored", "capabilities": { "temperature": true } }]
+            "data": [{ "id": "combo", "name": "ignored", "capabilities": { "temperature": true } }, { "id": "" }]
         })))
         .mount(&server)
         .await;
@@ -81,6 +50,7 @@ async fn velox_ignores_names_and_capabilities() {
         .fetch_models()
         .await
         .unwrap();
+    assert_eq!(models.len(), 1);
     assert_eq!(models[0].display_name, "combo");
     assert!(models[0].capabilities.is_empty());
 }
@@ -92,24 +62,24 @@ async fn gateway_errors() {
         .respond_with(ResponseTemplate::new(401).set_body_string("unauthorized"))
         .mount(&server)
         .await;
-    let err = gateway(Provider::Omniroute, &server, Some("key"))
+    let err = gateway(Provider::Velox, &server, Some("key"))
         .await
         .fetch_models()
         .await
         .unwrap_err();
-    assert_eq!(err.0, "omniroute /models answered 401");
+    assert_eq!(err.0, "velox /models answered 401");
 
     let server = MockServer::start().await;
     Mock::given(path("/v1/models"))
         .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
         .mount(&server)
         .await;
-    let err = gateway(Provider::Omniroute, &server, Some("key"))
+    let err = gateway(Provider::Velox, &server, Some("key"))
         .await
         .fetch_models()
         .await
         .unwrap_err();
-    assert_eq!(err.0, "omniroute /models returned invalid JSON");
+    assert_eq!(err.0, "velox /models returned invalid JSON");
 
     let server = MockServer::start().await;
     Mock::given(path("/v1/models"))
@@ -123,12 +93,12 @@ async fn gateway_errors() {
         .unwrap_err();
     assert_eq!(err.0, "velox /models returned an unexpected payload");
 
-    let err = gateway(Provider::Omniroute, &server, None)
+    let err = gateway(Provider::Velox, &server, None)
         .await
         .fetch_models()
         .await
         .unwrap_err();
-    assert_eq!(err.0, "OMNIROUTE_API_KEY is not configured");
+    assert_eq!(err.0, "VELOX_API_KEY is not configured");
     let err = gateway(Provider::Velox, &server, Some("  "))
         .await
         .fetch_models()
@@ -166,7 +136,7 @@ async fn api_key_never_reaches_trace_logs() {
         .mount(&server)
         .await;
     let secret = "sk-live-0123456789abcdef";
-    let g = gateway(Provider::Omniroute, &server, Some(secret)).await;
+    let g = gateway(Provider::Velox, &server, Some(secret)).await;
     assert!(g.fetch_models().await.is_err());
     tracing::info!("done");
 
@@ -214,11 +184,11 @@ async fn availability(pool: &PgPool, provider: &str, id: &str) -> Option<bool> {
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn refresh_upserts_and_marks_vanished_unavailable(pool: PgPool) {
-    sqlx::query("INSERT INTO available_models (provider, model_id, available) VALUES ('omniroute', 'old-model', true), ('velox', 'velox-model', true)")
+    sqlx::query("INSERT INTO available_models (provider, model_id, available) VALUES ('velox', 'old-model', true), ('velox', 'kept-model', true)")
         .execute(&pool)
         .await
         .unwrap();
-    let gateway = Arc::new(FakeGateway::new(Provider::Omniroute, &["new-model"]));
+    let gateway = Arc::new(FakeGateway::new(Provider::Velox, &["new-model"]));
     let flagger = Arc::new(RecordingFlagger::default());
     let result = refresher(&pool, gateway.clone(), flagger.clone())
         .refresh(gateway.as_ref())
@@ -227,44 +197,41 @@ async fn refresh_upserts_and_marks_vanished_unavailable(pool: PgPool) {
 
     assert!(result.refreshed);
     assert_eq!(result.count, 1);
-    assert_eq!(result.became_unavailable, vec!["old-model"]);
-    assert_eq!(
-        availability(&pool, "omniroute", "new-model").await,
-        Some(true)
-    );
-    assert_eq!(
-        availability(&pool, "omniroute", "old-model").await,
-        Some(false)
-    );
-    // Other providers untouched.
-    assert_eq!(
-        availability(&pool, "velox", "velox-model").await,
-        Some(true)
-    );
+    assert_eq!(result.became_unavailable, vec!["kept-model", "old-model"]);
+    assert_eq!(availability(&pool, "velox", "new-model").await, Some(true));
+    assert_eq!(availability(&pool, "velox", "old-model").await, Some(false));
     // Both id shapes flagged.
     assert_eq!(
         *flagger.0.lock().unwrap(),
-        vec!["old-model", "omniroute/old-model"]
+        vec![
+            "kept-model",
+            "velox/kept-model",
+            "old-model",
+            "velox/old-model"
+        ]
     );
 
     let (event_type, data): (String, serde_json::Value) = sqlx::query_as(
-        "SELECT event_type, data FROM events WHERE stream = 'Omniroute$models' ORDER BY id DESC LIMIT 1",
+        "SELECT event_type, data FROM events WHERE stream = 'Velox$models' ORDER BY id DESC LIMIT 1",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(event_type, "ModelsRefreshed");
     assert_eq!(data["model_count"], 1);
-    assert_eq!(data["unavailable_model_ids"], json!(["old-model"]));
+    assert_eq!(
+        data["unavailable_model_ids"],
+        json!(["kept-model", "old-model"])
+    );
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn refresh_failure_leaves_the_db_untouched(pool: PgPool) {
-    sqlx::query("INSERT INTO available_models (provider, model_id, available) VALUES ('omniroute', 'kept', true)")
+    sqlx::query("INSERT INTO available_models (provider, model_id, available) VALUES ('velox', 'kept', true)")
         .execute(&pool)
         .await
         .unwrap();
-    let gateway = Arc::new(FakeGateway::new(Provider::Omniroute, &[]));
+    let gateway = Arc::new(FakeGateway::new(Provider::Velox, &[]));
     gateway.fail("boom");
     let result = refresher(&pool, gateway.clone(), Arc::default())
         .refresh(gateway.as_ref())
@@ -272,7 +239,7 @@ async fn refresh_failure_leaves_the_db_untouched(pool: PgPool) {
         .unwrap();
     assert!(!result.refreshed);
     assert_eq!(result.error.as_deref(), Some("boom"));
-    assert_eq!(availability(&pool, "omniroute", "kept").await, Some(true));
+    assert_eq!(availability(&pool, "velox", "kept").await, Some(true));
     let events: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
         .fetch_one(&pool)
         .await
@@ -285,12 +252,11 @@ async fn refresh_failure_leaves_the_db_untouched(pool: PgPool) {
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn catalog_service(pool: PgPool) {
     let velox = Arc::new(FakeGateway::new(Provider::Velox, &["zeta", "alpha"]));
-    let omni = Arc::new(FakeGateway::new(Provider::Omniroute, &["beta"]));
     let server = common::spawn_with(
         pool,
         common::test_config(),
         Overrides {
-            gateways: Some(vec![velox.clone(), omni.clone()]),
+            gateways: Some(vec![velox.clone()]),
             ..Overrides::default()
         },
     )
@@ -322,7 +288,7 @@ async fn catalog_service(pool: PgPool) {
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(refreshed.results.len(), 2);
+    assert_eq!(refreshed.results.len(), 1);
     assert!(refreshed.results.iter().all(|r| r.refreshed));
 
     let list = client
@@ -334,8 +300,7 @@ async fn catalog_service(pool: PgPool) {
         .into_inner();
     assert!(!list.stale);
     let ids: Vec<_> = list.models.iter().map(|m| m.full_id.as_str()).collect();
-    assert_eq!(ids, vec!["velox/alpha", "velox/zeta", "omniroute/beta"]);
-    assert_eq!(list.models[2].capabilities.get("temperature"), Some(&true));
+    assert_eq!(ids, vec!["velox/alpha", "velox/zeta"]);
 
     // Vanished models are hidden unless asked for.
     velox.set(&["alpha"]);
@@ -350,7 +315,7 @@ async fn catalog_service(pool: PgPool) {
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(list.models.len(), 2);
+    assert_eq!(list.models.len(), 1);
     let all = client
         .list_models(pb::ListModelsRequest {
             include_unavailable: true,
@@ -358,7 +323,7 @@ async fn catalog_service(pool: PgPool) {
         .await
         .unwrap()
         .into_inner();
-    assert_eq!(all.models.len(), 3);
+    assert_eq!(all.models.len(), 2);
     assert!(
         !all.models
             .iter()
@@ -368,7 +333,7 @@ async fn catalog_service(pool: PgPool) {
     );
 
     // Provider errors are reported, not fatal.
-    omni.fail("OMNIROUTE_API_KEY is not configured");
+    velox.fail("VELOX_API_KEY is not configured");
     let refreshed = client
         .refresh_models(pb::RefreshModelsRequest {})
         .await
@@ -377,12 +342,12 @@ async fn catalog_service(pool: PgPool) {
     let failed = refreshed
         .results
         .iter()
-        .find(|r| r.provider == "omniroute")
+        .find(|r| r.provider == "velox")
         .unwrap();
     assert!(!failed.refreshed);
     assert_eq!(
         failed.error.as_deref(),
-        Some("OMNIROUTE_API_KEY is not configured")
+        Some("VELOX_API_KEY is not configured")
     );
 }
 

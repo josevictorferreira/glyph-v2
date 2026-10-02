@@ -243,7 +243,7 @@ export const RefreshModelsResponseSchema: GenMessage<RefreshModelsResponse> = /*
   messageDesc(file_glyph_v1_catalog, 8);
 
 /**
- * Models advertised by the providers (velox, omniroute) and the tool catalog.
+ * Models advertised by the provider (velox) and the tool catalog.
  *
  * @generated from service glyph.v1.CatalogService
  */

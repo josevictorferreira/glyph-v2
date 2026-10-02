@@ -20,7 +20,7 @@ type Client = WorkflowServiceClient<Channel>;
 async fn seed_model(pool: &PgPool) {
     sqlx::query(
         "INSERT INTO available_models (provider, model_id, available, capabilities, fetched_at)
-         VALUES ('omniroute', 'test-model', true, '{\"temperature\": true}', now())",
+         VALUES ('velox', 'test-model', true, '{\"temperature\": true}', now())",
     )
     .execute(pool)
     .await
@@ -99,7 +99,7 @@ async fn complete_step(client: &mut Client, workflow_id: &str, name: &str) -> St
         .update_step_model(pb::UpdateStepModelRequest {
             workflow_id: workflow_id.into(),
             step_id: step_id.clone(),
-            model_id: "omniroute/test-model".into(),
+            model_id: "velox/test-model".into(),
             temperature: None,
         })
         .await
@@ -281,7 +281,7 @@ async fn steps_and_events(pool: PgPool) {
         .update_step_model(pb::UpdateStepModelRequest {
             workflow_id: id.clone(),
             step_id: source.clone(),
-            model_id: "omniroute/test-model".into(),
+            model_id: "velox/test-model".into(),
             temperature: Some(3.0),
         })
         .await
@@ -294,7 +294,7 @@ async fn steps_and_events(pool: PgPool) {
         .update_step_model(pb::UpdateStepModelRequest {
             workflow_id: id.clone(),
             step_id: source.clone(),
-            model_id: "omniroute/test-model".into(),
+            model_id: "velox/test-model".into(),
             temperature: Some(0.4),
         })
         .await
@@ -824,12 +824,12 @@ async fn paused_step(client: &mut Client, id: &str) -> String {
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn vanished_models_flag_active_workflows(pool: PgPool) {
     seed_model(&pool).await;
-    let omni = Arc::new(FakeGateway::new(Provider::Omniroute, &["test-model"]));
+    let velox = Arc::new(FakeGateway::new(Provider::Velox, &["test-model"]));
     let server = common::spawn_with(
         pool,
         common::test_config(),
         Overrides {
-            gateways: Some(vec![omni.clone()]),
+            gateways: Some(vec![velox.clone()]),
             ..Overrides::default()
         },
     )
@@ -846,7 +846,7 @@ async fn vanished_models_flag_active_workflows(pool: PgPool) {
         .unwrap();
     let untouched = create(&mut client, "Draft").await;
 
-    omni.set(&["other-model"]);
+    velox.set(&["other-model"]);
     catalog
         .refresh_models(pb::RefreshModelsRequest {})
         .await
@@ -862,7 +862,7 @@ async fn vanished_models_flag_active_workflows(pool: PgPool) {
     assert_eq!(status(&got), pb::WorkflowStatus::NeedsAttention);
     assert_eq!(
         got.steps[0].model_id.as_deref(),
-        Some("omniroute/test-model"),
+        Some("velox/test-model"),
         "choice stays visible"
     );
     let data: serde_json::Value = sqlx::query_scalar(

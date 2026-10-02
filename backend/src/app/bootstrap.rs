@@ -131,18 +131,11 @@ pub async fn build_with(
 
     // --- catalog -----------------------------------------------------------
     let gateways = overrides.gateways.clone().unwrap_or_else(|| {
-        vec![
-            Arc::new(OpenAiCompatibleGateway::new(
-                Provider::Velox,
-                &config.velox_base_url,
-                config.velox_api_key.clone(),
-            )) as Arc<dyn ModelGateway>,
-            Arc::new(OpenAiCompatibleGateway::new(
-                Provider::Omniroute,
-                &config.omniroute_base_url,
-                config.omniroute_api_key.clone(),
-            )),
-        ]
+        vec![Arc::new(OpenAiCompatibleGateway::new(
+            Provider::Velox,
+            &config.velox_base_url,
+            config.velox_api_key.clone(),
+        )) as Arc<dyn ModelGateway>]
     });
     let catalog_store: Arc<dyn CatalogStore> = Arc::new(store.clone());
     let list_models = ListModels::new(
@@ -167,9 +160,7 @@ pub async fn build_with(
                     pi_bin: config.pi_bin.clone(),
                     timeout: config.pi_timeout,
                     velox_base_url: config.velox_base_url.clone(),
-                    omniroute_base_url: config.omniroute_base_url.clone(),
                     velox_api_key: config.velox_api_key.clone(),
-                    omniroute_api_key: config.omniroute_api_key.clone(),
                 },
                 Arc::new(store.clone()),
                 redactor(config),

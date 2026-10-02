@@ -9,7 +9,7 @@ nix run .#check   # buf lint/breaking, fmt, clippy, cargo deny, tests, frontend 
 nix run .#seed    # import the sample "Design POC Tournament" workflow
 ```
 
-Provider keys go in `.env` (gitignored): `VELOX_API_KEY=…`, `OMNIROUTE_API_KEY=…`.
+Provider keys go in `.env` (gitignored): `VELOX_API_KEY=…`.
 
 - `proto/` — the gRPC contract (`proto/README.md`)
 - `backend/` — the server (`backend/README.md` for routes and environment)

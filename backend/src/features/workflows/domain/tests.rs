@@ -25,7 +25,7 @@ fn now() -> Timestamp {
 fn catalog() -> CatalogView {
     CatalogView {
         models: vec![CatalogModel {
-            provider: "omniroute".into(),
+            provider: "velox".into(),
             model_id: "test-model".into(),
             available: true,
             capabilities: json!({ "temperature": true }).as_object().unwrap().clone(),
@@ -119,7 +119,7 @@ fn unavailable_model_blocks() {
 fn full_model_ids_are_accepted() {
     let mut wf = workflow();
     let id = complete_step(&mut wf, "Step 1");
-    wf.step_mut(id).unwrap().model_id = Some("omniroute/test-model".into());
+    wf.step_mut(id).unwrap().model_id = Some("velox/test-model".into());
     wf.step_mut(id)
         .unwrap()
         .model_settings

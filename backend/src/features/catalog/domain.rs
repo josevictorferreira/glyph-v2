@@ -7,17 +7,15 @@ use crate::shared::time::Timestamp;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Provider {
     Velox,
-    Omniroute,
 }
 
 impl Provider {
-    pub const ALL: [Self; 2] = [Self::Velox, Self::Omniroute];
+    pub const ALL: [Self; 1] = [Self::Velox];
     pub const DEFAULT: Self = Self::Velox;
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Velox => "velox",
-            Self::Omniroute => "omniroute",
         }
     }
 
@@ -29,7 +27,6 @@ impl Provider {
     pub fn api_key_var(self) -> &'static str {
         match self {
             Self::Velox => "VELOX_API_KEY",
-            Self::Omniroute => "OMNIROUTE_API_KEY",
         }
     }
 
@@ -108,15 +105,16 @@ mod tests {
 
     #[test]
     fn provider_names() {
-        assert_eq!(Provider::parse("omniroute"), Some(Provider::Omniroute));
+        assert_eq!(Provider::parse("velox"), Some(Provider::Velox));
+        assert_eq!(Provider::parse("omniroute"), None);
         assert_eq!(Provider::Velox.models_stream(), "Velox$models");
-        assert_eq!(Provider::Omniroute.api_key_var(), "OMNIROUTE_API_KEY");
+        assert_eq!(Provider::Velox.api_key_var(), "VELOX_API_KEY");
     }
 
     #[test]
     fn capability_truthiness() {
         let mut model = AvailableModel {
-            provider: "omniroute".into(),
+            provider: "velox".into(),
             model_id: "m".into(),
             display_name: None,
             available: true,
@@ -130,6 +128,6 @@ mod tests {
             .capabilities
             .insert("temperature".into(), json!(false));
         assert!(!model.capability("temperature"));
-        assert_eq!(model.full_id(), "omniroute/m");
+        assert_eq!(model.full_id(), "velox/m");
     }
 }

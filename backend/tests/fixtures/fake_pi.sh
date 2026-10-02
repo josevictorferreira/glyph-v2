@@ -28,7 +28,7 @@ if [ -n "$capture" ]; then
 fi
 
 session() {
-  printf '{"type":"session","version":3,"id":"fake","env_has_key":"%s"}\n' "${VELOX_API_KEY:+SET}${OMNIROUTE_API_KEY:+SET}"
+  printf '{"type":"session","version":3,"id":"fake","env_has_key":"%s"}\n' "${VELOX_API_KEY:+SET}"
   echo '{"type":"agent_start"}'
   echo '{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}'
 }
@@ -41,6 +41,7 @@ answer() {
 
 case "$model" in
   ok-model) session; answer '"the answer"' ;;
+  velox-only) session; answer '"the answer"' ;;
   json-model) session; answer '"{\"key\":\"value\"}"' ;;
   bad-json-model) session; answer '"not json at all"' ;;
   html-model) session; answer '"<!doctype html><html><body>Hi</body></html>"' ;;

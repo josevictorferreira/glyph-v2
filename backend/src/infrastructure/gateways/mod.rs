@@ -1,4 +1,4 @@
-//! OpenAI-compatible `/models` gateways (velox, omniroute).
+//! OpenAI-compatible `/models` gateway (velox).
 
 use std::time::Duration;
 
@@ -75,22 +75,7 @@ fn build_model(provider: Provider, entry: &Value) -> Option<FetchedModel> {
         return None;
     }
     // Velox lists aliases only: no name or capability surface.
-    let (display_name, capabilities) = match provider {
-        Provider::Velox => (id.clone(), Map::new()),
-        Provider::Omniroute => (
-            entry
-                .get("name")
-                .and_then(Value::as_str)
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or(&id)
-                .to_string(),
-            entry
-                .get("capabilities")
-                .and_then(Value::as_object)
-                .cloned()
-                .unwrap_or_default(),
-        ),
-    };
+    let (display_name, capabilities) = (id.clone(), Map::new());
     Some(FetchedModel {
         provider,
         model_id: id,

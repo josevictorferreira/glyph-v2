@@ -151,7 +151,7 @@ impl StepRunner for ScriptedRunner {
 pub async fn seed_model(pool: &PgPool) {
     sqlx::query(
         "INSERT INTO available_models (provider, model_id, available, capabilities, fetched_at)
-         VALUES ('omniroute', 'test-model', true, '{\"temperature\": true}', now())
+         VALUES ('velox', 'test-model', true, '{\"temperature\": true}', now())
          ON CONFLICT DO NOTHING",
     )
     .execute(pool)
@@ -261,7 +261,7 @@ impl Builder {
                 .update_step_model(pb::UpdateStepModelRequest {
                     workflow_id: self.id.clone(),
                     step_id: id.clone(),
-                    model_id: "omniroute/test-model".into(),
+                    model_id: "velox/test-model".into(),
                     temperature: None,
                 })
                 .await

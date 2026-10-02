@@ -27,8 +27,8 @@ impl CatalogReader for Catalog {
     async fn view(&self) -> DomainResult<CatalogView> {
         Ok(CatalogView {
             models: vec![CatalogModel {
-                provider: "omniroute".into(),
-                model_id: "omni-only".into(),
+                provider: "velox".into(),
+                model_id: "velox-only".into(),
                 available: true,
                 capabilities: Map::new(),
             }],
@@ -53,9 +53,7 @@ fn runner(timeout: Duration) -> PiStepRunner {
             pi_bin: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_pi.sh").into(),
             timeout,
             velox_base_url: "https://velox.test/v1".into(),
-            omniroute_base_url: "https://omniroute.test/v1".into(),
             velox_api_key: Some(SecretString::from(KEY.to_string())),
-            omniroute_api_key: None,
         },
         Arc::new(Catalog),
         Redactor::new([KEY.to_string()]),
@@ -293,17 +291,23 @@ async fn no_tools_flag_provider_resolution_and_missing_keys() {
         "bare ids default to velox"
     );
 
-    // A bare id the catalog knows resolves to its provider; omniroute has no key.
-    let o = run("omni-only", md()).await;
-    assert_eq!(o.status, OutcomeStatus::InternalError);
-    assert_eq!(
-        o.human_error.as_deref(),
-        Some("The step could not be executed.")
+    // A bare id the catalog knows resolves to its provider.
+    let capture = tempfile::tempdir().unwrap();
+    let mut ctx = context("velox-only", md());
+    ctx.prompt = Some(format!("x\nCAPTURE_DIR={}", capture.path().display()));
+    let o = runner(Duration::from_secs(10))
+        .run(ctx, Arc::new(Progress::default()))
+        .await;
+    let argv = std::fs::read_to_string(capture.path().join("argv")).unwrap();
+    assert!(
+        argv.contains("--provider\0velox\0"),
+        "a catalog-known bare id resolves to velox"
     );
-    assert_eq!(
-        o.technical_error.as_deref(),
-        Some("Runner internal error: OMNIROUTE_API_KEY is not configured")
+    assert!(
+        o.status == OutcomeStatus::Success || o.status == OutcomeStatus::ModelError,
+        "{o:?}"
     );
+
     let o = run("openai/gpt-5", md()).await;
     assert_eq!(
         o.technical_error.as_deref(),

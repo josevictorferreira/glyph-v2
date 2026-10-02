@@ -1,5 +1,5 @@
-//! Model & tool catalog (Rails `ModelsCatalog`, `Velox`, `Omniroute`,
-//! `AvailableModel`, `ToolDefinition`).
+//! Model & tool catalog (Rails `ModelsCatalog`, `Velox`, `AvailableModel`,
+//! `ToolDefinition`).
 
 pub mod application;
 pub mod domain;

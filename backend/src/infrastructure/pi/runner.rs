@@ -37,9 +37,7 @@ pub struct PiConfig {
     pub pi_bin: String,
     pub timeout: Duration,
     pub velox_base_url: String,
-    pub omniroute_base_url: String,
     pub velox_api_key: Option<SecretString>,
-    pub omniroute_api_key: Option<SecretString>,
 }
 
 pub struct PiStepRunner {
@@ -92,10 +90,6 @@ impl PiStepRunner {
     fn provider_settings(&self, provider: &str) -> Result<(String, String), String> {
         let (base, key) = match Provider::parse(provider) {
             Some(Provider::Velox) => (&self.config.velox_base_url, &self.config.velox_api_key),
-            Some(Provider::Omniroute) => (
-                &self.config.omniroute_base_url,
-                &self.config.omniroute_api_key,
-            ),
             None => {
                 return Err(format!(
                     "{}_API_KEY is not configured",

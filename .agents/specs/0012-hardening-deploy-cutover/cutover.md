@@ -48,7 +48,7 @@ Confirm `RUN_STATUS_SUCCEEDED` with the real Pi runner (`GLYPH_STEP_RUNNER=pi`, 
 ## 5. Switch traffic
 
 1. `nix run .#deploy` (only when the owner asks) — builds `.#image`, pushes to GHCR, restarts `deployment/glyph`.
-2. Set production env (see `backend/README.md`): `DATABASE_URL`, `GLYPH_ENCRYPTION_KEY` (new key, base64 32 bytes: `openssl rand -base64 32`), `VELOX_API_KEY`, `OMNIROUTE_API_KEY`, `GLYPH_CORS_ORIGINS`, `GLYPH_PUBLIC_URL`, `GLYPH_LOG_JSON=true`.
+2. Set production env (see `backend/README.md`): `DATABASE_URL`, `GLYPH_ENCRYPTION_KEY` (new key, base64 32 bytes: `openssl rand -base64 32`), `VELOX_API_KEY`, `GLYPH_CORS_ORIGINS`, `GLYPH_PUBLIC_URL`, `GLYPH_LOG_JSON=true`.
 3. Point DNS/ingress at v2. Keep Rails running read-only for run history; disable its Solid Queue recurring tasks so both systems never dispatch the same schedules.
 
 ## Verification log (2026-09-27)

@@ -4,7 +4,7 @@ package glyph.v1;
 
 import "google/protobuf/timestamp.proto";
 
-// Models advertised by the providers (velox, omniroute) and the tool catalog.
+// Models advertised by the provider (velox) and the tool catalog.
 service CatalogService {
   rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
   rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
