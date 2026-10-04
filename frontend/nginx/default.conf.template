@@ -1,10 +1,25 @@
 # Backend address is substituted at container start from GLYPH_BACKEND_URL;
 # only defined env vars are replaced, so nginx's own $uri/$host survive.
+
+# gRPC location (below): native gRPC requests (envoy-translated gRPC-Web) go
+# upstream as gRPC-Web and come back labelled as native gRPC; gRPC-Web
+# requests keep their content types both ways.
+map $http_content_type $grpc_upstream_content_type {
+    ~^application/grpc-web  $http_content_type;
+    ~^application/grpc      application/grpc-web+proto;
+    default                 $http_content_type;
+}
+map $http_content_type $grpc_downstream_content_type {
+    ~^application/grpc-web  $upstream_http_content_type;
+    ~^application/grpc      application/grpc;
+    default                 $upstream_http_content_type;
+}
+
 server {
     listen 8080;
-    # Browsers negotiate HTTP/2 with the Cilium ingress, and its envoy speaks
-    # the downstream protocol upstream — nginx must accept h2 or those
-    # connections fail. Plain HTTP/1.1 clients still work.
+    # Lets the Cilium ingress's envoy reach nginx over h2 should a client
+    # negotiate it (envoy speaks the downstream protocol upstream); today its
+    # listener offers no h2 ALPN, so traffic arrives as HTTP/1.1.
     http2 on;
     server_name _;
 
@@ -37,18 +52,29 @@ server {
         try_files $uri =404;
     }
 
-    # gRPC (behind an ingress) and gRPC health. The Cilium ingress runs
-    # envoy's grpc_web filter, which translates browser gRPC-Web into native
-    # gRPC before it reaches nginx — so these requests must be forwarded to
-    # the backend over HTTP/2 with grpc_pass, not proxied over HTTP/1.1
-    # (tonic-web rejects native gRPC over h1 with a bare 400).
+    # gRPC-Web (Connect) and gRPC health. The Cilium ingress runs envoy's
+    # grpc_web filter, which translates browser gRPC-Web into native gRPC
+    # before it reaches nginx, over HTTP/1.1 (its listener offers no h2 ALPN).
+    # Native gRPC carries grpc-status in HTTP trailers, and envoy drops
+    # HTTP/1.1 trailers, so every successful call reached the browser with no
+    # status ("missing trailer"). Instead, re-label native gRPC requests as
+    # gRPC-Web and proxy over HTTP/1.1: tonic-web then writes the status as an
+    # in-body trailer frame, and the response is labelled application/grpc so
+    # envoy passes the body (trailer frame included) through untouched.
+    # Requests that are already gRPC-Web pass through as is.
     # accept-encoding identity: compressed frames break gRPC-Web decoders.
     # No effective read timeout: server streaming would stall.
     location ~ ^/(glyph\.v1\.|grpc\.) {
-        grpc_pass ${GLYPH_BACKEND_GRPC_URL};
-        grpc_set_header accept-encoding identity;
-        grpc_read_timeout 86400s;
-        grpc_send_timeout 86400s;
+        proxy_pass ${GLYPH_BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Content-Type $grpc_upstream_content_type;
+        proxy_set_header accept-encoding identity;
+        proxy_hide_header Content-Type;
+        add_header Content-Type $grpc_downstream_content_type always;
+        proxy_buffering off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
     }
 
     # Step-run artifacts: zip download / preview can be long transfers.
