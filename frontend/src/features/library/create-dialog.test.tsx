@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { TimestampSchema } from "@bufbuild/protobuf/wkt";
 import { WorkflowStatus } from "@/gen/glyph/v1/common_pb";
 import {
@@ -136,6 +137,35 @@ describe("create dialog — from YAML", () => {
     fireEvent.click(screen.getByTestId("import-submit"));
     await waitFor(() => expect(imported).toEqual(["name: Imported\n"]));
     await waitFor(() => expect(router?.state.location.pathname).toBe("/workflows/wf-imported"));
+    unmount();
+  });
+
+  it("keeps the dialog open when the import fails, without an unhandled rejection", async () => {
+    let calls = 0;
+    const { unmount, router } = renderWithApp(undefined, {
+      route: "/",
+      services: {
+        workflow: baseWorkflow,
+        definition: {
+          parseDefinition: () =>
+            Promise.resolve(create(ParseDefinitionResponseSchema, { errors: [] })),
+          importWorkflow: () => {
+            calls += 1;
+            return Promise.reject(new ConnectError("missing trailer", Code.Unknown));
+          },
+        },
+        live: idleLive,
+      },
+    });
+    await screen.findByTestId("library-new");
+    await openOnTab("From YAML");
+    fireEvent.change(screen.getByTestId("create-yaml"), { target: { value: "name: Imported\n" } });
+    await waitFor(() => expect(screen.getByTestId("yaml-valid")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("import-submit"));
+    await waitFor(() => expect(calls).toBe(1));
+    await waitFor(() => expect(screen.getByTestId("import-submit")).toBeEnabled());
+    expect(screen.getByTestId("create-dialog")).toBeInTheDocument();
+    expect(router?.state.location.pathname).toBe("/");
     unmount();
   });
 });

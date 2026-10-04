@@ -97,10 +97,12 @@ function BlankTab({ onDone }: { onDone: () => void }) {
   });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Failures are already toasted by onAppError.
     const res = await mutateAsync({
       name: name.trim(),
       description: description.trim() || undefined,
-    });
+    }).catch(() => undefined);
+    if (!res) return;
     onDone();
     const id = res.workflow?.summary?.id;
     if (id) await navigate({ to: "/workflows/$id", params: { id } });
@@ -156,7 +158,9 @@ function YamlTab({ onDone }: { onDone: () => void }) {
   };
 
   const submit = async () => {
-    const res = await mutateAsync({ yaml });
+    // Failures are already toasted by onAppError.
+    const res = await mutateAsync({ yaml }).catch(() => undefined);
+    if (!res) return;
     onDone();
     const id = res.workflow?.summary?.id;
     if (id) await navigate({ to: "/workflows/$id", params: { id } });
