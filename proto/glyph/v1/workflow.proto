@@ -15,12 +15,16 @@ import "google/protobuf/timestamp.proto";
 //   FAILED_PRECONDITION  google.rpc.ErrorInfo{reason} (+ ValidationIssues):
 //                        VALIDATION_FAILED (activate),
 //                        CONNECTION_SOURCE_EXISTS (create connection; metadata
-//                        existing_source_label — retry with replace_existing).
+//                        existing_source_label — retry with replace_existing),
+//                        WORKFLOW_HAS_RUNS (delete).
 service WorkflowService {
   rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
   rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse);
   rpc CreateWorkflow(CreateWorkflowRequest) returns (CreateWorkflowResponse);
   rpc UpdateWorkflow(UpdateWorkflowRequest) returns (UpdateWorkflowResponse);
+  // Steps, values, schedule and texts cascade away; runs are evidence and
+  // block the delete until deleted separately (WORKFLOW_HAS_RUNS).
+  rpc DeleteWorkflow(DeleteWorkflowRequest) returns (DeleteWorkflowResponse);
   rpc ValidateWorkflow(ValidateWorkflowRequest) returns (ValidateWorkflowResponse);
 
   rpc AddStep(AddStepRequest) returns (AddStepResponse);
@@ -246,6 +250,12 @@ message UpdateWorkflowResponse {
 message ValidateWorkflowRequest {
   string id = 1;
 }
+
+message DeleteWorkflowRequest {
+  string id = 1;
+}
+
+message DeleteWorkflowResponse {}
 
 message ValidateWorkflowResponse {
   repeated Issue issues = 1;

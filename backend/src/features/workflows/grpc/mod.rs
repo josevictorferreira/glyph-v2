@@ -167,6 +167,16 @@ impl Rpc for WorkflowGrpc {
         )
     }
 
+    async fn delete_workflow(
+        &self,
+        r: Request<pb::DeleteWorkflowRequest>,
+    ) -> Rsp<pb::DeleteWorkflowResponse> {
+        self.service
+            .delete(parse_id(&r.get_ref().id, "id")?)
+            .await?;
+        Ok(Response::new(pb::DeleteWorkflowResponse {}))
+    }
+
     async fn validate_workflow(
         &self,
         r: Request<pb::ValidateWorkflowRequest>,

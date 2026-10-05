@@ -121,6 +121,10 @@ async fn watch_workflow_streams_a_run(pool: PgPool) {
     loop {
         let e = next_event(&mut stream).await;
         assert_eq!(e.workflow_id, b.id);
+        // The stream opens with a greeting HEARTBEAT (no run id).
+        if e.r#type() == pb::EventType::Heartbeat {
+            continue;
+        }
         assert_eq!(e.run_id.as_deref(), Some(run.id.as_str()), "{e:?}");
         let t = e.r#type();
         seen.push(t);
@@ -162,6 +166,10 @@ async fn lagging_subscribers_get_a_resync_and_heartbeats_flow() {
             occurred_at: Utc::now(),
         });
     }
+    // Every stream opens with a greeting HEARTBEAT (connection liveness for
+    // quiet workflows), then the events flow.
+    let open = stream.next().await.unwrap().unwrap().event.unwrap();
+    assert_eq!(open.r#type(), pb::EventType::Heartbeat);
     let first = stream.next().await.unwrap().unwrap().event.unwrap();
     assert_eq!(first.r#type(), pb::EventType::Resync);
 
@@ -178,9 +186,11 @@ async fn lagging_subscribers_get_a_resync_and_heartbeats_flow() {
         .unwrap();
     assert_eq!(beat.event.unwrap().r#type(), pb::EventType::Heartbeat);
 
-    // Shutdown ends open streams.
+    // Shutdown ends open streams (the greeting heartbeats arrive first).
     let stop = CancellationToken::new();
     let mut ending = watch(&hub, workflow, None, stop.clone());
+    let open = ending.next().await.unwrap().unwrap().event.unwrap();
+    assert_eq!(open.r#type(), pb::EventType::Heartbeat);
     stop.cancel();
     assert!(
         tokio::time::timeout(Duration::from_secs(1), ending.next())
@@ -222,15 +232,23 @@ async fn grpc_web_streaming(pool: PgPool) {
     let mut buf = Vec::new();
     let event = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
+            // Drain buffered frames first: the greeting HEARTBEAT and the
+            // trigger event may arrive in one chunk. Keep reading until a
+            // non-heartbeat frame shows up.
+            while buf.len() >= 5 {
+                let len = u32::from_be_bytes(buf[1..5].try_into().unwrap()) as usize;
+                if buf.len() < 5 + len {
+                    break;
+                }
+                let event = pb::WatchWorkflowResponse::decode(&buf[5..5 + len]).unwrap();
+                buf.drain(..5 + len);
+                if event.event.as_ref().unwrap().r#type() != pb::EventType::Heartbeat {
+                    return event;
+                }
+            }
             let frame = body.frame().await.unwrap().unwrap();
             if let Ok(data) = frame.into_data() {
                 buf.extend_from_slice(&data);
-            }
-            if buf.len() >= 5 {
-                let len = u32::from_be_bytes(buf[1..5].try_into().unwrap()) as usize;
-                if buf.len() >= 5 + len {
-                    return pb::WatchWorkflowResponse::decode(&buf[5..5 + len]).unwrap();
-                }
             }
         }
     })

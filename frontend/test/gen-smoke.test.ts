@@ -12,7 +12,7 @@ import { fakeTransport } from "./fakeTransport";
 describe("generated services", () => {
   it("exposes the expected typeName and method counts", () => {
     expect(WorkflowService.typeName).toBe("glyph.v1.WorkflowService");
-    expect(Object.keys(WorkflowService.methods)).toHaveLength(33);
+    expect(Object.keys(WorkflowService.methods)).toHaveLength(34);
     expect(RunService.typeName).toBe("glyph.v1.RunService");
     expect(Object.keys(RunService.methods)).toHaveLength(7);
     expect(CatalogService.typeName).toBe("glyph.v1.CatalogService");

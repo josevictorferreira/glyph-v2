@@ -3,14 +3,19 @@
 // action matrix per workflow status. Lifecycle preconditions open the
 // readiness sheet instead of toasting.
 import { useCallback, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { WorkflowStatus } from "@/gen/glyph/v1/common_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { Workflow } from "@/gen/glyph/v1/workflow_pb";
 import { LiveConnectionIndicator } from "@/features/live";
 import { useRunSheet } from "@/features/runs";
 import { ScheduleChip } from "@/features/schedule";
-import { useIssues, useWorkflow, useWorkflowMutation } from "@/features/workflows";
+import {
+  useDeleteWorkflow,
+  useIssues,
+  useWorkflow,
+  useWorkflowMutation,
+} from "@/features/workflows";
 import { appErrorToast, type AppError } from "@/shared/api/errors";
 import { useAutosaveField } from "@/shared/lib/autosave";
 import {
@@ -168,8 +173,11 @@ function PrimaryActions({
 }) {
   const workflowId = workflow.summary?.id ?? "";
   const status = workflow.summary?.status ?? WorkflowStatus.DRAFT;
+  const name = workflow.summary?.name ?? "";
   const { setReadinessOpen } = useEditorChrome();
   const [pauseOpen, setPauseOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Run now opens the run sheet when values are asked, else starts at once.
   const { runNow } = useRunSheet();
@@ -208,6 +216,11 @@ function PrimaryActions({
   });
 
   const secondaryRunLabel = status === WorkflowStatus.DRAFT ? "Test run" : "Run now";
+
+  const remove = useDeleteWorkflow((error) => {
+    setDeleteOpen(false);
+    toast({ title: appErrorToast(error), tone: "danger" });
+  });
 
   return (
     <>
@@ -288,6 +301,9 @@ function PrimaryActions({
           {(status === WorkflowStatus.ACTIVE || status === WorkflowStatus.NEEDS_ATTENTION) && (
             <DropdownItem onSelect={() => setPauseOpen(true)}>Pause</DropdownItem>
           )}
+          <DropdownItem onSelect={() => setDeleteOpen(true)} className="text-danger">
+            Delete workflow…
+          </DropdownItem>
         </DropdownContent>
       </Dropdown>
 
@@ -308,6 +324,36 @@ function PrimaryActions({
               onClick={() => pause.mutate({ id: workflowId })}
             >
               Pause
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent
+          title={`Delete “${name}”?`}
+          description="Its steps, values, and schedule are removed. Runs are kept until deleted separately."
+        >
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              data-testid="confirm-delete-workflow"
+              loading={remove.isPending}
+              onClick={() =>
+                remove.mutate(workflowId, {
+                  onSuccess: () => {
+                    setDeleteOpen(false);
+                    toast({ title: `Workflow “${name}” deleted.`, tone: "success" });
+                    void navigate({ to: "/" });
+                  },
+                })
+              }
+            >
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

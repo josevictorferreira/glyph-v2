@@ -12,6 +12,7 @@ import {
   ActivateWorkflowResponseSchema,
   PauseWorkflowResponseSchema,
   ResumeWorkflowResponseSchema,
+  DeleteWorkflowResponseSchema,
 } from "@/gen/glyph/v1/workflow_pb";
 import { StartRunResponseSchema } from "@/gen/glyph/v1/run_pb";
 import { WorkflowStatus, IssueSchema } from "@/gen/glyph/v1/common_pb";
@@ -280,6 +281,54 @@ describe("WorkspaceHeader (spec 0018)", () => {
     expect(await screen.findByTestId("readiness-sheet")).toBeInTheDocument();
     expect(screen.getByText("Ready to reactivate")).toBeInTheDocument();
     expect(screen.getByTestId("readiness-activate")).toHaveTextContent("Reactivate");
+    unmount();
+  });
+  it("deletes through the confirm dialog and navigates home", async () => {
+    const deleted: string[] = [];
+    const { unmount } = mount({
+      workflow: {
+        getWorkflow: () => Promise.resolve(wf(WorkflowStatus.DRAFT)),
+        deleteWorkflow: (req: { id: string }) => {
+          deleted.push(req.id);
+          return Promise.resolve(create(DeleteWorkflowResponseSchema, {}));
+        },
+      },
+    });
+    await screen.findByTestId("activate");
+    await userEvent.click(screen.getByRole("button", { name: "More workflow actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete workflow…" }));
+    expect(
+      screen.getByText(
+        "Its steps, values, and schedule are removed. Runs are kept until deleted separately.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(await screen.findByTestId("confirm-delete-workflow"));
+    await waitFor(() => expect(deleted).toEqual(["wf-1"]));
+    expect(await screen.findByText("Workflow “Tournament” deleted.")).toBeInTheDocument();
+    unmount();
+  });
+  it("surfaces WORKFLOW_HAS_RUNS verbatim and keeps the workflow", async () => {
+    const err = failedPrecondition("WORKFLOW_HAS_RUNS");
+    const refusal: ConnectError = new ConnectError(
+      "Unable to delete — this workflow still has runs. Delete them first from the Runs tab.",
+      Code.FailedPrecondition,
+    );
+    Object.assign(refusal, { details: err.details });
+    const { unmount } = mount({
+      workflow: {
+        getWorkflow: () => Promise.resolve(wf(WorkflowStatus.DRAFT)),
+        deleteWorkflow: () => Promise.reject(refusal),
+      },
+    });
+    await screen.findByTestId("activate");
+    await userEvent.click(screen.getByRole("button", { name: "More workflow actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete workflow…" }));
+    await userEvent.click(await screen.findByTestId("confirm-delete-workflow"));
+    expect(
+      await screen.findByText(
+        "Unable to delete — this workflow still has runs. Delete them first from the Runs tab.",
+      ),
+    ).toBeInTheDocument();
     unmount();
   });
 });

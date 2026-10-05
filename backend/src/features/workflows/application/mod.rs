@@ -3,7 +3,10 @@
 
 use std::sync::Arc;
 
+use serde_json::json;
+
 use crate::features::workflows::domain::catalog_view::CatalogView;
+use crate::features::workflows::domain::events;
 use crate::features::workflows::domain::model::{
     StepKind, TextField, TextRef, Workflow, WorkflowSummary,
 };
@@ -160,6 +163,32 @@ impl WorkflowService {
             Ok(((), wf.update_details(&name, description, fail_fast)?))
         })
         .await
+    }
+
+    /// Deletes the workflow and its children (steps, values, schedule,
+    /// texts). Runs are evidence: they block the delete (Rails
+    /// `dependent: :restrict_with_error` parity).
+    pub async fn delete(&self, id: WorkflowId) -> DomainResult<()> {
+        let mut tx = self.store.begin().await?;
+        let workflow = tx
+            .lock_workflow(id)
+            .await?
+            .ok_or(DomainError::NotFound("workflow"))?;
+        if tx.run_count(id).await? > 0 {
+            return Err(DomainError::precondition(
+                "WORKFLOW_HAS_RUNS",
+                "Unable to delete — this workflow still has runs. Delete them first from the Runs tab.",
+            ));
+        }
+        tx.delete_workflow(id).await?;
+        tx.append_events(&[events::event(
+            events::WORKFLOW_DELETED,
+            id,
+            json!({ "name": workflow.name }),
+        )])
+        .await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     // --- steps -------------------------------------------------------------

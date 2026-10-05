@@ -103,15 +103,15 @@ impl Config {
             step_runner: parse(&var, "GLYPH_STEP_RUNNER", "pi")?,
             step_concurrency: parse(&var, "GLYPH_STEP_CONCURRENCY", "5")?,
             shutdown_grace: Duration::from_secs(parse(&var, "GLYPH_SHUTDOWN_GRACE", "30")?),
-            live_heartbeat: match var("GLYPH_LIVE_HEARTBEAT_SECONDS") {
-                None => None,
-                Some(_) => Some(Duration::from_secs(parse(
-                    &var,
-                    "GLYPH_LIVE_HEARTBEAT_SECONDS",
-                    "30",
-                )?))
-                .filter(|d| !d.is_zero()),
-            },
+            // Live heartbeat default: without periodic frames a dead stream
+            // (e.g. a proxy that dropped the connection silently) looks "Live"
+            // forever. "0" disables.
+            live_heartbeat: Some(Duration::from_secs(parse(
+                &var,
+                "GLYPH_LIVE_HEARTBEAT_SECONDS",
+                "30",
+            )?))
+            .filter(|d| !d.is_zero()),
             pi_bin: var("GLYPH_PI_BIN").unwrap_or_else(|| "pi".into()),
             pi_timeout: Duration::from_secs(parse(&var, "GLYPH_PI_TIMEOUT_SECONDS", "900")?),
             secret_values: SECRET_ENV_KEYS

@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use futures_core::Stream;
+use futures_util::StreamExt;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
@@ -93,13 +94,19 @@ struct State {
 
 /// Events for `workflow` (and broadcast RESYNCs); a lagging subscriber gets a
 /// RESYNC instead of the events it missed. Ends when the bus closes or on
-/// server shutdown.
+/// server shutdown. The stream opens with a HEARTBEAT so clients can mark
+/// the connection live without waiting for an event — a quiet workflow may
+/// go minutes between events.
 pub fn watch(
     bus: &dyn LiveBus,
     workflow: WorkflowId,
     heartbeat: Option<Duration>,
     stop: CancellationToken,
 ) -> EventStream {
+    let greeting = message(
+        &workflow.to_string(),
+        &synthetic(LiveKind::Heartbeat, &workflow.to_string()),
+    );
     let state = State {
         rx: bus.subscribe(),
         workflow: workflow.to_string(),
@@ -110,30 +117,34 @@ pub fn watch(
         }),
         stop,
     };
-    Box::pin(futures_util::stream::unfold(state, |mut s| async move {
-        loop {
-            let beat = async {
-                match s.heartbeat.as_mut() {
-                    Some(i) => {
-                        i.tick().await;
-                    }
-                    None => std::future::pending::<()>().await,
+    Box::pin(
+        futures_util::stream::once(async move { Ok(greeting) }).chain(
+            futures_util::stream::unfold(state, |mut s| async move {
+                loop {
+                    let beat = async {
+                        match s.heartbeat.as_mut() {
+                            Some(i) => {
+                                i.tick().await;
+                            }
+                            None => std::future::pending::<()>().await,
+                        }
+                    };
+                    let event = tokio::select! {
+                        _ = s.stop.cancelled() => return None,
+                        _ = beat => synthetic(LiveKind::Heartbeat, &s.workflow),
+                        received = s.rx.recv() => match received {
+                            Ok(e) if e.workflow_id == s.workflow || (e.kind == LiveKind::Resync && e.workflow_id.is_empty()) => e,
+                            Ok(_) => continue,
+                            Err(RecvError::Lagged(_)) => synthetic(LiveKind::Resync, &s.workflow),
+                            Err(RecvError::Closed) => return None,
+                        },
+                    };
+                    let msg = message(&s.workflow, &event);
+                    return Some((Ok(msg), s));
                 }
-            };
-            let event = tokio::select! {
-                _ = s.stop.cancelled() => return None,
-                _ = beat => synthetic(LiveKind::Heartbeat, &s.workflow),
-                received = s.rx.recv() => match received {
-                    Ok(e) if e.workflow_id == s.workflow || (e.kind == LiveKind::Resync && e.workflow_id.is_empty()) => e,
-                    Ok(_) => continue,
-                    Err(RecvError::Lagged(_)) => synthetic(LiveKind::Resync, &s.workflow),
-                    Err(RecvError::Closed) => return None,
-                },
-            };
-            let msg = message(&s.workflow, &event);
-            return Some((Ok(msg), s));
-        }
-    }))
+            }),
+        ),
+    )
 }
 
 #[tonic::async_trait]

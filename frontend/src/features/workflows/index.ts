@@ -12,4 +12,5 @@ export {
   type WorkflowMutationRpc,
   type UseWorkflowMutationOptions,
 } from "./use-workflow-mutation";
+export { useDeleteWorkflow } from "./use-delete-workflow";
 export { useWorkflowCommands } from "./workspace-commands";

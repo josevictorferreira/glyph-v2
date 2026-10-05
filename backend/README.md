@@ -38,7 +38,7 @@ nix build .#image        # OCI image (binary + Pi), load with `podman load < res
 | `GLYPH_WORKER_ENABLED` | `true` | run the job worker and recurring tickers here |
 | `GLYPH_SCHEDULER_ENABLED` | `true` | enqueue the minute schedule dispatch |
 | `GLYPH_SHUTDOWN_GRACE` | `30` | seconds the worker waits for in-flight jobs on shutdown |
-| `GLYPH_LIVE_HEARTBEAT_SECONDS` | unset | heartbeat events on idle `WatchWorkflow` streams |
+| `GLYPH_LIVE_HEARTBEAT_SECONDS` | `30` | heartbeat events on idle `WatchWorkflow` streams (`0` disables) |
 | `GLYPH_LOG_JSON` | `false` | JSON log lines |
 | `RUST_LOG` | `info,sqlx=warn,tower_http=info` | log filter |
 

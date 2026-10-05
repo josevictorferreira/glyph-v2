@@ -31,5 +31,9 @@ pub trait WorkflowTx: UnitOfWork {
     async fn load_workflow(&mut self, id: WorkflowId) -> DomainResult<Option<Workflow>>;
     /// Persists the aggregate: upserts every row, deletes children no longer present.
     async fn save_workflow(&mut self, workflow: &Workflow) -> DomainResult<()>;
+    /// Deletes the workflow row (children cascade). Runs must be gone first.
+    async fn delete_workflow(&mut self, id: WorkflowId) -> DomainResult<()>;
+    /// Number of runs for the workflow.
+    async fn run_count(&mut self, id: WorkflowId) -> DomainResult<i64>;
     async fn active_workflow_ids(&mut self) -> DomainResult<Vec<WorkflowId>>;
 }

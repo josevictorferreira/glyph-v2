@@ -814,6 +814,25 @@ impl WorkflowTx for PgTx {
         save(&mut self.tx, self.cipher.as_ref(), workflow).await
     }
 
+    async fn delete_workflow(&mut self, id: WorkflowId) -> DomainResult<()> {
+        sqlx::query!("DELETE FROM workflows WHERE id = $1", id.as_uuid())
+            .execute(&mut *self.tx)
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    async fn run_count(&mut self, id: WorkflowId) -> DomainResult<i64> {
+        Ok(sqlx::query_scalar!(
+            "SELECT count(*) FROM workflow_runs WHERE workflow_id = $1",
+            id.as_uuid()
+        )
+        .fetch_one(&mut *self.tx)
+        .await
+        .map_err(db)?
+        .unwrap_or(0))
+    }
+
     async fn active_workflow_ids(&mut self) -> DomainResult<Vec<WorkflowId>> {
         Ok(sqlx::query_scalar!(
             "SELECT id FROM workflows WHERE status = 'active' ORDER BY created_at"

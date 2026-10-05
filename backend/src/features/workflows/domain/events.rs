@@ -18,6 +18,7 @@ pub const WORKFLOW_ACTIVATED: &str = "WorkflowActivated";
 pub const WORKFLOW_PAUSED: &str = "WorkflowPaused";
 pub const WORKFLOW_RESUMED: &str = "WorkflowResumed";
 pub const WORKFLOW_NEEDS_ATTENTION: &str = "WorkflowNeedsAttention";
+pub const WORKFLOW_DELETED: &str = "WorkflowDeleted";
 
 pub fn event(event_type: &str, workflow: WorkflowId, extra: Value) -> DomainEvent {
     DomainEvent::workflow(event_type, workflow, extra)

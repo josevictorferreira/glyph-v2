@@ -228,6 +228,78 @@ async fn create_get_update_list(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn delete_workflow_without_runs_cascades_children(pool: PgPool) {
+    let (server, mut client) = setup(pool).await;
+    let wf = create(&mut client, "Doomed").await;
+    let id = wid(&wf);
+    complete_step(&mut client, &id, "Step").await;
+
+    client
+        .delete_workflow(pb::DeleteWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap();
+
+    let err = client
+        .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Code::NotFound);
+    // Steps (and the rest of the aggregate) cascade away with the row.
+    let steps: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM workflow_steps WHERE workflow_id = $1::uuid")
+            .bind(&id)
+            .fetch_one(&server.pool)
+            .await
+            .unwrap();
+    assert_eq!(steps, 0);
+    assert!(
+        event_types(&server.pool, &id)
+            .await
+            .iter()
+            .any(|t| t == "WorkflowDeleted")
+    );
+    // Unknown workflow.
+    let err = client
+        .delete_workflow(pb::DeleteWorkflowRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Code::NotFound);
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn delete_workflow_refused_while_runs_exist(pool: PgPool) {
+    let (server, mut client) = setup(pool).await;
+    let wf = create(&mut client, "With runs").await;
+    let id = wid(&wf);
+    sqlx::query(
+        "INSERT INTO workflow_runs (workflow_id, trigger, snapshot)
+         VALUES ($1::uuid, 'manual', '{}')",
+    )
+    .bind(&id)
+    .execute(&server.pool)
+    .await
+    .unwrap();
+
+    let err = client
+        .delete_workflow(pb::DeleteWorkflowRequest { id: id.clone() })
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Code::FailedPrecondition);
+    assert_eq!(
+        err.message(),
+        "Unable to delete — this workflow still has runs. Delete them first from the Runs tab."
+    );
+    assert_eq!(error_info(&err).unwrap().reason, "WORKFLOW_HAS_RUNS");
+    // The workflow survives.
+    client
+        .get_workflow(pb::GetWorkflowRequest { id })
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
 async fn steps_and_events(pool: PgPool) {
     let (server, mut client) = setup(pool).await;
     let wf = create(&mut client, "W").await;
