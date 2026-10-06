@@ -996,3 +996,138 @@ async fn shared_text_vars_interpolate_at_run_time(pool: PgPool) {
     );
     let _ = text;
 }
+
+const FAST_SWEEP: &[(&str, &str)] = &[("GLYPH_RECOVERY_SWEEP_SECONDS", "1")];
+
+async fn wait_step_status(pool: &PgPool, name: &str, status: &str) {
+    for _ in 0..200 {
+        let found: Option<String> =
+            sqlx::query_scalar("SELECT status FROM step_runs WHERE step_name = $1")
+                .bind(name)
+                .fetch_optional(pool)
+                .await
+                .unwrap();
+        if found.as_deref() == Some(status) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    panic!("step {name} never became {status}");
+}
+
+/// What an OOM kill leaves behind: the job locked long ago by a worker that
+/// no longer heartbeats.
+async fn kill_worker_of(pool: &PgPool, kind: &str) {
+    let n = sqlx::query(
+        "UPDATE jobs SET locked_by = 'dead-host:1:deadbeef', locked_at = now() - interval '10 minutes'
+         WHERE kind = $1 AND finished_at IS NULL",
+    )
+    .bind(kind)
+    .execute(pool)
+    .await
+    .unwrap()
+    .rows_affected();
+    assert_eq!(n, 1);
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn a_step_whose_worker_died_is_interrupted_and_the_run_advances(pool: PgPool) {
+    let runner = ScriptedRunner::new(&[("A", Script::Slow(60_000, "never".into()))]);
+    let server = server_with(pool, runner, FAST_SWEEP, true).await;
+    let mut b = Builder::new(&server, "Crash", false).await;
+    let a = b.pi("A").await;
+    let bb = b.pi("B").await;
+    b.connect(&a, &bb, "in").await;
+    let queued = start(&server, &b.id, &[]).await;
+    wait_step_status(&server.pool, "A", "running").await;
+
+    kill_worker_of(&server.pool, "execute_step_run").await;
+
+    let run = settle(&server, &b.id, &queued.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Failed);
+    assert_eq!(step(&run, "A").status(), pb::StepRunStatus::Failed);
+    assert_eq!(
+        step(&run, "A").human_error.as_deref(),
+        Some("The step was interrupted before it finished.")
+    );
+    assert_eq!(step(&run, "B").status(), pb::StepRunStatus::Skipped);
+    // The last progress snapshot stays as evidence.
+    let detail = step_detail(&server, &run, "A").await;
+    assert!(detail.technical_error.unwrap().contains("worker"));
+    let error: Option<String> =
+        sqlx::query_scalar("SELECT error FROM jobs WHERE kind = 'execute_step_run'")
+            .fetch_one(&server.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        error.as_deref(),
+        Some("abandoned: worker dead-host:1:deadbeef stopped")
+    );
+    assert!(
+        run_events(&server.pool, &run.id)
+            .await
+            .contains(&"StepRunFailed".to_string())
+    );
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn a_running_step_whose_job_errored_is_interrupted(pool: PgPool) {
+    let runner = ScriptedRunner::new(&[("A", Script::Slow(60_000, "never".into()))]);
+    let server = server_with(pool, runner, FAST_SWEEP, true).await;
+    let mut b = Builder::new(&server, "Errored", false).await;
+    b.pi("A").await;
+    let queued = start(&server, &b.id, &[]).await;
+    wait_step_status(&server.pool, "A", "running").await;
+
+    // The handler returned an error after the step started (e.g. its finish
+    // could not reach the database): the job is done, the step is not.
+    sqlx::query(
+        "UPDATE jobs SET finished_at = now(), error = 'boom' WHERE kind = 'execute_step_run'",
+    )
+    .execute(&server.pool)
+    .await
+    .unwrap();
+
+    let run = settle(&server, &b.id, &queued.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Failed);
+    assert_eq!(
+        step(&run, "A").human_error.as_deref(),
+        Some("The step was interrupted before it finished.")
+    );
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn another_process_requeues_a_run_abandoned_before_it_started(pool: PgPool) {
+    let runner = ScriptedRunner::new(&[]);
+    // No worker here: the run stays queued with its job unclaimed.
+    let api = server_with(pool.clone(), runner.clone(), &[], false).await;
+    let mut b = Builder::new(&api, "Requeue", false).await;
+    b.pi("A").await;
+    let queued = start(&api, &b.id, &[]).await;
+    kill_worker_of(&api.pool, "execute_workflow_run").await;
+
+    let worker = server_with(pool, runner.clone(), FAST_SWEEP, true).await;
+    let run = settle(&worker, &b.id, &queued.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Succeeded);
+    assert_eq!(runner.call_count(), 1);
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn live_workers_jobs_are_never_recovered(pool: PgPool) {
+    let runner = ScriptedRunner::new(&[("A", Script::Slow(2_500, "done".into()))]);
+    let server = server_with(pool, runner, FAST_SWEEP, true).await;
+    let mut b = Builder::new(&server, "Alive", false).await;
+    b.pi("A").await;
+    let queued = start(&server, &b.id, &[]).await;
+    wait_step_status(&server.pool, "A", "running").await;
+    // Locked long ago, but by this live, heartbeating worker.
+    sqlx::query(
+        "UPDATE jobs SET locked_at = now() - interval '10 minutes' WHERE kind = 'execute_step_run'",
+    )
+    .execute(&server.pool)
+    .await
+    .unwrap();
+
+    let run = settle(&server, &b.id, &queued.id).await;
+    assert_eq!(run.status(), pb::RunStatus::Succeeded);
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id FROM step_runs s\n         WHERE s.status = 'running'\n           AND NOT EXISTS (\n             SELECT 1 FROM jobs j\n             WHERE j.kind = $1 AND j.finished_at IS NULL\n               AND j.payload->>'step_run_id' = s.id::text\n           )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "step_runs",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1f23cb1a92d6e4d3683a7124271f5e3ac5eda2eb506b2e004456a34210f2f3e7"
+}

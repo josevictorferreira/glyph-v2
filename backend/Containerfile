@@ -47,9 +47,9 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash coreutils findutils grep sed ca-certificates tzdata \
  && rm -rf /var/lib/apt/lists/* \
- # Pinned to the same 0.83 the flake's nixpkgs provides, so local runs and the
+ # Pinned to the same 1.0.3 the flake's nixpkgs provides, so local runs and the
  # image execute the same agent. --ignore-scripts per Pi's install docs.
- && npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
+ && npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.0.3
 
 COPY --from=build /app/backend/target/release/glyph /usr/local/bin/glyph
 

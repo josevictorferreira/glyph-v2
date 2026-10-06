@@ -66,6 +66,15 @@ case "$model" in
   hang-model) session; exec sleep 30 ;;
   stubborn-model) session; trap '' TERM; exec sleep 8 ;;
   slow-model) session; sleep 3.3; answer '"slow answer"' ;;
+  chatty-model)
+    # ~2.4 MB of token deltas: far beyond a pipe buffer.
+    session
+    echo '{"type":"message_start","message":{"role":"assistant","content":[]}}'
+    for ((n = 0; n < 20000; n++)); do
+      echo '{"type":"message_update","usage":{"input":100,"output":1,"totalTokens":101},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"chatty chatty chatty chatty chatty chatty "}}'
+    done
+    answer '"chatty answer"'
+    ;;
   utf8-model) answer '"café → 日本語"' ;;
   empty-model)
     echo '{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"stop","usage":{"totalTokens":1}}}'

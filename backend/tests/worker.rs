@@ -197,3 +197,34 @@ async fn shutdown_waits_for_in_flight_jobs(pool: PgPool) {
     .unwrap();
     assert!(locked && !finished);
 }
+
+async fn workers_alive(pool: &PgPool) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM job_workers WHERE heartbeat_at > now() - interval '1 minute'",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn heartbeats_while_alive_and_retires_on_stop(pool: PgPool) {
+    let stop = CancellationToken::new();
+    let worker = Worker::new(pool.clone())
+        .queue("q", 1)
+        .spawn(stop.clone(), Duration::from_secs(1));
+    for _ in 0..200 {
+        if workers_alive(&pool).await == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(workers_alive(&pool).await, 1);
+    stop.cancel();
+    worker.await.unwrap();
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM job_workers")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0, "a stopped worker vouches for nothing");
+}

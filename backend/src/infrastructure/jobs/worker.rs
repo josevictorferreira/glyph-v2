@@ -1,6 +1,7 @@
 //! In-process job worker: one claim loop per queue with bounded concurrency.
 //! Claims use `FOR UPDATE SKIP LOCKED`; every claimed job is finished exactly
-//! once, with its error recorded — never retried.
+//! once, with its error recorded — never retried. A heartbeat proves the
+//! worker alive, so jobs left by a dead one can be recovered (`recovery`).
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -23,6 +24,7 @@ pub type JobFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>>;
 pub type Handler = Arc<dyn Fn(Value) -> JobFuture + Send + Sync>;
 
 const IDLE_POLL: Duration = Duration::from_secs(1);
+pub const HEARTBEAT_EVERY: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
 pub struct Worker {
@@ -39,7 +41,13 @@ impl Worker {
             pool,
             handlers: HashMap::new(),
             queues: Vec::new(),
-            id: format!("{host}:{}", std::process::id()),
+            // The nonce tells restarts apart: a restarted container keeps its
+            // hostname and usually its pid (1).
+            id: format!(
+                "{host}:{}:{}",
+                std::process::id(),
+                &uuid::Uuid::new_v4().simple().to_string()[..8]
+            ),
         }
     }
 
@@ -67,6 +75,10 @@ impl Worker {
     }
 
     async fn run(self, stop: CancellationToken, grace: Duration) {
+        if let Err(error) = jobs::heartbeat(&self.pool, &self.id).await {
+            tracing::warn!(%error, "worker heartbeat failed");
+        }
+        let heartbeat = tokio::spawn(beat(self.pool.clone(), self.id.clone()));
         let wake = Arc::new(Notify::new());
         let listener = tokio::spawn(listen(self.pool.clone(), wake.clone(), stop.clone()));
         let tracker = TaskTracker::new();
@@ -97,6 +109,10 @@ impl Worker {
             );
         }
         listener.abort();
+        heartbeat.abort();
+        if let Err(error) = jobs::retire(&this.pool, &this.id).await {
+            tracing::warn!(%error, "retiring the worker failed");
+        }
     }
 
     async fn claim_loop(
@@ -159,6 +175,17 @@ impl Worker {
         }
         if let Err(error) = jobs::finish(&self.pool, job.id, result.err().as_deref()).await {
             tracing::error!(%error, "recording job completion failed");
+        }
+    }
+}
+
+async fn beat(pool: PgPool, id: String) {
+    let mut interval = tokio::time::interval(HEARTBEAT_EVERY);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        interval.tick().await;
+        if let Err(error) = jobs::heartbeat(&pool, &id).await {
+            tracing::warn!(%error, "worker heartbeat failed");
         }
     }
 }

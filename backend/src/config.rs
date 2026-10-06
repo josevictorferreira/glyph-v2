@@ -36,6 +36,8 @@ pub struct Config {
     pub step_concurrency: usize,
     /// Worker drain time on shutdown (GLYPH_SHUTDOWN_GRACE seconds).
     pub shutdown_grace: Duration,
+    /// Dead-worker recovery sweep period (GLYPH_RECOVERY_SWEEP_SECONDS).
+    pub recovery_every: Duration,
     /// Keep-alive events on idle live streams (GLYPH_LIVE_HEARTBEAT_SECONDS).
     pub live_heartbeat: Option<Duration>,
     pub pi_bin: String,
@@ -103,6 +105,7 @@ impl Config {
             step_runner: parse(&var, "GLYPH_STEP_RUNNER", "pi")?,
             step_concurrency: parse(&var, "GLYPH_STEP_CONCURRENCY", "5")?,
             shutdown_grace: Duration::from_secs(parse(&var, "GLYPH_SHUTDOWN_GRACE", "30")?),
+            recovery_every: Duration::from_secs(parse(&var, "GLYPH_RECOVERY_SWEEP_SECONDS", "60")?),
             // Live heartbeat default: without periodic frames a dead stream
             // (e.g. a proxy that dropped the connection silently) looks "Live"
             // forever. "0" disables.

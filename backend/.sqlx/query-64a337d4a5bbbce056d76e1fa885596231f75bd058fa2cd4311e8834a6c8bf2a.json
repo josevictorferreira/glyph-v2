@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE jobs j\n         SET finished_at = now(), error = 'abandoned: worker ' || j.locked_by || ' stopped'\n         WHERE j.finished_at IS NULL\n           AND j.locked_at < now() - make_interval(secs => $1)\n           AND NOT EXISTS (\n             SELECT 1 FROM job_workers w\n             WHERE w.id = j.locked_by AND w.heartbeat_at > now() - make_interval(secs => $1)\n           )\n         RETURNING j.id, j.kind, j.payload",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "jobs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "jobs",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "jobs",
+            "name": "payload"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "64a337d4a5bbbce056d76e1fa885596231f75bd058fa2cd4311e8834a6c8bf2a"
+}

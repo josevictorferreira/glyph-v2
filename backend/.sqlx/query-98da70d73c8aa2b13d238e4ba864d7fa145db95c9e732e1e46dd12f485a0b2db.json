@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO job_workers (id, heartbeat_at) VALUES ($1, now())\n         ON CONFLICT (id) DO UPDATE SET heartbeat_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98da70d73c8aa2b13d238e4ba864d7fa145db95c9e732e1e46dd12f485a0b2db"
+}

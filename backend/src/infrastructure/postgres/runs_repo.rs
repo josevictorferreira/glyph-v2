@@ -191,18 +191,21 @@ async fn load_step_runs(
     cipher: &dyn Cipher,
     run: Option<RunId>,
     one: Option<StepRunId>,
+    with_session: bool,
 ) -> DomainResult<Vec<StepRun>> {
     let rows = sqlx::query!(
         "SELECT id, workflow_run_id, snapshot_step_id, step_name, step_kind, status, position,
                 allow_failure, prompt, additional_context, expected_output, model_id, model_settings,
                 enabled_tools, output_name, output_file_format, resolved_inputs, output, output_text,
-                messages, session_content, technical_error, human_error, skipped_reason, queued_at,
+                messages, CASE WHEN $3 THEN session_content END AS session_content,
+                technical_error, human_error, skipped_reason, queued_at,
                 started_at, ended_at, elapsed_ms, created_at
          FROM step_runs
          WHERE ($1::uuid IS NULL OR workflow_run_id = $1) AND ($2::uuid IS NULL OR id = $2)
          ORDER BY position, created_at, id",
         run.map(|r| r.as_uuid()),
         one.map(|s| s.as_uuid()),
+        with_session,
     )
     .fetch_all(&mut *conn)
     .await
@@ -249,13 +252,13 @@ impl RunStore for PgStore {
 
     async fn step_runs(&self, run: RunId) -> DomainResult<Vec<StepRun>> {
         let mut conn = self.pool.acquire().await.map_err(db)?;
-        load_step_runs(&mut conn, self.cipher.as_ref(), Some(run), None).await
+        load_step_runs(&mut conn, self.cipher.as_ref(), Some(run), None, false).await
     }
 
     async fn find_step_run(&self, id: StepRunId) -> DomainResult<Option<StepRun>> {
         let mut conn = self.pool.acquire().await.map_err(db)?;
         Ok(
-            load_step_runs(&mut conn, self.cipher.as_ref(), None, Some(id))
+            load_step_runs(&mut conn, self.cipher.as_ref(), None, Some(id), true)
                 .await?
                 .into_iter()
                 .next(),

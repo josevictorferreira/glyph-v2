@@ -30,6 +30,7 @@ use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
 use crate::infrastructure::fake_runner::FakeStepRunner;
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
+use crate::infrastructure::jobs::recovery::{self, Recovery};
 use crate::infrastructure::jobs::recurring::{self, Recurring};
 use crate::infrastructure::jobs::worker::Worker;
 use crate::infrastructure::pi::runner::{PiConfig, PiStepRunner};
@@ -252,6 +253,11 @@ pub async fn build_with(
                 }
             });
         background.push(worker.spawn(stop.clone(), config.shutdown_grace));
+        background.push(recovery::spawn(
+            pool.clone(),
+            recovery(config, &runs),
+            stop.clone(),
+        ));
         background.push(recurring::spawn(
             pool.clone(),
             Recurring {
@@ -304,6 +310,39 @@ fn worker(pool: PgPool, config: &Config, runs: &RunService) -> Worker {
             let runs = step_exec.clone();
             async move { Ok(runs.execute_step(id_from(&payload, "step_run_id")?).await?) }
         })
+}
+
+/// Dead-worker recovery → application operations.
+fn recovery(config: &Config, runs: &RunService) -> Recovery {
+    let (job_runs, step_runs) = (runs.clone(), runs.clone());
+    Recovery {
+        every: config.recovery_every,
+        // Far above the worker's 10s heartbeat: a struggling database delays
+        // heartbeats, and recovering a live step would lose its result.
+        stale_after: Duration::from_secs(5 * 60),
+        step_kind: runs::application::EXECUTE_STEP.into(),
+        recover_job: Arc::new(move |job| {
+            let runs = job_runs.clone();
+            Box::pin(async move {
+                match job.kind.as_str() {
+                    runs::application::EXECUTE_STEP => {
+                        runs.interrupt_step(id_from(&job.payload, "step_run_id")?)
+                            .await?
+                    }
+                    runs::application::EXECUTE_RUN => {
+                        runs.requeue_run(id_from(&job.payload, "run_id")?).await?
+                    }
+                    // Recurring kinds are enqueued again by their ticker.
+                    _ => {}
+                }
+                Ok(())
+            })
+        }),
+        recover_step: Arc::new(move |id| {
+            let runs = step_runs.clone();
+            Box::pin(async move { Ok(runs.interrupt_step(id.into()).await?) })
+        }),
+    }
 }
 
 impl App {

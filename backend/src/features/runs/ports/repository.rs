@@ -24,7 +24,8 @@ pub trait RunStore: Send + Sync {
         workflow: WorkflowId,
         filter: &RunListFilter,
     ) -> DomainResult<Vec<Run>>;
-    /// Ordered by (position, created_at).
+    /// Ordered by (position, created_at), without `session_content`: a run
+    /// overview never renders transcripts, and they can be large.
     async fn step_runs(&self, run: RunId) -> DomainResult<Vec<StepRun>>;
     async fn find_step_run(&self, id: StepRunId) -> DomainResult<Option<StepRun>>;
     /// Progress snapshot: writes (encrypted) session content and notifies

@@ -22,7 +22,7 @@ src/
 
 ## Pi
 
-Contract verified against Pi **0.83.0** (the nixpkgs `pi-coding-agent` in `flake.lock`, also shipped in the image). `tests/pi_contract.rs` runs the real CLI against a local OpenAI-compatible mock whenever `GLYPH_PI_BIN` is set (the flake sets it) — rerun it after any Pi upgrade. `tests/fixtures/fake_pi.sh` stands in for Pi in the process-handling tests.
+Contract verified against Pi **1.0.3** (the nixpkgs `pi-coding-agent` in `flake.lock`, also shipped in the image). `tests/pi_contract.rs` runs the real CLI against a local OpenAI-compatible mock whenever `GLYPH_PI_BIN` is set (the flake sets it) — rerun it after any Pi upgrade. `tests/fixtures/fake_pi.sh` stands in for Pi in the process-handling tests.
 
 Safety rules for `infrastructure/pi/runner.rs` and `features/runs/domain/{pi_events,prompt,output_format_validator}.rs`: argv only, `env_clear()` + allow-list, temp HOME, stdin closed, timeout with SIGTERM → SIGKILL, and redact before anything leaves the runner.
 

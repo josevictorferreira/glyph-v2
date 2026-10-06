@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 pub const WAKE_CHANNEL: &str = "glyph_jobs";
 
@@ -59,4 +60,73 @@ pub async fn pending(pool: &PgPool, kind: &str) -> Result<bool, sqlx::Error> {
     .fetch_one(pool)
     .await?
     .unwrap_or(false))
+}
+
+/// Records that `worker` is alive.
+pub async fn heartbeat(pool: &PgPool, worker: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO job_workers (id, heartbeat_at) VALUES ($1, now())
+         ON CONFLICT (id) DO UPDATE SET heartbeat_at = now()",
+        worker,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// A stopping worker forgets itself: jobs it left behind become recoverable
+/// without waiting for its heartbeat to go stale.
+pub async fn retire(pool: &PgPool, worker: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM job_workers WHERE id = $1", worker)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Finishes (with an error) every unfinished job locked for longer than
+/// `stale_after` by a worker without a heartbeat as recent, and returns them.
+/// Concurrent sweepers never return the same job.
+pub async fn abandon_orphans(
+    pool: &PgPool,
+    stale_after: std::time::Duration,
+) -> Result<Vec<ClaimedJob>, sqlx::Error> {
+    let rows = sqlx::query!(
+        "UPDATE jobs j
+         SET finished_at = now(), error = 'abandoned: worker ' || j.locked_by || ' stopped'
+         WHERE j.finished_at IS NULL
+           AND j.locked_at < now() - make_interval(secs => $1)
+           AND NOT EXISTS (
+             SELECT 1 FROM job_workers w
+             WHERE w.id = j.locked_by AND w.heartbeat_at > now() - make_interval(secs => $1)
+           )
+         RETURNING j.id, j.kind, j.payload",
+        stale_after.as_secs_f64(),
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| ClaimedJob {
+            id: r.id,
+            kind: r.kind,
+            payload: r.payload,
+        })
+        .collect())
+}
+
+/// Step runs still `running` with no unfinished `kind` job executing them
+/// (their job errored after the step started, or was abandoned).
+pub async fn orphaned_step_runs(pool: &PgPool, kind: &str) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT s.id FROM step_runs s
+         WHERE s.status = 'running'
+           AND NOT EXISTS (
+             SELECT 1 FROM jobs j
+             WHERE j.kind = $1 AND j.finished_at IS NULL
+               AND j.payload->>'step_run_id' = s.id::text
+           )",
+        kind,
+    )
+    .fetch_all(pool)
+    .await
 }

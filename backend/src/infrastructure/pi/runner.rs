@@ -3,7 +3,7 @@
 //! allow-list, a throwaway HOME, stdin closed, a hard timeout with
 //! SIGTERM → SIGKILL, and every captured byte redacted before it leaves.
 //!
-//! Contract (verified against Pi 0.83):
+//! Contract (verified against Pi 1.0.3):
 //!   pi --print --mode json --provider P --model M --api-key K
 //!      (--no-tools | --tools a,b) --no-session --no-extensions --no-skills
 //!      --no-context-files --system-prompt S @<workdir>/prompt.md
@@ -18,8 +18,10 @@ use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
+use tokio::sync::watch;
 
 use crate::features::catalog::Provider;
+use crate::features::runs::domain::session_stream::SessionCompactor;
 use crate::features::runs::domain::{pi_events, prompt};
 use crate::features::runs::{
     OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner,
@@ -31,6 +33,7 @@ use crate::shared::redactor::Redactor;
 pub const PI_MAX_OUTPUT_TOKENS: u32 = 131_072;
 pub const PROGRESS_INTERVAL: Duration = Duration::from_secs(3);
 pub const KILL_GRACE: Duration = Duration::from_secs(3);
+pub const PROGRESS_FLUSH_GRACE: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
 pub struct PiConfig {
@@ -261,8 +264,20 @@ impl PiStepRunner {
             buf
         });
 
+        // Progress is written by its own task through a latest-wins channel:
+        // stdout must keep draining while a snapshot write is slow, or Pi
+        // stalls on a full pipe.
+        let (snapshots, mut latest) = watch::channel(String::new());
+        let sink = progress.clone();
+        let mut writer = tokio::spawn(async move {
+            while latest.changed().await.is_ok() {
+                let snapshot = latest.borrow_and_update().clone();
+                sink.report(snapshot).await;
+            }
+        });
+
         let deadline = tokio::time::Instant::now() + self.config.timeout;
-        let mut out = Vec::new();
+        let mut session = SessionCompactor::default();
         let mut chunk = vec![0u8; 65_536];
         let mut last_progress: Option<Instant> = None;
         let mut timed_out = false;
@@ -271,10 +286,10 @@ impl PiStepRunner {
                 read = stdout.read(&mut chunk) => match read {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        out.extend_from_slice(&chunk[..n]);
+                        session.push(&chunk[..n]);
                         if last_progress.is_none_or(|t| t.elapsed() >= PROGRESS_INTERVAL) {
                             last_progress = Some(Instant::now());
-                            progress.report(self.redactor.redact(&String::from_utf8_lossy(&out))).await;
+                            snapshots.send_replace(self.redactor.redact(&session.snapshot()));
                         }
                     }
                 },
@@ -295,16 +310,24 @@ impl PiStepRunner {
         if timed_out {
             terminate(&mut child).await;
         }
-        progress
-            .report(self.redactor.redact(&String::from_utf8_lossy(&out)))
-            .await;
+        let stdout = session.snapshot();
+        snapshots.send_replace(self.redactor.redact(&stdout));
+        drop(snapshots);
+        // The step's evidence is persisted by its finish; a stuck progress
+        // write must not hold it hostage.
+        if tokio::time::timeout(PROGRESS_FLUSH_GRACE, &mut writer)
+            .await
+            .is_err()
+        {
+            writer.abort();
+        }
         let err = tokio::time::timeout(Duration::from_secs(5), stderr_task)
             .await
             .ok()
             .and_then(Result::ok)
             .unwrap_or_default();
         Ok(Captured {
-            stdout: String::from_utf8_lossy(&out).into_owned(),
+            stdout,
             stderr: String::from_utf8_lossy(&err).into_owned(),
             exit_code: status.and_then(|s| s.code()),
             timed_out,

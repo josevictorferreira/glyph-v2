@@ -21,7 +21,7 @@ nix run .#check               # buf lint/breaking, fmt, clippy -D warnings, test
 nix run .#seed                # import the sample "Design POC Tournament" workflow (server must run)
 nix run .#reset               # stop Postgres and wipe .dev
 nix build .#glyph             # release binary
-nix build .#image             # OCI image (binary + Pi 0.83), `podman load < result`
+nix build .#image             # OCI image (binary + Pi 1.0.3), `podman load < result`
 GLYPH_STEP_RUNNER=fake nix run .#web   # deterministic runner, no provider keys needed
 nix develop                   # shell with db_start/db_stop/db_psql/db_migrate/sqlx_prepare
 ```

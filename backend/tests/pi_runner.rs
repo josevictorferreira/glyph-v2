@@ -358,6 +358,48 @@ async fn tool_calls_and_progress() {
     assert!(reports.last().unwrap().contains("slow answer"));
 }
 
+/// A progress write that never returns (a stalled database).
+struct StuckProgress;
+
+#[async_trait]
+impl ProgressSink for StuckProgress {
+    async fn report(&self, _: String) {
+        std::future::pending::<()>().await;
+    }
+}
+
+#[tokio::test]
+async fn a_stuck_progress_write_does_not_stall_the_agent() {
+    let started = Instant::now();
+    let o = runner(Duration::from_secs(30))
+        .run(context("chatty-model", md()), Arc::new(StuckProgress))
+        .await;
+    assert_eq!(o.status, OutcomeStatus::Success, "{:?}", o.technical_error);
+    assert_eq!(o.output_text.as_deref(), Some("chatty answer"));
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+#[tokio::test]
+async fn token_deltas_are_not_persisted_one_by_one() {
+    let progress = Arc::new(Progress::default());
+    let o = runner(Duration::from_secs(30))
+        .run(context("chatty-model", md()), progress.clone())
+        .await;
+    assert_eq!(o.status, OutcomeStatus::Success, "{:?}", o.technical_error);
+    let session = o.session_content.unwrap();
+    assert!(session.len() < 10_000, "{} bytes", session.len());
+    assert!(session.contains("chatty answer"));
+    for report in progress.0.lock().unwrap().iter() {
+        // The in-flight message is one record (~0.86 MB of text at most),
+        // never the ~2.4 MB delta stream.
+        assert!(report.len() < 1_000_000, "{} bytes", report.len());
+    }
+}
+
 #[tokio::test]
 async fn timeouts_terminate_then_kill() {
     let started = Instant::now();

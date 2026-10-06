@@ -5,5 +5,6 @@ pub mod model;
 pub mod output_format_validator;
 pub mod pi_events;
 pub mod prompt;
+pub mod session_stream;
 pub mod session_transcript;
 pub mod workflow_values;

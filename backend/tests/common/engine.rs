@@ -161,14 +161,24 @@ pub async fn seed_model(pool: &PgPool) {
 
 /// A server running the real job worker with `runner` as the step runner.
 pub async fn server(pool: PgPool, runner: Arc<ScriptedRunner>) -> TestServer {
+    server_with(pool, runner, &[], true).await
+}
+
+/// `server` with extra config and the worker (and its sweeps) on or off.
+pub async fn server_with(
+    pool: PgPool,
+    runner: Arc<ScriptedRunner>,
+    config: &[(&str, &str)],
+    background: bool,
+) -> TestServer {
     seed_model(&pool).await;
     super::spawn_with(
         pool,
-        super::test_config(),
+        super::config_with(config),
         Overrides {
             step_runner: Some(runner),
             gateways: Some(Vec::new()),
-            background: Some(true),
+            background: Some(background),
             ..Overrides::default()
         },
     )

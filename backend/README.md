@@ -38,6 +38,7 @@ nix build .#image        # OCI image (binary + Pi), load with `podman load < res
 | `GLYPH_WORKER_ENABLED` | `true` | run the job worker and recurring tickers here |
 | `GLYPH_SCHEDULER_ENABLED` | `true` | enqueue the minute schedule dispatch |
 | `GLYPH_SHUTDOWN_GRACE` | `30` | seconds the worker waits for in-flight jobs on shutdown |
+| `GLYPH_RECOVERY_SWEEP_SECONDS` | `60` | period of the sweep that recovers jobs left by dead workers |
 | `GLYPH_LIVE_HEARTBEAT_SECONDS` | `30` | heartbeat events on idle `WatchWorkflow` streams (`0` disables) |
 | `GLYPH_LOG_JSON` | `false` | JSON log lines |
 | `RUST_LOG` | `info,sqlx=warn,tower_http=info` | log filter |
@@ -57,4 +58,8 @@ Jobs are never retried; a failed job records its error. Handlers are idempotent 
 
 ## Graceful shutdown
 
-On SIGINT/SIGTERM: gRPC health reports `NOT_SERVING`, tickers stop, live streams end, the worker stops claiming and waits up to `GLYPH_SHUTDOWN_GRACE` for in-flight jobs, and HTTP requests get up to 10s to drain. A step still running after the grace is left `running` (diagnostic, never retried).
+On SIGINT/SIGTERM: gRPC health reports `NOT_SERVING`, tickers stop, live streams end, the worker stops claiming and waits up to `GLYPH_SHUTDOWN_GRACE` for in-flight jobs, and HTTP requests get up to 10s to drain. A step still running after the grace is failed as interrupted by the recovery sweep (never retried).
+
+## Crash recovery
+
+Each worker heartbeats every 10s (`job_workers`). Every `GLYPH_RECOVERY_SWEEP_SECONDS`, any process with the worker enabled finishes the jobs locked for over 5 minutes by a worker without a heartbeat as recent (OOM kill, node loss, aborted on shutdown), recording `abandoned: worker … stopped`. Their step runs fail with "The step was interrupted before it finished." (keeping the last progress snapshot) and the run advances. A queued run whose `execute_workflow_run` job was abandoned gets a new one. Step runs left `running` after their job errored are failed the same way.

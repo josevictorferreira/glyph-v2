@@ -28,6 +28,7 @@ pub const EXECUTE_RUN: &str = "execute_workflow_run";
 pub const EXECUTE_STEP: &str = "execute_step_run";
 pub const RUN_QUEUE: &str = "workflow_execution";
 pub const STEP_QUEUE: &str = "step_execution";
+pub const INTERRUPTED: &str = "The step was interrupted before it finished.";
 
 pub fn execute_run_job(run: RunId) -> Job {
     Job::new(EXECUTE_RUN, RUN_QUEUE, json!({ "run_id": run.to_string() }))
@@ -345,14 +346,12 @@ impl RunService {
         &self,
         run: &Run,
         step_run: StepRunId,
+        from: StepRunStatus,
         finish: StepFinish,
         reason: Option<&str>,
     ) -> DomainResult<bool> {
         let mut tx = self.store.begin().await?;
-        if !tx
-            .finish_step_run(step_run, StepRunStatus::Running, &finish)
-            .await?
-        {
+        if !tx.finish_step_run(step_run, from, &finish).await? {
             tx.commit().await?;
             return Ok(false);
         }
@@ -425,6 +424,7 @@ impl RunService {
             self.finish(
                 &run,
                 step_run_id,
+                StepRunStatus::Running,
                 finish,
                 Some("The step could not be executed."),
             )
@@ -451,7 +451,13 @@ impl RunService {
                         skipped_reason: Some(reason.clone()),
                     };
                     if self
-                        .finish(&run, step_run_id, finish, Some(&reason))
+                        .finish(
+                            &run,
+                            step_run_id,
+                            StepRunStatus::Running,
+                            finish,
+                            Some(&reason),
+                        )
                         .await?
                     {
                         self.after_step_finished(run.id, step_run_id).await?;
@@ -482,7 +488,10 @@ impl RunService {
                 technical_error: None,
                 skipped_reason: None,
             };
-            if self.finish(&run, step_run_id, finish, None).await? {
+            if self
+                .finish(&run, step_run_id, StepRunStatus::Running, finish, None)
+                .await?
+            {
                 self.after_step_finished(run.id, step_run_id).await?;
             }
             return Ok(());
@@ -514,12 +523,81 @@ impl RunService {
         let reason = finish.human_error.clone();
         // Fail-fast may have cancelled this step meanwhile: never overwrite it.
         if self
-            .finish(&run, step_run_id, finish, reason.as_deref())
+            .finish(
+                &run,
+                step_run_id,
+                StepRunStatus::Running,
+                finish,
+                reason.as_deref(),
+            )
             .await?
         {
             self.after_step_finished(run.id, step_run_id).await?;
         }
         Ok(())
+    }
+
+    // --- crash recovery ----------------------------------------------------------
+
+    /// A step whose worker died (OOM kill, node loss) or whose job errored
+    /// after it started: its agent result is lost. It fails (never
+    /// re-executed: no retries for execution jobs), keeping the last progress
+    /// snapshot as evidence, and the run advances.
+    pub async fn interrupt_step(&self, step_run_id: StepRunId) -> DomainResult<()> {
+        let Some(step_run) = self.store.find_step_run(step_run_id).await? else {
+            return Ok(());
+        };
+        if step_run.status.terminal() {
+            return Ok(());
+        }
+        let run = self
+            .store
+            .find_run(step_run.run_id)
+            .await?
+            .ok_or(DomainError::NotFound("run"))?;
+        let now = self.clock.now();
+        let finish = StepFinish {
+            status: StepRunStatus::Failed,
+            ended_at: now,
+            elapsed_ms: step_run
+                .started_at
+                .map(|at| (now - at).num_milliseconds().max(0)),
+            output: None,
+            output_text: None,
+            messages: None,
+            session_content: step_run.session_content.clone(),
+            human_error: Some(INTERRUPTED.into()),
+            technical_error: Some(
+                "The worker executing this step stopped before the step finished.".into(),
+            ),
+            skipped_reason: None,
+        };
+        if self
+            .finish(
+                &run,
+                step_run_id,
+                step_run.status,
+                finish,
+                Some(INTERRUPTED),
+            )
+            .await?
+        {
+            self.after_step_finished(run.id, step_run_id).await?;
+        }
+        Ok(())
+    }
+
+    /// An `execute_workflow_run` job whose worker died: its transaction never
+    /// committed, so the run is still queued and only needs a new job.
+    pub async fn requeue_run(&self, run_id: RunId) -> DomainResult<()> {
+        let mut tx = self.store.begin().await?;
+        let Some(run) = tx.lock_run(run_id).await? else {
+            return tx.commit().await;
+        };
+        if run.status == RunStatus::Queued {
+            tx.enqueue(execute_run_job(run.id)).await?;
+        }
+        tx.commit().await
     }
 
     // --- operator actions ------------------------------------------------------
