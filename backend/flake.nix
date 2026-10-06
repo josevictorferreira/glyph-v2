@@ -47,8 +47,11 @@
             podman push "$TAG"
             echo "Successfully pushed image: $TAG"
 
-            echo "Restarting glyph deployment in apps namespace"
-            kubectl -n apps rollout restart deployment/glyph
+            # Flux owns the Deployment and strips the annotation `rollout restart`
+            # adds, rolling back to the old pod. Recreate the pods instead:
+            # imagePullPolicy is Always, so they pull the image pushed above.
+            echo "Recreating glyph pods in apps namespace"
+            kubectl -n apps delete pod -l app.kubernetes.io/name=glyph --wait=false
             kubectl -n apps rollout status deployment/glyph --timeout=600s
           '';
         };

@@ -69,7 +69,8 @@ pub trait RunTx: WorkflowTx {
         skipped_reason: Option<&str>,
     ) -> DomainResult<Vec<StepRunId>>;
     /// CAS `from` → outcome status with all evidence. False when the step run
-    /// left `from` meanwhile (e.g. fail-fast cancelled it).
+    /// left `from` meanwhile (e.g. fail-fast cancelled it). A `None` session
+    /// keeps the last progress snapshot instead of clearing it.
     async fn finish_step_run(
         &mut self,
         id: StepRunId,

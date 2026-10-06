@@ -519,7 +519,7 @@ impl RunTx for PgTx {
         let cipher = self.cipher.clone();
         Ok(sqlx::query!(
             "UPDATE step_runs SET status = $3, ended_at = $4, elapsed_ms = $5, output = $6, output_text = $7,
-                    messages = $8, session_content = $9, human_error = $10, technical_error = $11,
+                    messages = $8, session_content = COALESCE($9, session_content), human_error = $10, technical_error = $11,
                     skipped_reason = $12, updated_at = now()
              WHERE id = $1 AND status = $2",
             id.as_uuid(),

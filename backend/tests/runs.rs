@@ -1054,6 +1054,13 @@ async fn a_step_whose_worker_died_is_interrupted_and_the_run_advances(pool: PgPo
     // The last progress snapshot stays as evidence.
     let detail = step_detail(&server, &run, "A").await;
     assert!(detail.technical_error.unwrap().contains("worker"));
+    let kept: bool = sqlx::query_scalar(
+        "SELECT session_content IS NOT NULL FROM step_runs WHERE step_name = 'A'",
+    )
+    .fetch_one(&server.pool)
+    .await
+    .unwrap();
+    assert!(kept, "the progress snapshot survives the interruption");
     let error: Option<String> =
         sqlx::query_scalar("SELECT error FROM jobs WHERE kind = 'execute_step_run'")
             .fetch_one(&server.pool)

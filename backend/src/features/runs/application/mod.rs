@@ -542,7 +542,7 @@ impl RunService {
     /// A step whose worker died (OOM kill, node loss) or whose job errored
     /// after it started: its agent result is lost. It fails (never
     /// re-executed: no retries for execution jobs), keeping the last progress
-    /// snapshot as evidence, and the run advances.
+    /// snapshot as evidence (untouched in place), and the run advances.
     pub async fn interrupt_step(&self, step_run_id: StepRunId) -> DomainResult<()> {
         let Some(step_run) = self.store.find_step_run(step_run_id).await? else {
             return Ok(());
@@ -565,7 +565,9 @@ impl RunService {
             output: None,
             output_text: None,
             messages: None,
-            session_content: step_run.session_content.clone(),
+            // Kept as-is by the store: rewriting a large snapshot only to
+            // preserve it is what a recovering database can least afford.
+            session_content: None,
             human_error: Some(INTERRUPTED.into()),
             technical_error: Some(
                 "The worker executing this step stopped before the step finished.".into(),
