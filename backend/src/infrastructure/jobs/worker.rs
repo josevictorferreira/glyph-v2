@@ -23,7 +23,9 @@ use crate::infrastructure::postgres::jobs::{self, ClaimedJob, WAKE_CHANNEL};
 pub type JobFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>>;
 pub type Handler = Arc<dyn Fn(Value) -> JobFuture + Send + Sync>;
 
-const IDLE_POLL: Duration = Duration::from_secs(1);
+/// Safety net only: enqueues NOTIFY `glyph_jobs`, which wakes idle loops at
+/// once. A 1s poll made every queue claim (an UPDATE) every second at idle.
+const IDLE_POLL: Duration = Duration::from_secs(30);
 pub const HEARTBEAT_EVERY: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
@@ -129,6 +131,11 @@ impl Worker {
                 _ = stop.cancelled() => return,
                 permit = slots.clone().acquire_owned() => permit.expect("semaphore is never closed"),
             };
+            // Registered before claiming: a NOTIFY that lands while the claim
+            // runs must still wake this loop instead of waiting for the poll.
+            let woken = wake.notified();
+            tokio::pin!(woken);
+            woken.as_mut().enable();
             let job = match jobs::claim(&self.pool, queue, &self.id).await {
                 Ok(job) => job,
                 Err(error) => {
@@ -140,7 +147,7 @@ impl Worker {
                 drop(permit);
                 tokio::select! {
                     _ = stop.cancelled() => return,
-                    _ = wake.notified() => {},
+                    _ = woken => {},
                     _ = tokio::time::sleep(IDLE_POLL) => {},
                 }
                 continue;
@@ -206,6 +213,8 @@ async fn listen(pool: PgPool, wake: Arc<Notify>, stop: CancellationToken) {
         if listener.listen(WAKE_CHANNEL).await.is_err() {
             continue;
         }
+        // Enqueues while (re)connecting sent NOTIFYs nobody heard.
+        wake.notify_waiters();
         loop {
             tokio::select! {
                 _ = stop.cancelled() => return,

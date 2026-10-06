@@ -228,3 +228,44 @@ async fn heartbeats_while_alive_and_retires_on_stop(pool: PgPool) {
         .unwrap();
     assert_eq!(rows, 0, "a stopped worker vouches for nothing");
 }
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn idle_workers_wake_on_notify_not_on_polling(pool: PgPool) {
+    let done = Arc::new(AtomicUsize::new(0));
+    let d = done.clone();
+    let stop = CancellationToken::new();
+    let worker = Worker::new(pool.clone())
+        .queue("q", 2)
+        .handle("work", move |_| {
+            let d = d.clone();
+            async move {
+                d.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
+        .spawn(stop.clone(), Duration::from_secs(1));
+    // Let the claim loop find the queue empty and go idle.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    for _ in 0..3 {
+        sqlx::query("INSERT INTO jobs (kind, queue, payload) VALUES ('work', 'q', '{}')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("SELECT pg_notify('glyph_jobs', 'q')")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let started = std::time::Instant::now();
+    while done.load(Ordering::SeqCst) < 3 && started.elapsed() < Duration::from_secs(2) {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(
+        done.load(Ordering::SeqCst),
+        3,
+        "woken by NOTIFY, well before the idle poll"
+    );
+    stop.cancel();
+    worker.await.unwrap();
+}
