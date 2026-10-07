@@ -11,6 +11,7 @@ import { useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast } from "@/shared/api/errors";
 import {
   Button,
+  Check,
   Combobox,
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import {
   SheetContent,
   Switch,
   toast,
+  Trash,
 } from "@/shared/ui";
 import {
   WEEKDAYS,
@@ -342,7 +344,7 @@ function ComposerForm({
       <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
         {configured ? (
           <Button variant="ghost" size="sm" onClick={() => setConfirmRemove(true)}>
-            Remove…
+            <Trash className="size-3.5" /> Remove…
           </Button>
         ) : (
           <span />
@@ -366,7 +368,7 @@ function ComposerForm({
               })
             }
           >
-            Save schedule
+            <Check className="size-3.5" /> Save schedule
           </Button>
         </div>
       </div>
@@ -394,7 +396,7 @@ function ComposerForm({
                 })
               }
             >
-              Remove
+              <Trash className="size-3.5" /> Remove
             </Button>
           </DialogFooter>
         </DialogContent>

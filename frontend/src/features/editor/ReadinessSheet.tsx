@@ -6,7 +6,16 @@ import type { Issue } from "@/gen/glyph/v1/common_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import { useWorkflow, useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast } from "@/shared/api/errors";
-import { AlertTriangle, Button, CheckCircle, Sheet, SheetContent, toast } from "@/shared/ui";
+import {
+  AlertTriangle,
+  Button,
+  CheckCircle,
+  Power,
+  RotateCw,
+  Sheet,
+  SheetContent,
+  toast,
+} from "@/shared/ui";
 import { useEditorChrome } from "./chrome";
 import { groupIssues, issueField, issueStepId, issueTarget } from "./issues";
 
@@ -73,6 +82,7 @@ export function ReadinessSheet({ workflowId }: { workflowId: string }) {
                 loading={activate.isPending}
                 onClick={() => activate.mutate({ id: workflowId })}
               >
+                {reactivate ? <RotateCw className="size-3.5" /> : <Power className="size-3.5" />}{" "}
                 {reactivate ? "Reactivate" : "Activate"}
               </Button>
             )}

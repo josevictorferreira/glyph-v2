@@ -1,7 +1,15 @@
 // Model & tool pickers (spec 0018). Presentational over the catalog
 // queries: callers own saving (UpdateStepModel / ToggleStepTool).
 import type { AvailableModel, ToolDefinition } from "@/gen/glyph/v1/catalog_pb";
-import { Badge, Button, Checkbox, Combobox, Skeleton, type ComboboxItem } from "@/shared/ui";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Combobox,
+  RotateCw,
+  Skeleton,
+  type ComboboxItem,
+} from "@/shared/ui";
 import { useModels, useRefreshModels, useTools } from "./hooks";
 
 /** A step's model id is "{provider}/{model_id}"; legacy bare ids match model_id. */
@@ -74,7 +82,7 @@ export function ModelPicker({
             loading={refresh.isPending}
             onClick={() => refresh.mutate()}
           >
-            Refresh
+            <RotateCw className="size-3.5" /> Refresh
           </Button>
         </p>
       )}

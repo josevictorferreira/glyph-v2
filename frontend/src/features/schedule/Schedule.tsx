@@ -2,7 +2,7 @@
 // panel. Copy is spec/Rails wording; the composer sheet does the editing.
 import type { Workflow } from "@/gen/glyph/v1/workflow_pb";
 import { useIssues } from "@/features/workflows";
-import { Badge, Button, RelativeTime } from "@/shared/ui";
+import { Badge, Button, Pencil, Plus, RelativeTime } from "@/shared/ui";
 import { tsToDate } from "@/shared/lib/time";
 import { scheduleIssues, scheduleState, scheduleStateLine } from "./lib/state";
 
@@ -24,7 +24,7 @@ export function ScheduleCard({
         <p className="text-xs text-ink-subtle">Runs only when you start it.</p>
         <div>
           <Button size="sm" variant="secondary" onClick={onOpenComposer}>
-            Add schedule
+            <Plus className="size-3.5" /> Add schedule
           </Button>
         </div>
       </div>
@@ -71,7 +71,7 @@ export function ScheduleCard({
 
       <div>
         <Button size="sm" variant="ghost" onClick={onOpenComposer}>
-          Edit schedule
+          <Pencil className="size-3.5" /> Edit schedule
         </Button>
       </div>
     </div>

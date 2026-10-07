@@ -17,6 +17,7 @@ import {
   Button,
   Disclosure,
   Kbd,
+  Play,
   Sheet,
   SheetContent,
   Textarea,
@@ -196,7 +197,7 @@ function RunSheetBody({
               </ul>
             </div>
             <Button type="button" size="sm" variant="ghost" onClick={onReviewIssues}>
-              Review issues
+              <AlertTriangle className="size-3.5" /> Review issues
             </Button>
           </div>
         )}
@@ -268,7 +269,7 @@ function RunSheetBody({
             loading={startRun.isPending}
             data-testid="start-run"
           >
-            Start run
+            <Play /> Start run
           </Button>
         </div>
       </form>

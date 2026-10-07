@@ -12,8 +12,10 @@ import { appErrorToast } from "@/shared/api/errors";
 import { describeRunTrigger } from "@/shared/api/enums";
 import { tsToDate } from "@/shared/lib/time";
 import {
+  ArrowUpRight,
   Badge,
   Button,
+  ChevronDown,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -23,7 +25,9 @@ import {
   RelativeTime,
   RunStatusBadge,
   Skeleton,
+  Stop,
   toast,
+  Trash,
 } from "@/shared/ui";
 import { isLiveRun } from "./lib/run-view";
 import { useRunSheet } from "./RunSheet";
@@ -103,7 +107,7 @@ export function RunsTable({ workflowId }: { workflowId: string }) {
           loading={isFetchingNextPage}
           onClick={() => void fetchNextPage()}
         >
-          Load more
+          <ChevronDown className="size-3.5" /> Load more
         </Button>
       )}
     </div>
@@ -156,7 +160,7 @@ function RunRow({ workflowId, run }: { workflowId: string; run: Run }) {
               })
             }
           >
-            Open
+            <ArrowUpRight className="size-3.5" /> Open
           </Button>
           {live && (
             <Button
@@ -165,11 +169,11 @@ function RunRow({ workflowId, run }: { workflowId: string; run: Run }) {
               loading={stop.isPending}
               onClick={() => stop.mutate({ workflowId, runId: run.id })}
             >
-              Stop
+              <Stop className="size-3.5" /> Stop
             </Button>
           )}
           <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>
-            Delete
+            <Trash className="size-3.5" /> Delete
           </Button>
         </div>
         <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -192,7 +196,7 @@ function RunRow({ workflowId, run }: { workflowId: string; run: Run }) {
                   )
                 }
               >
-                Delete
+                <Trash className="size-3.5" /> Delete
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -21,7 +21,21 @@ import { useWorkflowEvents } from "@/features/live";
 import { useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast } from "@/shared/api/errors";
 import { useDebouncedValue } from "@/shared/lib/use-debounced";
-import { Badge, Button, Dialog, DialogContent, DialogFooter, toast } from "@/shared/ui";
+import {
+  Badge,
+  Button,
+  Check,
+  Copy,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  Download,
+  Eye,
+  Pencil,
+  toast,
+  Trash,
+  Upload,
+} from "@/shared/ui";
 import { YamlEditor, type ExternalError, type YamlEditorApi } from "./YamlEditor";
 import { YamlDiff } from "./YamlDiff";
 import { ProblemsList, readinessProblems, yamlProblems } from "./problems";
@@ -40,10 +54,7 @@ const toExported = (res: ExportDefinitionResponse): Exported => ({
 
 export function DefinitionMode({ workflowId }: { workflowId: string }) {
   const transport = useTransport();
-  const client = useMemo(
-    () => createClient(DefinitionService, transport),
-    [transport],
-  );
+  const client = useMemo(() => createClient(DefinitionService, transport), [transport]);
   const [text, setText] = useState<string | null>(null);
   const [base, setBase] = useState<Exported | null>(null);
   const [banner, setBanner] = useState(false);
@@ -182,14 +193,10 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
   // Dry-run and a rejected apply can report the same error; show it once.
   const semanticErrors: ExternalError[] = [...parseErrors, ...applyErrors].filter(
     (error, i, all) =>
-      all.findIndex((other) => other.message === error.message && other.line === error.line) ===
-      i,
+      all.findIndex((other) => other.message === error.message && other.line === error.line) === i,
   );
 
-  const rows = [
-    ...yamlProblems(semanticErrors),
-    ...readinessProblems(readiness),
-  ];
+  const rows = [...yamlProblems(semanticErrors), ...readinessProblems(readiness)];
 
   if (exportQuery.isError) {
     return (
@@ -222,13 +229,13 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
             disabled={text === null || conflict !== null}
             onClick={() => void applyWith(base?.fingerprint ?? "")}
           >
-            Apply changes
+            <Check className="size-3.5" /> Apply changes
           </Button>
           <Button variant="ghost" size="sm" data-testid="download-yml" onClick={download}>
-            Download .yml
+            <Download className="size-3.5" /> Download .yml
           </Button>
           <Button variant="ghost" size="sm" data-testid="copy-yaml" onClick={() => void copy()}>
-            Copy
+            <Copy className="size-3.5" /> Copy
           </Button>
         </div>
       </header>
@@ -245,7 +252,7 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
             data-testid="definition-review"
             onClick={() => void refreshConflict()}
           >
-            Review changes
+            <Eye className="size-3.5" /> Review changes
           </Button>
         </div>
       )}
@@ -265,11 +272,21 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <Button variant="secondary" size="sm" data-testid="conflict-keep-mine" onClick={keepMine}>
-                Keep editing on top of latest
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="conflict-keep-mine"
+                onClick={keepMine}
+              >
+                <Pencil className="size-3.5" /> Keep editing on top of latest
               </Button>
-              <Button variant="secondary" size="sm" data-testid="conflict-discard" onClick={discardMine}>
-                Discard my changes
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="conflict-discard"
+                onClick={discardMine}
+              >
+                <Trash className="size-3.5" /> Discard my changes
               </Button>
               <Button
                 variant="danger"
@@ -277,7 +294,7 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
                 data-testid="conflict-overwrite"
                 onClick={() => setConfirmOverwrite(true)}
               >
-                Overwrite latest…
+                <Upload className="size-3.5" /> Overwrite latest…
               </Button>
             </div>
           </div>
@@ -328,8 +345,8 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
         <Dialog open onOpenChange={(open) => !open && setConfirmOverwrite(false)}>
           <DialogContent title="Overwrite the latest version?" data-testid="overwrite-dialog">
             <p className="text-sm text-ink-muted">
-              Your text will replace the latest version on the server. Anything changed elsewhere
-              is lost.
+              Your text will replace the latest version on the server. Anything changed elsewhere is
+              lost.
             </p>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setConfirmOverwrite(false)}>
@@ -345,7 +362,7 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
                   });
                 }}
               >
-                Overwrite latest
+                <Upload className="size-3.5" /> Overwrite latest
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -359,15 +376,19 @@ export function DefinitionMode({ workflowId }: { workflowId: string }) {
               You edited the definition without applying it. Leaving now discards those edits.
             </p>
             <DialogFooter>
-              <Button variant="ghost" data-testid="definition-blocker-stay" onClick={() => blocker.reset?.()}>
-                Keep editing
+              <Button
+                variant="ghost"
+                data-testid="definition-blocker-stay"
+                onClick={() => blocker.reset?.()}
+              >
+                <Pencil className="size-3.5" /> Keep editing
               </Button>
               <Button
                 variant="danger"
                 data-testid="definition-blocker-leave"
                 onClick={() => blocker.proceed?.()}
               >
-                Discard and leave
+                <Trash className="size-3.5" /> Discard and leave
               </Button>
             </DialogFooter>
           </DialogContent>

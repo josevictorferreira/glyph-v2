@@ -19,6 +19,7 @@ import {
   DialogFooter,
   IconButton,
   Input,
+  Plus,
   Trash,
   type ComboboxItem,
 } from "@/shared/ui";
@@ -265,7 +266,7 @@ function InputRow({
               loading={removeInput.isPending}
               onClick={() => removeInput.mutate({ workflowId, inputId: input.id })}
             >
-              Remove
+              <Trash className="size-3.5" /> Remove
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -363,7 +364,7 @@ function AddInputRow({ workflowId, step }: { workflowId: string; step: Step }) {
           <label htmlFor={id}>Required</label>
         </span>
         <Button type="submit" size="sm" loading={add.isPending}>
-          Add input
+          <Plus className="size-3.5" /> Add input
         </Button>
       </div>
       {error && (

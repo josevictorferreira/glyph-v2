@@ -19,7 +19,7 @@ import { LiveProvider } from "@/features/live";
 import { RunSheetProvider, RunStrip } from "@/features/runs";
 import { useWorkflowCommands } from "@/features/workflows";
 import { toAppError } from "@/shared/api/errors";
-import { Button, Skeleton } from "@/shared/ui";
+import { Button, ChevronLeft, Skeleton } from "@/shared/ui";
 
 export const Route = createFileRoute("/workflows/$id")({
   component: WorkspaceLayout,
@@ -105,7 +105,9 @@ function WorkflowNotFound() {
         </p>
         <div className="mt-4 flex justify-center gap-2">
           <Link to="/">
-            <Button>Back to Home</Button>
+            <Button>
+              <ChevronLeft /> Back to Home
+            </Button>
           </Link>
         </div>
       </div>

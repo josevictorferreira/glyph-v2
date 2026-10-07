@@ -28,7 +28,9 @@ import {
   RelativeTime,
   RunStatusBadge,
   Skeleton,
+  Stop,
   toast,
+  Trash,
 } from "@/shared/ui";
 import { useRun, useRunDuration } from "./hooks";
 import { isLiveRun, snapshotOutdated } from "./lib/run-view";
@@ -214,7 +216,7 @@ function RunHeader({ workflowId, run }: { workflowId: string; run: Run }) {
             onClick={() => stop.mutate({ workflowId, runId: run.id })}
             data-testid="stop-run"
           >
-            Stop
+            <Stop className="size-3.5" /> Stop
           </Button>
         )}
         <Button
@@ -223,7 +225,7 @@ function RunHeader({ workflowId, run }: { workflowId: string; run: Run }) {
           onClick={() => setConfirmDelete(true)}
           data-testid="delete-run"
         >
-          Delete
+          <Trash className="size-3.5" /> Delete
         </Button>
       </div>
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -250,7 +252,7 @@ function RunHeader({ workflowId, run }: { workflowId: string; run: Run }) {
                 )
               }
             >
-              Delete
+              <Trash className="size-3.5" /> Delete
             </Button>
           </DialogFooter>
         </DialogContent>

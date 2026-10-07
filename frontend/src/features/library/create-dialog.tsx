@@ -16,12 +16,15 @@ import { useDebouncedValue } from "@/shared/lib/use-debounced";
 import {
   Button,
   Combobox,
+  Copy,
   Dialog,
   DialogContent,
   DialogFooter,
   Field,
   Input,
+  Plus,
   Textarea,
+  Upload,
 } from "@/shared/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui";
 
@@ -127,7 +130,7 @@ function BlankTab({ onDone }: { onDone: () => void }) {
       </Field>
       <DialogFooter>
         <Button type="submit" disabled={isPending} data-testid="create-submit">
-          {isPending ? "Creating…" : "Create workflow"}
+          <Plus /> {isPending ? "Creating…" : "Create workflow"}
         </Button>
       </DialogFooter>
     </form>
@@ -222,7 +225,7 @@ function YamlTab({ onDone }: { onDone: () => void }) {
           disabled={isPending || yaml.trim().length === 0 || dryRun.isFetching || errors.length > 0}
           data-testid="import-submit"
         >
-          {isPending ? "Importing…" : "Import"}
+          <Upload /> {isPending ? "Importing…" : "Import"}
         </Button>
       </DialogFooter>
     </div>
@@ -283,7 +286,7 @@ function DuplicateTab({ onDone }: { onDone: () => void }) {
           disabled={busy || !source}
           data-testid="duplicate-submit"
         >
-          {busy ? "Copying…" : "Duplicate"}
+          <Copy /> {busy ? "Copying…" : "Duplicate"}
         </Button>
       </DialogFooter>
     </div>

@@ -20,6 +20,7 @@ import {
   SaveIndicator,
   Switch,
   Textarea,
+  Plus,
   Trash,
   toast,
 } from "@/shared/ui";
@@ -337,7 +338,7 @@ function AddTextForm({ workflowId }: { workflowId: string }) {
       )}
       <div className="flex justify-end">
         <Button type="submit" size="sm" loading={add.isPending}>
-          Add text
+          <Plus className="size-3.5" /> Add text
         </Button>
       </div>
     </form>

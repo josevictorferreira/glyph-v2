@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Button, CopyButton } from "@/shared/ui";
+import { Button, ChevronLeft, CopyButton, RotateCw } from "@/shared/ui";
 
 // Root errorComponent (spec 0022): an app-styled crash page instead of the
 // router default. Diagnostics (path, message, stack) are copyable. This is a
@@ -21,12 +21,14 @@ export function RouteError({ error }: { error: unknown }) {
           Your data is safe; reloading the page usually fixes it.
         </p>
         <div className="mt-4 flex gap-2">
-          <Button onClick={() => window.location.reload()}>Reload</Button>
+          <Button onClick={() => window.location.reload()}>
+            <RotateCw /> Reload
+          </Button>
           <Link
             to="/"
-            className="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink"
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink"
           >
-            Back to Home
+            <ChevronLeft /> Back to Home
           </Link>
         </div>
         <div className="mt-4">

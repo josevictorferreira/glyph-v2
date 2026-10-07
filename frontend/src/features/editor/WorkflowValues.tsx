@@ -22,6 +22,7 @@ import {
   SaveIndicator,
   Select,
   Textarea,
+  Plus,
   Trash,
 } from "@/shared/ui";
 import { variableTokens } from "./lib/variables";
@@ -213,7 +214,7 @@ function ValueRow({ workflow, input }: { workflow: Workflow; input: WorkflowInpu
               loading={remove.isPending}
               onClick={() => remove.mutate({ workflowId, inputId: input.id })}
             >
-              Remove
+              <Trash className="size-3.5" /> Remove
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -286,7 +287,7 @@ function AddValueForm({ workflowId }: { workflowId: string }) {
       )}
       <div className="flex justify-end">
         <Button type="submit" size="sm" loading={add.isPending}>
-          Add value
+          <Plus className="size-3.5" /> Add value
         </Button>
       </div>
     </form>

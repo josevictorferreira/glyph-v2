@@ -1,13 +1,13 @@
 // Run strip (spec 0020): the last 20 runs as status chips along the bottom
 // of the workspace (all modes), newest on the right. Hover shows start,
-// duration and failure; click opens the run lens; "+" runs now.
+// duration and failure; click opens the run lens; the play button runs now.
 import { Link } from "@tanstack/react-router";
 import { RunTrigger } from "@/gen/glyph/v1/common_pb";
 import type { Run } from "@/gen/glyph/v1/run_pb";
 import { describeRunStatus, describeRunTrigger } from "@/shared/api/enums";
 import { cn } from "@/shared/lib/cn";
 import { formatDuration, formatExact, tsToDate, useNow } from "@/shared/lib/time";
-import { Clock, IconButton, Plus, StatusDot } from "@/shared/ui";
+import { Clock, IconButton, Play, StatusDot } from "@/shared/ui";
 import { useRuns } from "./hooks";
 import { elapsedMs, isLiveRun } from "./lib/run-view";
 import { useRunSheet } from "./RunSheet";
@@ -77,7 +77,7 @@ export function RunStrip({
         View all
       </Link>
       <IconButton label="Run now" size="sm" onClick={runNow} data-testid="strip-run-now">
-        <Plus className="size-3.5" />
+        <Play className="size-3.5" />
       </IconButton>
     </div>
   );

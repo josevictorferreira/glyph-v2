@@ -1,5 +1,6 @@
 /** Empty-canvas CTA (spec 0017 §Empty state). */
 import { Button } from "@/shared/ui/button";
+import { Layers, Sparkle } from "@/shared/ui/icons";
 
 export interface CanvasEmptyStateProps {
   onAddStep: (kind: 1 | 2) => void;
@@ -20,10 +21,10 @@ export function CanvasEmptyState({ onAddStep, onImportYaml }: CanvasEmptyStatePr
         </p>
         <div className="mt-3 flex justify-center gap-2">
           <Button size="sm" onClick={() => onAddStep(1)} data-testid="canvas-empty-add">
-            Add Pi step
+            <Sparkle className="size-3.5" /> Add Pi step
           </Button>
           <Button size="sm" variant="secondary" onClick={() => onAddStep(2)}>
-            Add helper step
+            <Layers className="size-3.5" /> Add helper step
           </Button>
         </div>
         {onImportYaml && (

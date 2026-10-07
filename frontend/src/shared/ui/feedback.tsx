@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Collapsible } from "radix-ui";
 import { cn } from "@/shared/lib/cn";
-import { ChevronRight } from "./icons";
+import { ChevronRight, Copy } from "./icons";
 import { CheckIcon } from "./select";
 import { toast } from "./toast";
 
@@ -101,7 +101,7 @@ export function CopyButton({
         }
       }}
     >
-      {copied ? <CheckIcon /> : null}
+      {copied ? <CheckIcon /> : <Copy className="size-3.5" />}
       {copied ? "Copied" : label}
     </button>
   );

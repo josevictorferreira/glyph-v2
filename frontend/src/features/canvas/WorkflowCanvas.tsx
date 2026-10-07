@@ -48,6 +48,7 @@ import { CanvasEmptyState } from "./CanvasEmptyState";
 import { tidyUp } from "./lib/layout";
 import { toast } from "@/shared/ui/toast";
 import { Button } from "@/shared/ui/button";
+import { ArrowUpRight, Copy, Layers, Plus, Sparkle, Trash } from "@/shared/ui/icons";
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -186,7 +187,7 @@ function BuildCanvas({
   const { selectedStepId, onSelectStep, onOpenStep } = selection;
   const [menu, setMenu] = useState<{ x: number; y: number; stepId?: string } | null>(null);
 
-  // The "+ Step" menu is the shared Radix Dropdown (keyboard: Enter/Space
+  // The "Step" menu is the shared Radix Dropdown (keyboard: Enter/Space
   // opens, ↑/↓ moves, Enter activates — audit ticket 9).
   const [addOpen, setAddOpen] = useState(false);
 
@@ -579,13 +580,15 @@ function BuildCanvas({
         <Dropdown open={addOpen} onOpenChange={setAddOpen}>
           <DropdownTrigger asChild>
             <Button size="sm" variant="secondary" data-testid="canvas-add-step">
-              + Step
+              <Plus className="size-3.5" /> Step
             </Button>
           </DropdownTrigger>
           <DropdownContent align="start" data-testid="canvas-add-menu">
-            <DropdownItem onSelect={() => void addAt(StepKindEnum.PI)}>Add Pi step</DropdownItem>
+            <DropdownItem onSelect={() => void addAt(StepKindEnum.PI)}>
+              <Sparkle className="size-3.5" /> Add Pi step
+            </DropdownItem>
             <DropdownItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
-              Add helper step
+              <Layers className="size-3.5" /> Add helper step
             </DropdownItem>
           </DropdownContent>
         </Dropdown>
@@ -595,7 +598,7 @@ function BuildCanvas({
           data-testid="canvas-tidy"
           onClick={() => void onTidy()}
         >
-          Tidy up
+          <Sparkle className="size-3.5" /> Tidy up
         </Button>
       </div>
 
@@ -609,12 +612,12 @@ function BuildCanvas({
             {menu.stepId ? (
               <>
                 <ContextMenuItem onSelect={() => onOpenStep?.(menu.stepId!)}>
-                  Open step
+                  <ArrowUpRight className="size-3.5" /> Open step
                 </ContextMenuItem>
                 <ContextMenuItem
                   onSelect={() => duplicateStep.mutate({ workflowId, stepId: menu.stepId! })}
                 >
-                  Duplicate step
+                  <Copy className="size-3.5" /> Duplicate step
                 </ContextMenuItem>
                 <ContextMenuItem
                   className="text-status-failed"
@@ -633,18 +636,20 @@ function BuildCanvas({
                     }
                   }}
                 >
-                  Delete step
+                  <Trash className="size-3.5" /> Delete step
                 </ContextMenuItem>
               </>
             ) : (
               <>
                 <ContextMenuItem onSelect={() => void addAt(StepKindEnum.PI)}>
-                  Add Pi step
+                  <Sparkle className="size-3.5" /> Add Pi step
                 </ContextMenuItem>
                 <ContextMenuItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
-                  Add helper step
+                  <Layers className="size-3.5" /> Add helper step
                 </ContextMenuItem>
-                <ContextMenuItem onSelect={() => void onTidy()}>Tidy up</ContextMenuItem>
+                <ContextMenuItem onSelect={() => void onTidy()}>
+                  <Sparkle className="size-3.5" /> Tidy up
+                </ContextMenuItem>
               </>
             )}
           </ContextMenuContent>

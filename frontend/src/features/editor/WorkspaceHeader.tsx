@@ -19,6 +19,7 @@ import {
 import { appErrorToast, type AppError } from "@/shared/api/errors";
 import { useAutosaveField } from "@/shared/lib/autosave";
 import {
+  AlertTriangle,
   Badge,
   Button,
   Dialog,
@@ -31,8 +32,13 @@ import {
   IconButton,
   Input,
   MenuBars,
+  Pause,
+  Play,
+  Power,
+  RotateCw,
   SaveIndicator,
   toast,
+  Trash,
   WorkflowStatusBadge,
 } from "@/shared/ui";
 import { useEditorChrome } from "./chrome";
@@ -238,12 +244,12 @@ function PrimaryActions({
           }
           onClick={() => activate.mutate({ id: workflowId })}
         >
-          Activate
+          <Power className="size-3.5" /> Activate
         </Button>
       )}
       {status === WorkflowStatus.ACTIVE && (
         <Button size="sm" variant="primary" data-testid="run-now" onClick={runNow}>
-          Run now
+          <Play className="size-3.5" /> Run now
         </Button>
       )}
       {status === WorkflowStatus.PAUSED && (
@@ -254,7 +260,7 @@ function PrimaryActions({
           loading={resume.isPending}
           onClick={() => resume.mutate({ id: workflowId })}
         >
-          Resume
+          <Play className="size-3.5" /> Resume
         </Button>
       )}
       {status === WorkflowStatus.NEEDS_ATTENTION &&
@@ -267,7 +273,7 @@ function PrimaryActions({
             title="The issues are resolved — reactivate the workflow."
             onClick={() => resume.mutate({ id: workflowId })}
           >
-            Reactivate
+            <RotateCw className="size-3.5" /> Reactivate
           </Button>
         ) : (
           <Button
@@ -276,7 +282,7 @@ function PrimaryActions({
             data-testid="review-issues"
             onClick={() => setReadinessOpen(true)}
           >
-            Review issues
+            <AlertTriangle className="size-3.5" /> Review issues
           </Button>
         ))}
 
@@ -296,13 +302,15 @@ function PrimaryActions({
                 : undefined
             }
           >
-            {secondaryRunLabel}
+            <Play className="size-3.5" /> {secondaryRunLabel}
           </DropdownItem>
           {(status === WorkflowStatus.ACTIVE || status === WorkflowStatus.NEEDS_ATTENTION) && (
-            <DropdownItem onSelect={() => setPauseOpen(true)}>Pause</DropdownItem>
+            <DropdownItem onSelect={() => setPauseOpen(true)}>
+              <Pause className="size-3.5" /> Pause
+            </DropdownItem>
           )}
           <DropdownItem onSelect={() => setDeleteOpen(true)} className="text-danger">
-            Delete workflow…
+            <Trash className="size-3.5" /> Delete workflow…
           </DropdownItem>
         </DropdownContent>
       </Dropdown>
@@ -323,7 +331,7 @@ function PrimaryActions({
               loading={pause.isPending}
               onClick={() => pause.mutate({ id: workflowId })}
             >
-              Pause
+              <Pause className="size-3.5" /> Pause
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -353,7 +361,7 @@ function PrimaryActions({
                 })
               }
             >
-              Delete
+              <Trash className="size-3.5" /> Delete
             </Button>
           </DialogFooter>
         </DialogContent>

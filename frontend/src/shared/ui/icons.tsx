@@ -24,6 +24,7 @@ function svg({ size = 16, children, ...props }: IconProps & { children: React.Re
 export const X = (p: IconProps) => svg({ ...p, children: <path d="M18 6 6 18M6 6l12 12" /> });
 export const Plus = (p: IconProps) => svg({ ...p, children: <path d="M12 5v14M5 12h14" /> });
 export const ChevronRight = (p: IconProps) => svg({ ...p, children: <path d="m9 18 6-6-6-6" /> });
+export const ChevronLeft = (p: IconProps) => svg({ ...p, children: <path d="m15 18-6-6 6-6" /> });
 export const ChevronDown = (p: IconProps) => svg({ ...p, children: <path d="m6 9 6 6 6-6" /> });
 export const Copy = (p: IconProps) =>
   svg({
@@ -170,3 +171,66 @@ export const PanelLeft = (p: IconProps) =>
 
 export const MenuBars = (p: IconProps) =>
   svg({ ...p, children: <path d="M4 6h16M4 12h16M4 18h16" /> });
+
+export const Power = (p: IconProps) =>
+  svg({
+    ...p,
+    children: (
+      <>
+        <path d="M12 2v10" />
+        <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
+      </>
+    ),
+  });
+export const RotateCw = (p: IconProps) =>
+  svg({
+    ...p,
+    children: (
+      <>
+        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+      </>
+    ),
+  });
+export const Pencil = (p: IconProps) =>
+  svg({
+    ...p,
+    children: (
+      <>
+        <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+        <path d="m15 5 4 4" />
+      </>
+    ),
+  });
+export const Check = (p: IconProps) => svg({ ...p, children: <path d="M20 6 9 17l-5-5" /> });
+export const Upload = (p: IconProps) =>
+  svg({
+    ...p,
+    children: (
+      <>
+        <path d="M12 3v12" />
+        <path d="m7 8 5-5 5 5" />
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      </>
+    ),
+  });
+export const ArrowUpRight = (p: IconProps) =>
+  svg({
+    ...p,
+    children: (
+      <>
+        <path d="M7 7h10v10" />
+        <path d="M7 17 17 7" />
+      </>
+    ),
+  });
+export const Eye = (p: IconProps) =>
+  svg({
+    ...p,
+    children: (
+      <>
+        <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+  });

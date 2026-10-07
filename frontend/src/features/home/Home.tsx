@@ -10,7 +10,7 @@ import { useValidateWorkflow, useWorkflowList } from "@/features/workflows";
 import { needsAttention, isRunning, useCreateWorkflowDialog } from "@/features/library";
 import { describeRunStatus, describeWorkflowStatus } from "@/shared/api/enums";
 import { formatExact, formatRelative, tsToDate, useNow } from "@/shared/lib/time";
-import { Badge, Button, EmptyState, Plus, StatusDot } from "@/shared/ui";
+import { Badge, Button, EmptyState, Plus, StatusDot, Upload } from "@/shared/ui";
 
 export function HomePage() {
   // Poll every 15s while Home is visible (react-query pauses in hidden tabs
@@ -126,7 +126,7 @@ function FirstRun() {
               data-testid="first-run-import"
               onClick={() => createDialog.open("yaml")}
             >
-              Import YAML
+              <Upload /> Import YAML
             </Button>
           </div>
         }

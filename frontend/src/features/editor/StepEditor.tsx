@@ -10,6 +10,7 @@ import { useIssues, useWorkflowMutation } from "@/features/workflows";
 import { appErrorToast } from "@/shared/api/errors";
 import {
   Button,
+  Copy,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -28,6 +29,7 @@ import {
   TabsList,
   TabsTrigger,
   toast,
+  Trash,
 } from "@/shared/ui";
 import type { EditorFocus, StepEditorTab } from "./chrome";
 import { InputsTab } from "./InputsTab";
@@ -146,7 +148,7 @@ export function StepEditor({
               loading={deleteStep.isPending}
               onClick={() => deleteStep.mutate({ workflowId, stepId: step.id })}
             >
-              Delete
+              <Trash className="size-3.5" /> Delete
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -204,10 +206,10 @@ function StepEditorHeader({
         </DropdownTrigger>
         <DropdownContent align="end">
           <DropdownItem disabled={duplicatePending} onSelect={onDuplicate}>
-            Duplicate
+            <Copy className="size-3.5" /> Duplicate
           </DropdownItem>
           <DropdownItem onSelect={onDelete} className="text-status-failed">
-            Delete
+            <Trash className="size-3.5" /> Delete
           </DropdownItem>
         </DropdownContent>
       </Dropdown>

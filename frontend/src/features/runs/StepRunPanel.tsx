@@ -18,7 +18,9 @@ import { describeToolState } from "@/shared/api/enums";
 import { formatExact, tsToDate } from "@/shared/lib/time";
 import {
   Button,
+  ChevronDown,
   Duration,
+  RotateCw,
   Skeleton,
   StatusDot,
   StepRunStatusBadge,
@@ -195,7 +197,7 @@ function ErrorSection({
             retry.mutate({ workflowId, runId: run.id, stepRunId: summary.id });
           }}
         >
-          Retry step
+          <RotateCw className="size-3.5" /> Retry step
         </Button>
         {error && (
           <p className="text-xs text-status-failed" role="alert">
@@ -334,7 +336,7 @@ export function Transcript({
             setSeen(blocks.length);
           }}
         >
-          Jump to latest
+          <ChevronDown className="size-3.5" /> Jump to latest
         </Button>
       )}
     </div>
