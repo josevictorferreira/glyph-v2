@@ -1,6 +1,7 @@
 // Step output renderers (spec 0020). Agent output is untrusted:
 // Markdown goes through rehype-sanitize, HTML only renders in a sandboxed
-// iframe pointed at the backend preview route (strict CSP there), JSON is
+// iframe pointed at the backend preview route (strict CSP there: the document
+// runs in an opaque origin, so scripts have no ambient authority), JSON is
 // shown as a tree. Every format offers Raw, Copy and Download.
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -122,7 +123,7 @@ export function StepOutput({ stepRun }: { stepRun: StepRun }) {
         <iframe
           title={`${summary.stepName} output preview`}
           src={stepRun.previewPath}
-          sandbox=""
+          sandbox="allow-scripts allow-forms"
           referrerPolicy="no-referrer"
           className="h-96 w-full rounded-md border border-border bg-white"
         />

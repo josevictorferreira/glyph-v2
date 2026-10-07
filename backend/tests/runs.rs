@@ -711,12 +711,12 @@ async fn downloads_and_preview(pool: PgPool) {
     let r = http(&server, &path("Page", "preview")).await;
     assert_eq!(r.status(), 200);
     assert_eq!(r.headers()["content-type"], "text/html; charset=utf-8");
-    assert!(
-        r.headers()["content-security-policy"]
-            .to_str()
-            .unwrap()
-            .contains("default-src 'none'")
-    );
+    let csp = r.headers()["content-security-policy"].to_str().unwrap();
+    assert!(csp.contains("default-src 'none'"));
+    // Scripts must only ever run inside the CSP sandbox (opaque origin), and
+    // outbound requests (fetch/XHR) must stay blocked by `default-src 'none'`.
+    assert!(csp.contains("sandbox allow-scripts allow-forms"));
+    assert!(csp.contains("script-src 'unsafe-inline' https:"));
     assert_eq!(r.headers()["x-content-type-options"], "nosniff");
     assert_eq!(http(&server, &path("Data", "preview")).await.status(), 404);
 

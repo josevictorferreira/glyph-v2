@@ -139,7 +139,7 @@ describe("StepOutput", () => {
       />,
     );
     const frame = screen.getByTitle("Research output preview");
-    expect(frame).toHaveAttribute("sandbox", "");
+    expect(frame).toHaveAttribute("sandbox", "allow-scripts allow-forms");
     expect(frame).toHaveAttribute("src", "/workflows/wf/runs/r/step_runs/sr-1/preview");
     expect(screen.getByRole("link", { name: "Open in new tab" })).toHaveAttribute(
       "rel",

@@ -11,8 +11,15 @@ use crate::features::workflows::model::StepKind;
 use crate::shared::ids::{RunId, StepRunId, WorkflowId};
 use crate::shared::output_format::OutputFileFormat;
 
-pub const PREVIEW_CSP: &str =
-    "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:";
+/// Agent HTML is untrusted. `sandbox` forces the preview into an opaque
+/// origin (works for top-level navigations too, not just iframes), so scripts
+/// can never touch the app's cookies, storage or same-origin gRPC API, and
+/// `default-src 'none'` blocks all outbound fetch/XHR/beacon traffic.
+/// `allow-scripts`/`allow-forms` re-enable just execution and form controls:
+/// pages rendered purely by JavaScript display, remote scripts/styles/fonts
+/// (CDN-dependent agent HTML) load, while no ambient authority is granted —
+/// remote code is attacker-authored exactly like the inline code it replaces.
+pub const PREVIEW_CSP: &str = "default-src 'none'; script-src 'unsafe-inline' https:; style-src 'unsafe-inline' https:; img-src data: https:; font-src data: https:; sandbox allow-scripts allow-forms";
 
 fn not_found() -> Response {
     (StatusCode::NOT_FOUND, "Not found").into_response()
