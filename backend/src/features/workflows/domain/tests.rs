@@ -547,7 +547,10 @@ fn duplicate_step() {
     assert_eq!(c.name, "Original Step");
     assert_eq!(c.prompt.as_deref(), Some("Do the thing"));
     assert_eq!((c.canvas_x, c.canvas_y), (140, 190));
-    assert!(c.model_id.is_none() && c.output_name.is_none() && c.enabled_tool_ids.is_empty());
+    // Rails parity: model, tools and output settings are copied too.
+    assert_eq!(c.model_id.as_deref(), Some("test-model"));
+    assert_eq!(c.output_name.as_deref(), Some("result"));
+    assert_eq!(c.enabled_tool_ids, vec!["read".to_string()]);
     assert_eq!(c.inputs.len(), 1);
     assert!(
         wf.connections

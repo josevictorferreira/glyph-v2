@@ -185,7 +185,17 @@ function BuildCanvas({
 }: WorkflowCanvasBuildProps) {
   const workflowId = workflow.summary?.id ?? "";
   const { selectedStepId, onSelectStep, onOpenStep } = selection;
-  const [menu, setMenu] = useState<{ x: number; y: number; stepId?: string } | null>(null);
+  // Context-menu target. React Flow's node/pane callbacks (which run before
+  // the wrapper's, as child handlers) record it in a ref; the wrapper's own
+  // onContextMenu then publishes it to state (and falls back to a pane
+  // target for surfaces React Flow does not label, e.g. the empty state).
+  // `flow` is the click's flow position so pane items can add a step there.
+  const [menu, setMenu] = useState<{ flow: { x: number; y: number }; stepId?: string } | null>(
+    null,
+  );
+  const menuTargetRef = useRef<{ flow: { x: number; y: number }; stepId?: string } | null>(null);
+  // Ctrl+C/Ctrl+V clipboard: the copied step id (canvas-local).
+  const copyRef = useRef<string | null>(null);
 
   // The "Step" menu is the shared Radix Dropdown (keyboard: Enter/Space
   // opens, ↑/↓ moves, Enter activates — audit ticket 9).
@@ -221,10 +231,19 @@ function BuildCanvas({
   });
 
   // Cache stamp: updatedAt has seconds granularity, so structural facts are
-  // folded in to catch same-second mutations (connect adds an input+edge).
-  const stepStamp = workflow.steps.map((s) => `${s.id}:${s.inputs.length}`).join("|");
+  // folded in to catch same-second mutations. Step content is included too —
+  // the server does not bump workflows.updated_at for step-only edits
+  // (rename, prompt, model…), and the cards must still re-render.
+  const stepStamp = workflow.steps
+    .map(
+      (s) =>
+        `${s.id}:${s.name}:${s.description ?? ""}:${s.prompt ?? ""}:${s.additionalContext ?? ""}:${s.expectedOutput ?? ""}:${s.outputName ?? ""}:${s.outputDescription ?? ""}:${s.outputFileFormat}:${s.modelId ?? ""}:${JSON.stringify(s.temperature ?? null)}:${s.enabledToolKeys.join(",")}:${s.allowFailure}:${s.canvasX}:${s.canvasY}:${s.promptRef?.textId ?? ""}:${s.contextRef?.textId ?? ""}:${s.expectRef?.textId ?? ""}:${s.inputs.map((i) => `${i.id}.${i.name}.${i.required}.${i.workflowInputId ?? ""}`).join(";")}`,
+    )
+    .join("|");
+  const textStamp = workflow.texts.map((t) => `${t.id}:${t.key}`).join("|");
+  const inputStamp = workflow.inputs.map((i) => `${i.id}:${i.name}`).join("|");
   const connStamp = workflow.connections.map((c) => `${c.id}:${c.destinationInputId}`).join("|");
-  const version = `${workflow.summary?.updatedAt?.seconds ?? 0}-${workflow.summary?.updatedAt?.nanos ?? 0}:${issues.length}#${stepStamp}#${connStamp}`;
+  const version = `${workflow.summary?.updatedAt?.seconds ?? 0}-${workflow.summary?.updatedAt?.nanos ?? 0}:${issues.length}#${stepStamp}#${textStamp}#${inputStamp}#${connStamp}`;
   const [nodes, setNodes, onNodesChange] = useDerivedNodes(
     version,
     useCallback(() => buildNodes(workflow, issues), [workflow, issues]),
@@ -473,6 +492,23 @@ function BuildCanvas({
         if (selected) duplicateStep.mutate({ workflowId, stepId: selected.id });
         return;
       }
+      // Ctrl/Cmd+C then Ctrl/Cmd+V duplicates the selected step (a copy of
+      // the step without its connections — same as Duplicate).
+      if (e.key.toLowerCase() === "c" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        const selection = document.getSelection();
+        // Real text selection wins: don't hijack the browser copy.
+        if (selection && selection.type === "Range") return;
+        copyRef.current = selected?.id ?? null;
+        return;
+      }
+      if (e.key.toLowerCase() === "v" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        const pasted = copyRef.current;
+        if (pasted && workflow.steps.some((s) => s.id === pasted)) {
+          e.preventDefault();
+          duplicateStep.mutate({ workflowId, stepId: pasted });
+        }
+        return;
+      }
       if (e.key.toLowerCase() === "f") {
         e.preventDefault();
         void fitView({ padding: 0.2, duration: 200 });
@@ -496,25 +532,54 @@ function BuildCanvas({
         nudge(selected.id, arrow[0] * step, arrow[1] * step);
       }
     },
-    [addAt, duplicateStep, fitView, nudge, nodes, onSelectStep, setViewport, workflowId],
+    [
+      addAt,
+      duplicateStep,
+      fitView,
+      nudge,
+      nodes,
+      onSelectStep,
+      setViewport,
+      workflow.steps,
+      workflowId,
+    ],
   );
 
   // ── Context menu ────────────────────────────────────────────────────────
-  const openMenu = (e: ReactMouseEvent | MouseEvent, stepId?: string) => {
-    e.preventDefault();
-    setMenu({ x: e.clientX, y: e.clientY, stepId });
-  };
-
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("resize", close);
+  // React Flow's callbacks only record the target; the wrapper's Radix
+  // ContextMenuTrigger (below) receives the same native event, opens the
+  // menu and anchors it at the pointer. The handlers must NOT call
+  // preventDefault: Radix's trigger skips opening when the event is already
+  // default-prevented (it calls preventDefault itself).
+  const onNodeContextMenu = useCallback((_e: ReactMouseEvent | MouseEvent, node: StepNode) => {
+    menuTargetRef.current = {
+      flow: { x: node.position.x, y: node.position.y },
+      stepId: node.id,
     };
-  }, [menu]);
+  }, []);
+  const onPaneContextMenu = useCallback(
+    (e: ReactMouseEvent | MouseEvent) => {
+      menuTargetRef.current = { flow: screenToFlowPosition({ x: e.clientX, y: e.clientY }) };
+    },
+    [screenToFlowPosition],
+  );
+  // Runs for every right-click in the wrapper (child handlers ran first):
+  // publish the recorded target, or fall back to a pane target where the
+  // click landed on something React Flow does not label (empty state,
+  // minimap, controls).
+  const onCanvasContextMenu = useCallback(
+    (e: ReactMouseEvent | MouseEvent) => {
+      const target = menuTargetRef.current;
+      menuTargetRef.current = null;
+      setMenu(target ?? { flow: screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
+    },
+    [screenToFlowPosition],
+  );
+  // Clear the recorded target when the menu closes.
+  const closeMenu = useCallback(() => {
+    menuTargetRef.current = null;
+    setMenu(null);
+  }, []);
 
   const onPaneDoubleClick = useCallback(
     (e: ReactMouseEvent) => {
@@ -527,135 +592,154 @@ function BuildCanvas({
   );
 
   return (
-    <div
-      ref={wrapperRef}
-      className="glyph-canvas-wrapper relative h-full w-full outline-none"
-      data-testid="canvas"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      onDoubleClick={onPaneDoubleClick}
-    >
-      <TextHighlightContext.Provider value={highlightTextId ?? null}>
-        <ReactFlow<StepNode>
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onConnectEnd={onConnectEnd}
-          isValidConnection={isValidConnection}
-          onBeforeDelete={onBeforeDelete}
-          onSelectionChange={
-            onSelectStep
-              ? (p: OnSelectionChangeParams) => onSelectStep(singleSelection(p))
-              : undefined
-          }
-          onNodeDoubleClick={(_e, node) => onOpenStep?.(node.id)}
-          onNodeContextMenu={(e, node) => openMenu(e, node.id)}
-          onPaneContextMenu={(e) => openMenu(e)}
-          onNodeDragStart={() => (interactingRef.current = true)}
-          onNodeDragStop={onNodeDragStop}
-          onPaneClick={() => onSelectStep?.(null)}
-          onMoveEnd={() => localStorage.setItem(storageKey, JSON.stringify(getViewport()))}
-          connectionLineType={ConnectionLineType.Bezier}
-          minZoom={0.2}
-          maxZoom={2}
+    <ContextMenuRoot onOpenChange={(open) => (!open ? closeMenu() : undefined)}>
+      <ContextMenuTrigger asChild>
+        <div
+          ref={wrapperRef}
+          className="glyph-canvas-wrapper relative h-full w-full outline-none"
+          data-testid="canvas"
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          onDoubleClick={onPaneDoubleClick}
+          onContextMenu={onCanvasContextMenu}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} />
-          <Controls showInteractive={false} />
-          <MiniMap pannable zoomable nodeColor={miniMapNodeColor} />
-        </ReactFlow>
-      </TextHighlightContext.Provider>
+          <TextHighlightContext.Provider value={highlightTextId ?? null}>
+            <ReactFlow<StepNode>
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onConnectEnd={onConnectEnd}
+              isValidConnection={isValidConnection}
+              onBeforeDelete={onBeforeDelete}
+              onSelectionChange={
+                onSelectStep
+                  ? (p: OnSelectionChangeParams) => onSelectStep(singleSelection(p))
+                  : undefined
+              }
+              onNodeDoubleClick={(_e, node) => onOpenStep?.(node.id)}
+              onNodeContextMenu={onNodeContextMenu}
+              onPaneContextMenu={onPaneContextMenu}
+              onNodeDragStart={() => (interactingRef.current = true)}
+              onNodeDragStop={onNodeDragStop}
+              onPaneClick={() => onSelectStep?.(null)}
+              onMoveEnd={() => localStorage.setItem(storageKey, JSON.stringify(getViewport()))}
+              connectionLineType={ConnectionLineType.Bezier}
+              minZoom={0.2}
+              maxZoom={2}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={20} />
+              <Controls showInteractive={false} />
+              <MiniMap pannable zoomable nodeColor={miniMapNodeColor} />
+            </ReactFlow>
+          </TextHighlightContext.Provider>
 
-      {workflow.steps.length === 0 && (
-        <CanvasEmptyState onAddStep={addAt} onImportYaml={onImportYaml} />
-      )}
+          {workflow.steps.length === 0 && (
+            <CanvasEmptyState onAddStep={addAt} onImportYaml={onImportYaml} />
+          )}
 
-      {/* Toolbar */}
-      <div
-        className="glyph-canvas-toolbar absolute left-2 top-2 z-10 flex items-center gap-1 p-1"
-        data-testid="canvas-toolbar"
-      >
-        <Dropdown open={addOpen} onOpenChange={setAddOpen}>
-          <DropdownTrigger asChild>
-            <Button size="sm" variant="secondary" data-testid="canvas-add-step">
-              <Plus className="size-3.5" /> Step
-            </Button>
-          </DropdownTrigger>
-          <DropdownContent align="start" data-testid="canvas-add-menu">
-            <DropdownItem onSelect={() => void addAt(StepKindEnum.PI)}>
-              <Sparkle className="size-3.5" /> Add Pi step
-            </DropdownItem>
-            <DropdownItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
-              <Layers className="size-3.5" /> Add helper step
-            </DropdownItem>
-          </DropdownContent>
-        </Dropdown>
-        <Button
-          size="sm"
-          variant="secondary"
-          data-testid="canvas-tidy"
-          onClick={() => void onTidy()}
-        >
-          <Sparkle className="size-3.5" /> Tidy up
-        </Button>
-      </div>
-
-      {/* Context menu (Radix ContextMenu anchored at the pointer position) */}
-      {menu && (
-        <ContextMenuRoot open onOpenChange={(open) => (!open ? setMenu(null) : undefined)}>
-          <ContextMenuTrigger asChild>
-            <div className="fixed z-30 size-0" style={{ left: menu.x, top: menu.y }} aria-hidden />
-          </ContextMenuTrigger>
-          <ContextMenuContent data-testid="canvas-context-menu" className="w-44">
-            {menu.stepId ? (
-              <>
-                <ContextMenuItem onSelect={() => onOpenStep?.(menu.stepId!)}>
-                  <ArrowUpRight className="size-3.5" /> Open step
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onSelect={() => duplicateStep.mutate({ workflowId, stepId: menu.stepId! })}
-                >
-                  <Copy className="size-3.5" /> Duplicate step
-                </ContextMenuItem>
-                <ContextMenuItem
-                  className="text-status-failed"
-                  onSelect={() => {
-                    const stepId = menu.stepId!;
-                    const conns = workflow.connections.filter(
-                      (c) => c.sourceStepId === stepId || c.destinationStepId === stepId,
-                    ).length;
-                    const message =
-                      conns > 0
-                        ? `Delete “${stepDisplayName(workflow, stepId)}”? This removes ${conns} connection${conns === 1 ? "" : "s"}.`
-                        : `Delete “${stepDisplayName(workflow, stepId)}”?`;
-                    if (window.confirm(message)) {
-                      deleteStep.mutate({ workflowId, stepId });
-                      onSelectStep?.(null);
-                    }
-                  }}
-                >
-                  <Trash className="size-3.5" /> Delete step
-                </ContextMenuItem>
-              </>
-            ) : (
-              <>
-                <ContextMenuItem onSelect={() => void addAt(StepKindEnum.PI)}>
+          {/* Toolbar */}
+          <div
+            className="glyph-canvas-toolbar absolute left-2 top-2 z-10 flex items-center gap-1 p-1"
+            data-testid="canvas-toolbar"
+          >
+            <Dropdown open={addOpen} onOpenChange={setAddOpen}>
+              <DropdownTrigger asChild>
+                <Button size="sm" variant="secondary" data-testid="canvas-add-step">
+                  <Plus className="size-3.5" /> Step
+                </Button>
+              </DropdownTrigger>
+              <DropdownContent align="start" data-testid="canvas-add-menu">
+                <DropdownItem onSelect={() => void addAt(StepKindEnum.PI)}>
                   <Sparkle className="size-3.5" /> Add Pi step
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
+                </DropdownItem>
+                <DropdownItem onSelect={() => void addAt(StepKindEnum.HELPER)}>
                   <Layers className="size-3.5" /> Add helper step
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => void onTidy()}>
-                  <Sparkle className="size-3.5" /> Tidy up
-                </ContextMenuItem>
-              </>
-            )}
-          </ContextMenuContent>
-        </ContextMenuRoot>
-      )}
-    </div>
+                </DropdownItem>
+              </DropdownContent>
+            </Dropdown>
+            <Button
+              size="sm"
+              variant="secondary"
+              data-testid="canvas-tidy"
+              onClick={() => void onTidy()}
+            >
+              <Sparkle className="size-3.5" /> Tidy up
+            </Button>
+          </div>
+        </div>
+      </ContextMenuTrigger>
+
+      {/* Context menu: Radix anchors it at the pointer from the wrapper's
+          real contextmenu event; `menu` says what was clicked. */}
+      <ContextMenuContent data-testid="canvas-context-menu" className="w-44">
+        {menu?.stepId ? (
+          <>
+            <ContextMenuItem onSelect={() => onOpenStep?.(menu.stepId!)}>
+              <ArrowUpRight className="size-3.5" /> Open step
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => duplicateStep.mutate({ workflowId, stepId: menu.stepId! })}
+            >
+              <Copy className="size-3.5" /> Duplicate step
+            </ContextMenuItem>
+            <ContextMenuItem
+              className="text-status-failed"
+              onSelect={() => {
+                const stepId = menu.stepId!;
+                const conns = workflow.connections.filter(
+                  (c) => c.sourceStepId === stepId || c.destinationStepId === stepId,
+                ).length;
+                const message =
+                  conns > 0
+                    ? `Delete “${stepDisplayName(workflow, stepId)}”? This removes ${conns} connection${conns === 1 ? "" : "s"}.`
+                    : `Delete “${stepDisplayName(workflow, stepId)}”?`;
+                if (window.confirm(message)) {
+                  deleteStep.mutate({ workflowId, stepId });
+                  onSelectStep?.(null);
+                }
+              }}
+            >
+              <Trash className="size-3.5" /> Delete step
+            </ContextMenuItem>
+          </>
+        ) : (
+          <PaneMenuItems menu={menu} addAt={addAt} onTidy={onTidy} />
+        )}
+      </ContextMenuContent>
+    </ContextMenuRoot>
+  );
+}
+
+/** Pane (empty canvas) context-menu items: add steps at the click point. */
+function PaneMenuItems({
+  menu,
+  addAt,
+  onTidy,
+}: {
+  menu: { flow: { x: number; y: number }; stepId?: string } | null;
+  addAt: (kind: StepKindEnum, flow?: { x: number; y: number }) => void;
+  onTidy: () => Promise<void>;
+}) {
+  if (!menu) return null;
+  return (
+    <>
+      <ContextMenuItem
+        onSelect={() => addAt(StepKindEnum.PI, { x: menu.flow.x - 120, y: menu.flow.y - 30 })}
+      >
+        <Sparkle className="size-3.5" /> Add Pi step
+      </ContextMenuItem>
+      <ContextMenuItem
+        onSelect={() => addAt(StepKindEnum.HELPER, { x: menu.flow.x - 120, y: menu.flow.y - 30 })}
+      >
+        <Layers className="size-3.5" /> Add helper step
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => void onTidy()}>
+        <Sparkle className="size-3.5" /> Tidy up
+      </ContextMenuItem>
+    </>
   );
 }
 

@@ -116,8 +116,12 @@ export function useAutosaveField<T>(opts: UseAutosaveFieldOptions<T>): AutosaveF
         preSaveBase.current = remoteBase.current;
         await save(next);
         setSaving(false);
-        setDraft(undefined);
-        setFrozen(undefined);
+        // A newer draft may have been typed while this save was in flight:
+        // clearing it would silently drop those keystrokes.
+        if (latest.current.draft === undefined || equals(latest.current.draft, next)) {
+          setDraft(undefined);
+          setFrozen(undefined);
+        }
         setCommitted(next);
         remoteBase.current = next;
         setJustSaved(true);
@@ -128,7 +132,7 @@ export function useAutosaveField<T>(opts: UseAutosaveFieldOptions<T>): AutosaveF
         // keep the draft for retry()
       }
     },
-    [save],
+    [save, equals],
   );
 
   const schedule = useCallback(

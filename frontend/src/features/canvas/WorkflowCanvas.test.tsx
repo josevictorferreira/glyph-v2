@@ -32,7 +32,8 @@ import {
 import type { RunSnapshot, StepRunSummary } from "@/gen/glyph/v1/run_pb";
 import { tidyUp } from "./lib/layout";
 import { WorkflowCanvas } from "./WorkflowCanvas";
-import { useWorkflow } from "@/features/workflows";
+import { useWorkflow, useWorkflowMutation } from "@/features/workflows";
+import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import { renderWithApp } from "@test/render";
 import type { FakeServices } from "@test/fakeTransport";
 
@@ -331,6 +332,73 @@ describe("WorkflowCanvas (build)", () => {
     await waitFor(() =>
       expect(recorded.addStep).toEqual([expect.objectContaining({ kind: StepKind.HELPER })]),
     );
+  });
+
+  it("Ctrl+C then Ctrl+V duplicates the selected step", async () => {
+    const { recorded } = setupBuild();
+    const node = await nodeOfAsync("step-card-s-research");
+    fireEvent.click(node); // select the step
+    await waitFor(() => expect(nodeOf("step-card-s-research").classList).toContain("selected"));
+    const canvas = screen.getByTestId("canvas");
+    canvas.focus();
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true }));
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, bubbles: true }));
+    await waitFor(() =>
+      expect(recorded.duplicateStep).toEqual([
+        expect.objectContaining({ workflowId: "wf-1", stepId: "s-research" }),
+      ]),
+    );
+  });
+
+  it("Ctrl+V without a copied step does nothing", async () => {
+    const { recorded } = setupBuild();
+    await screen.findByTestId("step-card-s-research");
+    const canvas = screen.getByTestId("canvas");
+    canvas.focus();
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(recorded.duplicateStep).toEqual([]);
+  });
+
+  it("rebuilds cards when a step is renamed without bumping updatedAt", async () => {
+    const wf = makeWorkflow();
+    const { services } = makeServices(wf);
+    // The mutation response renames the step but keeps the same updatedAt
+    // (seconds-granular timestamps collide within the same second).
+    services.workflow!.updateStepDetails = async (req: { stepId: string }) => {
+      const step = wf.steps.find((s) => s.id === req.stepId)!;
+      step.name = "Renamed Step";
+      return { workflow: clone(wf), issues: [] };
+    };
+    function RenameHarness() {
+      const { data } = useWorkflow("wf-1");
+      const rename = useWorkflowMutation(WorkflowService.method.updateStepDetails);
+      if (!data?.workflow) return <div data-testid="loading" />;
+      return (
+        <div className="h-[600px] w-[800px]">
+          <button
+            onClick={() =>
+              rename.mutate({ workflowId: "wf-1", stepId: "s-research", name: "Renamed Step" })
+            }
+          >
+            rename
+          </button>
+          <WorkflowCanvas
+            mode="build"
+            workflow={data.workflow}
+            issues={data.issues}
+            onSelectStep={() => {}}
+          />
+        </div>
+      );
+    }
+    renderWithApp(<RenameHarness />, { services });
+    expect(await screen.findByText("Research")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "rename" }));
+    await waitFor(() => expect(screen.getByText("Renamed Step")).toBeInTheDocument(), {
+      timeout: 2000,
+    });
+    expect(screen.queryByText("Research")).not.toBeInTheDocument();
   });
 
   it("renders a marker per field linked to a shared text (spec 0023)", async () => {

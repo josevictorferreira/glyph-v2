@@ -216,12 +216,62 @@ test("duplicate with Ctrl+D; delete via context menu counts connections", async 
 
   // Delete the linked step through the context menu.
   await target.click({ button: "right" });
-  await expect(page.getByTestId("canvas-context-menu")).toBeVisible();
+  const menu = page.getByTestId("canvas-context-menu");
+  await expect(menu).toBeVisible();
+  // The menu must open at the cursor (it used to render at the viewport's
+  // top-left corner — "missing actions" on right-click).
+  const targetBox = (await target.boundingBox())!;
+  const menuBox = (await menu.boundingBox())!;
+  expect(menuBox.x).toBeGreaterThan(targetBox.x - 40);
+  expect(menuBox.y).toBeGreaterThan(targetBox.y - 40);
   const deleteMsg = nextConfirm(page, true);
   await page.getByRole("menuitem", { name: "Delete step" }).click();
   expect(await deleteMsg).toBe("Delete “Linked”? This removes 1 connection.");
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+});
+
+test("right-click on empty canvas opens Add actions at the cursor", async ({ page }) => {
+  const { id, stepIds } = await createWorkflow("E2E canvas pane menu", [
+    { name: "Solo", x: 200, y: 160, output: "result" },
+  ]);
+  await openCanvas(page, id);
+  await expect(node(page, stepIds[0]!)).toBeVisible();
+  // Right-click a point far from the card (top-left corner of the pane).
+  const pane = page.locator(".react-flow__pane").first();
+  const pbox = (await pane.boundingBox())!;
+  await pane.click({
+    button: "right",
+    position: { x: pbox.width * 0.08, y: pbox.height * 0.08 },
+  });
+  const menu = page.getByTestId("canvas-context-menu");
+  await expect(menu).toBeVisible();
+  const mbox = (await menu.boundingBox())!;
+  expect(mbox.x).toBeGreaterThan(pbox.x);
+  expect(mbox.y).toBeGreaterThan(pbox.y);
+  await page.getByRole("menuitem", { name: "Add Pi step" }).click();
+  await expect(page.locator(".react-flow__node")).toHaveCount(2);
+  const steps = (await workflows.getWorkflow({ id })).workflow?.steps ?? [];
+  expect(steps.some((s) => s.id !== stepIds[0])).toBe(true);
+});
+
+test("Ctrl+C and Ctrl+V duplicate the selected step", async ({ page }) => {
+  const { id, stepIds } = await createWorkflow("E2E canvas copy paste", [
+    { name: "Original", x: 200, y: 160, output: "result" },
+  ]);
+  await openCanvas(page, id);
+  const card = node(page, stepIds[0]!);
+  await expect(card).toBeVisible();
+  await card.click(); // select
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".react-flow__node")).toHaveCount(2);
+  const steps = (await workflows.getWorkflow({ id })).workflow?.steps ?? [];
+  expect(steps).toHaveLength(2);
+  const copy = steps.find((s) => s.id !== stepIds[0])!;
+  expect(copy.name).toBe("Original");
+  expect(copy.outputName).toBe("result"); // Rails parity: output settings copied
+  expect(copy.canvasX).toBeGreaterThan(0);
 });
 
 test("keyboard-only: add steps, cycle selection, nudge, duplicate", async ({ page }) => {

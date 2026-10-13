@@ -343,6 +343,14 @@ pub(crate) async fn save(
     .execute(&mut *conn)
     .await
     .map_err(save_error)?;
+    // save() only runs after a domain change, and child writes (steps,
+    // inputs, connections, texts) are not part of the header comparison
+    // above — bump updated_at so GetWorkflow/ListWorkflows observe them
+    // (Rails `touch: true` parity; the canvas keys node rebuilds off it).
+    sqlx::query!("UPDATE workflows SET updated_at = now() WHERE id = $1", wid)
+        .execute(&mut *conn)
+        .await
+        .map_err(db)?;
 
     // --- deletes first, so replacements never collide with unique indexes ---
     let connection_ids: Vec<Uuid> = wf.connections.iter().map(|c| c.id.as_uuid()).collect();

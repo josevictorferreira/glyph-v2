@@ -62,7 +62,7 @@ export function StepEditor({
 
   const duplicate = useWorkflowMutation(WorkflowService.method.duplicateStep, {
     onSucceeded: (res) => {
-      toast({ title: "Duplicated without model, tools and output settings." });
+      toast({ title: "Duplicated without connections." });
       onSelectStep(res.newStepId);
     },
     onAppError: (error) => toast({ title: appErrorToast(error), tone: "danger" }),

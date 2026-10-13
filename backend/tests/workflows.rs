@@ -392,7 +392,10 @@ async fn steps_and_events(pool: PgPool) {
         (copy.canvas_x, copy.canvas_y),
         (original.canvas_x + 40, original.canvas_y + 40)
     );
-    assert!(copy.model_id.is_none());
+    // Rails parity: model, tools and output settings are copied too.
+    assert_eq!(copy.model_id, original.model_id);
+    assert_eq!(copy.temperature, original.temperature);
+    assert_eq!(copy.enabled_tool_keys, original.enabled_tool_keys);
 
     let moved = client
         .move_step(pb::MoveStepRequest {
@@ -435,6 +438,52 @@ async fn steps_and_events(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(event_types(&server.pool, &id).await.len(), before_move);
+}
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn step_only_edits_bump_workflow_updated_at(pool: PgPool) {
+    let (_server, mut client) = setup(pool).await;
+    let wf = create(&mut client, "Stale stamp").await;
+    let id = wid(&wf);
+    let step = complete_step(&mut client, &id, "Original").await;
+    let updated_ms = |wf: &pb::Workflow| {
+        let ts = wf.summary.as_ref().unwrap().updated_at.unwrap();
+        ts.seconds * 1_000 + (ts.nanos as i64) / 1_000_000
+    };
+    // A step-only edit (rename) must bump workflows.updated_at so clients
+    // that key off it (canvas node rebuild, list ordering) observe the change.
+    let before = updated_ms(
+        &client
+            .get_workflow(pb::GetWorkflowRequest { id: id.clone() })
+            .await
+            .unwrap()
+            .into_inner()
+            .workflow
+            .unwrap(),
+    );
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    client
+        .update_step_details(pb::UpdateStepDetailsRequest {
+            workflow_id: id.clone(),
+            step_id: step,
+            name: "Renamed".into(),
+            description: None,
+            allow_failure: false,
+        })
+        .await
+        .unwrap();
+    let after = updated_ms(
+        &client
+            .get_workflow(pb::GetWorkflowRequest { id })
+            .await
+            .unwrap()
+            .into_inner()
+            .workflow
+            .unwrap(),
+    );
+    assert!(
+        after > before,
+        "step rename must bump updated_at ({before} -> {after})"
+    );
 }
 
 #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]

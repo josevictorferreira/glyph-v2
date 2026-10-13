@@ -166,6 +166,39 @@ describe("useAutosaveField", () => {
     rendered.unmount();
     expect(saves).toEqual(["ab"]);
   });
+  it("keeps a draft typed while a save is in flight (no dropped letters)", async () => {
+    let release: (() => void) | undefined;
+    const saves: string[] = [];
+    const save = (v: string) =>
+      new Promise<void>((resolve) => {
+        saves.push(v);
+        if (saves.length === 1)
+          release = resolve; // first save hangs
+        else resolve();
+      });
+    const { rendered } = setup("", save);
+    // First edit fires a save that stays in flight.
+    act(() => rendered.result.current.setValue("a"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(saves).toEqual(["a"]);
+    expect(rendered.result.current.status).toBe("saving");
+    // The user keeps typing while the save is in flight.
+    act(() => rendered.result.current.setValue("ab"));
+    expect(rendered.result.current.value).toBe("ab");
+    // The in-flight save resolves: the newer draft must survive.
+    await act(async () => {
+      release?.();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(rendered.result.current.value).toBe("ab");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(saves).toEqual(["a", "ab"]);
+    expect(rendered.result.current.status).toBe("saved");
+  });
 });
 
 describe("combineAutosaveStatuses", () => {

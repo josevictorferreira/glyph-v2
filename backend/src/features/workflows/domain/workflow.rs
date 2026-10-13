@@ -172,8 +172,16 @@ impl Workflow {
         step.description = source.description.clone();
         step.prompt = source.prompt.clone();
         step.additional_context = source.additional_context.clone();
+        step.expected_output = source.expected_output.clone();
         step.prompt_ref = source.prompt_ref.clone();
         step.context_ref = source.context_ref.clone();
+        step.expect_ref = source.expect_ref.clone();
+        step.output_name = source.output_name.clone();
+        step.output_description = source.output_description.clone();
+        step.output_file_format = source.output_file_format;
+        step.model_id = source.model_id.clone();
+        step.model_settings = source.model_settings.clone();
+        step.enabled_tool_ids = source.enabled_tool_ids.clone();
         step.allow_failure = source.allow_failure;
         step.inputs = source
             .inputs
