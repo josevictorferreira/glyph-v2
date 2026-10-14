@@ -681,6 +681,14 @@ function BuildCanvas({
               <ArrowUpRight className="size-3.5" /> Open step
             </ContextMenuItem>
             <ContextMenuItem
+              onSelect={() => {
+                copyRef.current = menu.stepId!;
+                toast({ title: "Step copied to clipboard" });
+              }}
+            >
+              <Copy className="size-3.5" /> Copy step
+            </ContextMenuItem>
+            <ContextMenuItem
               onSelect={() => duplicateStep.mutate({ workflowId, stepId: menu.stepId! })}
             >
               <Copy className="size-3.5" /> Duplicate step

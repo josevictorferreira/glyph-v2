@@ -454,6 +454,24 @@ describe("WorkflowCanvas (build)", () => {
     );
   });
 
+  it("copies a step via context menu and pastes via Ctrl+V", async () => {
+    const { recorded } = setupBuild();
+    (await nodeOfAsync("step-card-s-research")).dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+    );
+    const menu = await screen.findByTestId("canvas-context-menu");
+    await userEvent.click(within(menu).getByText("Copy step"));
+
+    const canvas = screen.getByTestId("canvas");
+    canvas.focus();
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, bubbles: true }));
+    await waitFor(() =>
+      expect(recorded.duplicateStep).toEqual([
+        expect.objectContaining({ workflowId: "wf-1", stepId: "s-research" }),
+      ]),
+    );
+  });
+
   // Audit ticket 9: the "+ Step" menu is keyboard-operable (Tab → Enter →
   // arrows → Enter adds a step) — it is a real menu, not a mouse-only div.
   it("adds a Pi step from the + Step menu with the keyboard only", async () => {

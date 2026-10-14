@@ -255,7 +255,7 @@ test("right-click on empty canvas opens Add actions at the cursor", async ({ pag
   expect(steps.some((s) => s.id !== stepIds[0])).toBe(true);
 });
 
-test("Ctrl+C and Ctrl+V duplicate the selected step", async ({ page }) => {
+test("Ctrl+C and Ctrl+V duplicate the selected step; context menu copy works", async ({ page }) => {
   const { id, stepIds } = await createWorkflow("E2E canvas copy paste", [
     { name: "Original", x: 200, y: 160, output: "result" },
   ]);
@@ -272,6 +272,12 @@ test("Ctrl+C and Ctrl+V duplicate the selected step", async ({ page }) => {
   expect(copy.name).toBe("Original");
   expect(copy.outputName).toBe("result"); // Rails parity: output settings copied
   expect(copy.canvasX).toBeGreaterThan(0);
+
+  // Copy via right-click context menu and paste with Ctrl+V
+  await card.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy step" }).click();
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".react-flow__node")).toHaveCount(3);
 });
 
 test("keyboard-only: add steps, cycle selection, nudge, duplicate", async ({ page }) => {
