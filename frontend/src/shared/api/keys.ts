@@ -9,6 +9,7 @@ import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 import type { WorkflowStatus } from "@/gen/glyph/v1/common_pb";
 import { RunService } from "@/gen/glyph/v1/run_pb";
 import { CatalogService } from "@/gen/glyph/v1/catalog_pb";
+import { SettingsService } from "@/gen/glyph/v1/settings_pb";
 
 export interface WorkflowListFilter {
   query?: string;
@@ -85,6 +86,18 @@ export const catalogKeys = {
   tools: (transport?: Transport) =>
     createConnectQueryKey({
       schema: CatalogService.method.listTools,
+      input: {},
+      transport,
+      cardinality: "finite",
+    }),
+};
+
+export const settingsKeys = {
+  /** Filter: every SettingsService query. */
+  service: () => createConnectQueryKey({ schema: SettingsService, cardinality: undefined }),
+  settings: (transport?: Transport) =>
+    createConnectQueryKey({
+      schema: SettingsService.method.getSettings,
       input: {},
       transport,
       cardinality: "finite",

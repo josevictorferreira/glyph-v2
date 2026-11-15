@@ -11,6 +11,7 @@ import { CatalogService } from "@/gen/glyph/v1/catalog_pb";
 import { DefinitionService } from "@/gen/glyph/v1/definition_pb";
 import { LiveService } from "@/gen/glyph/v1/live_pb";
 import { RunService } from "@/gen/glyph/v1/run_pb";
+import { SettingsService } from "@/gen/glyph/v1/settings_pb";
 import { WorkflowService } from "@/gen/glyph/v1/workflow_pb";
 
 export interface FakeServices {
@@ -19,6 +20,7 @@ export interface FakeServices {
   catalog?: Partial<ServiceImpl<typeof CatalogService>>;
   live?: Partial<ServiceImpl<typeof LiveService>>;
   definition?: Partial<ServiceImpl<typeof DefinitionService>>;
+  settings?: Partial<ServiceImpl<typeof SettingsService>>;
 }
 
 export function fakeTransport(impl: FakeServices = {}): Transport {
@@ -48,6 +50,7 @@ export function fakeTransport(impl: FakeServices = {}): Transport {
     register(CatalogService, impl.catalog);
     register(LiveService, impl.live);
     register(DefinitionService, impl.definition);
+    register(SettingsService, impl.settings);
   });
 }
 

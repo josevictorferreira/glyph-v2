@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as WorkflowsIdRouteImport } from './routes/workflows.$id'
 import { Route as WorkflowsIdIndexRouteImport } from './routes/workflows.$id.index'
@@ -21,6 +22,11 @@ import { Route as WorkflowsIdRunsRunIdRouteImport } from './routes/workflows.$id
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevUiRoute = DevUiRouteImport.update({
@@ -61,6 +67,7 @@ const WorkflowsIdRunsRunIdRoute = WorkflowsIdRunsRunIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id': typeof WorkflowsIdRouteWithChildren
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
   '/workflows/$id': typeof WorkflowsIdIndexRoute
@@ -80,6 +88,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id': typeof WorkflowsIdRouteWithChildren
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
@@ -92,6 +101,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/settings'
     | '/dev/ui'
     | '/workflows/$id'
     | '/workflows/$id/definition'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/settings'
     | '/dev/ui'
     | '/workflows/$id/definition'
     | '/workflows/$id'
@@ -110,6 +121,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/dev/ui'
     | '/workflows/$id'
     | '/workflows/$id/definition'
@@ -121,6 +133,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
   DevUiRoute: typeof DevUiRoute
   WorkflowsIdRoute: typeof WorkflowsIdRouteWithChildren
 }
@@ -132,6 +145,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/ui': {
@@ -218,6 +238,7 @@ const WorkflowsIdRouteWithChildren = WorkflowsIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
   DevUiRoute: DevUiRoute,
   WorkflowsIdRoute: WorkflowsIdRouteWithChildren,
 }
