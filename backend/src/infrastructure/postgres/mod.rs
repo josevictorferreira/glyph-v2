@@ -4,6 +4,7 @@ pub mod listener;
 pub mod migrate;
 pub mod pool;
 pub mod runs_repo;
+pub mod settings_repo;
 pub mod uow;
 pub mod workflows_repo;
 
