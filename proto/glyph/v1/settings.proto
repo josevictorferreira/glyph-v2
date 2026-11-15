@@ -1,0 +1,25 @@
+syntax = "proto3";
+package glyph.v1;
+
+// App-wide settings (single-user). Today: the chat agent's model.
+service SettingsService {
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+}
+
+message GetSettingsRequest {}
+
+message GetSettingsResponse {
+  optional string chat_model_id = 1;
+}
+
+message UpdateSettingsRequest {
+  // The chat agent's model as "{provider}/{model_id}". An empty (not merely
+  // absent) string clears the setting; an unknown or unavailable model is
+  // rejected with INVALID_ARGUMENT.
+  optional string chat_model_id = 1;
+}
+
+message UpdateSettingsResponse {
+  optional string chat_model_id = 1;
+}

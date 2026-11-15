@@ -25,6 +25,8 @@ use crate::features::live::grpc::LiveGrpc;
 use crate::features::runs::grpc::RunGrpc;
 use crate::features::runs::{self, RunService, StepRunner};
 use crate::features::scheduling::{DISPATCH_DUE, DispatchDueWorkflows, SCHEDULING_QUEUE};
+use crate::features::settings::SettingsService;
+use crate::features::settings::grpc::SettingsGrpc;
 use crate::features::workflows::WorkflowService;
 use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
@@ -41,6 +43,7 @@ use crate::proto::pb::catalog_service_server::CatalogServiceServer;
 use crate::proto::pb::definition_service_server::DefinitionServiceServer;
 use crate::proto::pb::live_service_server::LiveServiceServer;
 use crate::proto::pb::run_service_server::RunServiceServer;
+use crate::proto::pb::settings_service_server::SettingsServiceServer;
 use crate::proto::pb::workflow_service_server::WorkflowServiceServer;
 use crate::shared::error::DomainResult;
 use crate::shared::redactor::Redactor;
@@ -151,6 +154,13 @@ pub async fn build_with(
         clock.clone(),
     );
 
+    // --- settings ----------------------------------------------------------
+    let settings = SettingsService::new(
+        Arc::new(store.clone()),
+        Arc::new(list_models.clone()),
+        clock.clone(),
+    );
+
     // --- runs --------------------------------------------------------------
     let step_runner: Arc<dyn StepRunner> = match overrides.step_runner.clone() {
         Some(runner) => runner,
@@ -214,6 +224,7 @@ pub async fn build_with(
             definitions,
         )))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
+        .add_service(SettingsServiceServer::new(SettingsGrpc::new(settings)))
         .add_service(LiveServiceServer::new(LiveGrpc::new(
             Arc::new(hub),
             config.live_heartbeat,

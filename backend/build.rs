@@ -10,6 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "glyph/v1/definition.proto",
         "glyph/v1/run.proto",
         "glyph/v1/live.proto",
+        "glyph/v1/settings.proto",
     ];
     for file in &files {
         println!("cargo:rerun-if-changed={}", proto_root.join(file).display());
