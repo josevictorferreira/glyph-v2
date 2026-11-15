@@ -65,6 +65,8 @@ id_type!(
     SharedTextId,
     RunId,
     StepRunId,
+    ChatId,
+    ChatMessageId,
 );
 
 #[cfg(test)]

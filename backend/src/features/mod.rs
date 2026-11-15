@@ -1,4 +1,5 @@
 pub mod catalog;
+pub mod chat;
 pub mod definition;
 pub mod health;
 pub mod live;

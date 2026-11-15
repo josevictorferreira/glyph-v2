@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use serde_json::json;
 use crate::features::catalog::ListModels;
-use crate::features::settings::{CHAT_MODEL_ID, SettingsStore, SettingsTx};
+use crate::features::settings::{CHAT_MODEL_ID, SettingsStore};
 use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::events::DomainEvent;
 use crate::shared::time::Clock;
@@ -34,7 +34,7 @@ impl SettingsService {
 
     /// The chat feature's read of the chat model.
     pub async fn chat_model_id(&self) -> DomainResult<Option<String>> {
-        Ok(self.store.get(CHAT_MODEL_ID).await?)
+        self.store.get(CHAT_MODEL_ID).await
     }
 
     pub async fn update(&self, chat_model_id: Option<String>) -> DomainResult<Settings> {
