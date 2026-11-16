@@ -5,7 +5,6 @@ use crate::features::chat::domain::model::*;
 use crate::proto::convert::{parse_id, timestamp};
 use crate::proto::pb;
 use crate::proto::pb::chat_service_server::ChatService as Rpc;
-use crate::shared::ids::{ChatId, ChatMessageId};
 
 #[derive(Clone)]
 pub struct ChatGrpc {

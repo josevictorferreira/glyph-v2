@@ -2,7 +2,8 @@
 //! because they carry workflow YAML, tool results and the Pi session.
 use async_trait::async_trait;
 use crate::features::chat::domain::model::*;
-use crate::features::chat::ports::{
+use crate::features::chat::domain::events::{CHANNEL, ChatEvent};
+use crate::features::chat::ports::{ChatPublisher, 
     ChatStore, ChatTx, NewMessage, SessionFile,
 };
 use crate::infrastructure::crypto::Cipher;
@@ -139,6 +140,15 @@ impl ChatStore for PgStore {
 
 #[async_trait]
 impl ChatTx for PgTx {
+    async fn notify(&mut self, event: &ChatEvent) -> DomainResult<()> {
+        let payload = serde_json::to_string(event).map_err(DomainError::internal)?;
+        sqlx::query!("SELECT pg_notify($1, $2)", CHANNEL, payload)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
     async fn create_chat(&mut self, chat: &Chat) -> DomainResult<()> {
         sqlx::query!(
             "INSERT INTO chats (id, title, status, cancel_requested, created_at, updated_at)
@@ -360,5 +370,32 @@ impl ChatTx for PgTx {
             }
             _ => Ok(None),
         }
+    }
+}
+
+#[async_trait]
+impl ChatPublisher for PgStore {
+    fn publish(&self, event: &ChatEvent) {
+        // Outside any transaction; fire-and-forget on a spawned task so the
+        // caller never blocks on the pool.
+        let pool = self.pool.clone();
+        let event = event.clone();
+        tokio::spawn(async move {
+            let payload = match serde_json::to_string(&event) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(%e, "unreadable chat event");
+                    return;
+                }
+            };
+            if let Err(e) = sqlx::query("SELECT pg_notify($1, $2)")
+                .bind(CHANNEL)
+                .bind(&payload)
+                .execute(&pool)
+                .await
+            {
+                tracing::warn!(%e, "chat pg_notify failed");
+            }
+        });
     }
 }

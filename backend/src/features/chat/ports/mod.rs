@@ -1,7 +1,9 @@
 //! Ports for the chat feature: persistence, the runner, the event bus.
 use async_trait::async_trait;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use crate::features::chat::domain::events::ChatEvent;
 use crate::features::chat::domain::model::*;
 use crate::shared::error::DomainResult;
 use crate::shared::ids::{ChatId, ChatMessageId};
@@ -11,6 +13,17 @@ use crate::shared::uow::UnitOfWork;
 pub struct SessionFile {
     pub relative_path: String,
     pub bytes: Vec<u8>,
+}
+
+/// Fan-out of chat events to subscribers (fed by Postgres LISTEN/NOTIFY on
+/// the chat channel).
+pub trait ChatBus: Send + Sync {
+    fn subscribe(&self) -> broadcast::Receiver<ChatEvent>;
+}
+
+/// Publishes chat events outside any transaction (worker-side deltas).
+pub trait ChatPublisher: Send + Sync {
+    fn publish(&self, event: &ChatEvent);
 }
 
 /// Reads of chats; writes go through `ChatTx`.
@@ -24,6 +37,8 @@ pub trait ChatStore: Send + Sync {
 /// One transaction's chat writes.
 #[async_trait]
 pub trait ChatTx: UnitOfWork {
+    /// `pg_notify` of a chat event inside this transaction.
+    async fn notify(&mut self, event: &ChatEvent) -> DomainResult<()>;
     async fn create_chat(&mut self, chat: &Chat) -> DomainResult<()>;
     async fn rename_chat(&mut self, id: ChatId, title: &str) -> DomainResult<()>;
     async fn delete_chat(&mut self, id: ChatId) -> DomainResult<()>;

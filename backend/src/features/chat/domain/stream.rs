@@ -66,10 +66,8 @@ impl StreamBuffer {
         // Never publish a partial trailing word: that is where an incomplete
         // token or secret fragment lives.
         let prefix: String = candidate.chars().take(safe).collect();
-        safe = match prefix.rfind(|c: char| c.is_whitespace()) {
-            Some(i) => i + prefix[i..].chars().take(1).count(),
-            None => return None,
-        };
+        let ws = prefix.rfind(|c: char| c.is_whitespace())?;
+        safe = ws + 1;
         let already = self.published.chars().count();
         if safe <= already {
             return None;

@@ -3,7 +3,7 @@ mod common;
 use std::sync::Arc;
 use glyph_backend::features::chat::domain::model::*;
 use glyph_backend::shared::ids::ChatId;
-use glyph_backend::features::chat::ports::{ChatStore, ChatTx, NewMessage};
+use glyph_backend::features::chat::ports::{ChatStore, NewMessage};
 use glyph_backend::infrastructure::crypto::AesGcmCipher;
 use glyph_backend::infrastructure::postgres::PgStore;
 use sqlx::PgPool;
@@ -276,4 +276,77 @@ async fn message_length_counts_characters(pool: PgPool) {
     assert_eq!(response.messages.len(), 1);
     assert_eq!(response.messages[0].text, "héllo wörld");
     assert_eq!(response.messages[0].length, 11);
+}
+
+// --- chat events and hub (3.2) ----------------------------------------------
+
+use glyph_backend::features::chat::domain::events::{ChatEvent, ChatEventKind};
+use glyph_backend::features::chat::ports::ChatBus;
+use glyph_backend::infrastructure::postgres::listener::ChatHub;
+
+#[test]
+fn oversized_text_delta_splits_on_character_boundary() {
+    let event = ChatEvent {
+        kind: ChatEventKind::TextDelta,
+        chat_id: "c1".into(),
+        offset: Some(0),
+        text: Some("é".repeat(1500)),
+        message_id: Some("m1".into()),
+        occurred_at: Utc::now(),
+    };
+    let parts = glyph_backend::features::chat::domain::events::split_oversized(&event);
+    assert!(parts.len() > 1, "2000-byte delta must split");
+    for p in &parts {
+        assert!(serde_json::to_string(&p).unwrap().len() <= 2048, "part fits");
+    }
+    let joined: String = parts.iter().map(|p| p.text.clone().unwrap()).collect();
+    assert_eq!(joined.chars().count(), 1500);
+    let mut offset = 0;
+    for p in &parts {
+        assert_eq!(p.offset.unwrap(), offset);
+        offset += p.text.as_ref().unwrap().chars().count();
+    }
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn publish_and_subscribe_round_trip(pool: PgPool) {
+    let hub = ChatHub::new(64);
+    let stop = tokio_util::sync::CancellationToken::new();
+    let task = hub.clone().spawn_listener(pool.clone(), stop.clone());
+    let mut rx = ChatBus::subscribe(&hub);
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    let event = ChatEvent {
+        kind: ChatEventKind::TextDelta,
+        chat_id: "c1".into(),
+        offset: Some(3),
+        text: Some("hello".into()),
+        message_id: Some("m1".into()),
+        occurred_at: Utc::now(),
+    };
+    let payload = serde_json::to_string(&event).unwrap();
+    sqlx::query("SELECT pg_notify('glyph_chat', $1)")
+        .bind(&payload)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let received = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(received.chat_id, "c1");
+    assert_eq!(received.text.as_deref(), Some("hello"));
+
+    // Kill the LISTEN connection: the hub reconnects and broadcasts RESYNC.
+    sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ILIKE 'LISTEN%' AND pid <> pg_backend_pid()")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let e = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(e.kind, ChatEventKind::Resync);
+    stop.cancel();
+    let _ = task.await;
 }

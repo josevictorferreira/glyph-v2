@@ -1,4 +1,5 @@
 //! Chat domain: model, statuses, title derivation, streaming buffer.
+pub mod events;
 pub mod model;
 pub mod stream;
 #[cfg(test)]
