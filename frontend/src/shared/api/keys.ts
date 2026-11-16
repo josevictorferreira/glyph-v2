@@ -10,6 +10,7 @@ import type { WorkflowStatus } from "@/gen/glyph/v1/common_pb";
 import { RunService } from "@/gen/glyph/v1/run_pb";
 import { CatalogService } from "@/gen/glyph/v1/catalog_pb";
 import { SettingsService } from "@/gen/glyph/v1/settings_pb";
+import { ChatService } from "@/gen/glyph/v1/chat_pb";
 
 export interface WorkflowListFilter {
   query?: string;
@@ -99,6 +100,20 @@ export const settingsKeys = {
     createConnectQueryKey({
       schema: SettingsService.method.getSettings,
       input: {},
+      transport,
+      cardinality: "finite",
+    }),
+};
+
+export const chatKeys = {
+  /** Filter: every ChatService query. */
+  service: () => createConnectQueryKey({ schema: ChatService, cardinality: undefined }),
+  lists: () =>
+    createConnectQueryKey({ schema: ChatService.method.listChats, cardinality: "finite" }),
+  detail: (chatId: string, transport?: Transport) =>
+    createConnectQueryKey({
+      schema: ChatService.method.getChat,
+      input: { chatId },
       transport,
       cardinality: "finite",
     }),

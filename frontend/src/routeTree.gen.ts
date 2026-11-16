@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ChatIndexRouteImport } from './routes/chat.index'
+import { Route as ChatChatIdRouteImport } from './routes/chat.$chatId'
 import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as WorkflowsIdRouteImport } from './routes/workflows.$id'
 import { Route as WorkflowsIdIndexRouteImport } from './routes/workflows.$id.index'
@@ -24,10 +27,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ChatIndexRoute = ChatIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ChatRoute,
+} as any)
+const ChatChatIdRoute = ChatChatIdRouteImport.update({
+  id: '/$chatId',
+  path: '/$chatId',
+  getParentRoute: () => ChatRoute,
 } as any)
 const DevUiRoute = DevUiRouteImport.update({
   id: '/dev/ui',
@@ -67,9 +85,12 @@ const WorkflowsIdRunsRunIdRoute = WorkflowsIdRunsRunIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chat': typeof ChatRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/chat/$chatId': typeof ChatChatIdRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id': typeof WorkflowsIdRouteWithChildren
+  '/chat/': typeof ChatIndexRoute
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
   '/workflows/$id/runs': typeof WorkflowsIdRunsRouteWithChildren
   '/workflows/$id/': typeof WorkflowsIdIndexRoute
@@ -79,7 +100,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/chat/$chatId': typeof ChatChatIdRoute
   '/dev/ui': typeof DevUiRoute
+  '/chat': typeof ChatIndexRoute
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
   '/workflows/$id': typeof WorkflowsIdIndexRoute
   '/workflows/$id/runs/$runId': typeof WorkflowsIdRunsRunIdRoute
@@ -88,9 +111,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chat': typeof ChatRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/chat/$chatId': typeof ChatChatIdRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id': typeof WorkflowsIdRouteWithChildren
+  '/chat/': typeof ChatIndexRoute
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
   '/workflows/$id/runs': typeof WorkflowsIdRunsRouteWithChildren
   '/workflows/$id/': typeof WorkflowsIdIndexRoute
@@ -101,9 +127,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/chat'
     | '/settings'
+    | '/chat/$chatId'
     | '/dev/ui'
     | '/workflows/$id'
+    | '/chat/'
     | '/workflows/$id/definition'
     | '/workflows/$id/runs'
     | '/workflows/$id/'
@@ -113,7 +142,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/settings'
+    | '/chat/$chatId'
     | '/dev/ui'
+    | '/chat'
     | '/workflows/$id/definition'
     | '/workflows/$id'
     | '/workflows/$id/runs/$runId'
@@ -121,9 +152,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/chat'
     | '/settings'
+    | '/chat/$chatId'
     | '/dev/ui'
     | '/workflows/$id'
+    | '/chat/'
     | '/workflows/$id/definition'
     | '/workflows/$id/runs'
     | '/workflows/$id/'
@@ -133,6 +167,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChatRoute: typeof ChatRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   DevUiRoute: typeof DevUiRoute
   WorkflowsIdRoute: typeof WorkflowsIdRouteWithChildren
@@ -147,12 +182,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/chat/': {
+      id: '/chat/'
+      path: '/'
+      fullPath: '/chat/'
+      preLoaderRoute: typeof ChatIndexRouteImport
+      parentRoute: typeof ChatRoute
+    }
+    '/chat/$chatId': {
+      id: '/chat/$chatId'
+      path: '/$chatId'
+      fullPath: '/chat/$chatId'
+      preLoaderRoute: typeof ChatChatIdRouteImport
+      parentRoute: typeof ChatRoute
     }
     '/dev/ui': {
       id: '/dev/ui'
@@ -206,6 +262,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ChatRouteChildren {
+  ChatChatIdRoute: typeof ChatChatIdRoute
+  ChatIndexRoute: typeof ChatIndexRoute
+}
+
+const ChatRouteChildren: ChatRouteChildren = {
+  ChatChatIdRoute: ChatChatIdRoute,
+  ChatIndexRoute: ChatIndexRoute,
+}
+
+const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
+
 interface WorkflowsIdRunsRouteChildren {
   WorkflowsIdRunsRunIdRoute: typeof WorkflowsIdRunsRunIdRoute
   WorkflowsIdRunsIndexRoute: typeof WorkflowsIdRunsIndexRoute
@@ -238,6 +306,7 @@ const WorkflowsIdRouteWithChildren = WorkflowsIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChatRoute: ChatRouteWithChildren,
   SettingsRoute: SettingsRoute,
   DevUiRoute: DevUiRoute,
   WorkflowsIdRoute: WorkflowsIdRouteWithChildren,
