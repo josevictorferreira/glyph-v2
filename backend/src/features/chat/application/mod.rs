@@ -2,20 +2,26 @@
 //! turn pipeline. Mutations append their events in the same transaction.
 use std::sync::Arc;
 use crate::features::chat::domain::model::*;
-use crate::features::chat::ports::ChatStore;
+use crate::features::chat::ports::{ChatStore, NewMessage};
+use crate::features::settings::SettingsService;
 use crate::shared::error::{DomainError, DomainResult};
+use crate::shared::events::Job;
 use crate::shared::ids::ChatId;
 use crate::shared::time::Clock;
+
+pub const RUN_CHAT_TURN: &str = "run_chat_turn";
+pub const CHAT_QUEUE: &str = "chat";
 
 #[derive(Clone)]
 pub struct ChatService {
     store: Arc<dyn ChatStore>,
+    settings: SettingsService,
     clock: Arc<dyn Clock>,
 }
 
 impl ChatService {
-    pub fn new(store: Arc<dyn ChatStore>, clock: Arc<dyn Clock>) -> Self {
-        Self { store, clock }
+    pub fn new(store: Arc<dyn ChatStore>, settings: SettingsService, clock: Arc<dyn Clock>) -> Self {
+        Self { store, settings, clock }
     }
 
     fn chat_event(event_type: &str, chat: ChatId, extra: serde_json::Value) -> crate::shared::events::DomainEvent {
@@ -88,6 +94,68 @@ impl ChatService {
         .await?;
         tx.commit().await?;
         self.chat(id).await
+    }
+
+    /// Appends the user message and an empty `streaming` assistant message,
+    /// flips the chat to `running` (CAS) and enqueues exactly one turn job.
+    pub async fn send(&self, id: ChatId, text: &str) -> DomainResult<()> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(DomainError::invalid("Write a message first."));
+        }
+        let chat = self.chat(id).await?;
+        if chat.status == ChatStatus::Running {
+            return Err(DomainError::precondition(
+                "CHAT_TURN_RUNNING",
+                "The agent is already replying; wait for it to finish.",
+            ));
+        }
+        let Some(_model_id) = self.settings.chat_model_id().await? else {
+            return Err(DomainError::precondition(
+                "CHAT_MODEL_MISSING",
+                "Pick a model for the agent in Settings first.",
+            ));
+        };
+        let mut tx = self.store.begin().await?;
+        if !tx.begin_turn(id).await? {
+            return Err(DomainError::precondition(
+                "CHAT_TURN_RUNNING",
+                "The agent is already replying; wait for it to finish.",
+            ));
+        }
+        tx.insert_message(&NewMessage {
+            chat_id: id,
+            kind: MessageKind::User,
+            status: MessageStatus::Done,
+            text: Some(text.to_string()),
+            tool: None,
+        })
+        .await?;
+        tx.insert_message(&NewMessage {
+            chat_id: id,
+            kind: MessageKind::Assistant,
+            status: MessageStatus::Streaming,
+            text: None,
+            tool: None,
+        })
+        .await?;
+        if chat.title.is_empty() {
+            tx.rename_chat(id, &title_from(text)).await?;
+        }
+        tx.append_events(&[Self::chat_event(
+            "ChatTurnStarted",
+            id,
+            serde_json::json!({ "message": text }),
+        )])
+        .await?;
+        tx.enqueue(Job::new(
+            RUN_CHAT_TURN,
+            CHAT_QUEUE,
+            serde_json::json!({ "chat_id": id.to_string() }),
+        ))
+        .await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     pub async fn delete(&self, id: ChatId) -> DomainResult<()> {

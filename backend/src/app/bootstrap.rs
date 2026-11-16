@@ -158,14 +158,13 @@ pub async fn build_with(
     );
 
     // --- chat --------------------------------------------------------------
-    let chat = ChatService::new(Arc::new(store.clone()), clock.clone());
-
-    // --- settings ----------------------------------------------------------
     let settings = SettingsService::new(
         Arc::new(store.clone()),
         Arc::new(list_models.clone()),
         clock.clone(),
     );
+    // --- chat --------------------------------------------------------------
+    let chat = ChatService::new(Arc::new(store.clone()), settings.clone(), clock.clone());
 
     // --- runs --------------------------------------------------------------
     let step_runner: Arc<dyn StepRunner> = match overrides.step_runner.clone() {

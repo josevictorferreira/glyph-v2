@@ -350,3 +350,149 @@ async fn publish_and_subscribe_round_trip(pool: PgPool) {
     stop.cancel();
     let _ = task.await;
 }
+
+// --- SendMessage (3.3) -------------------------------------------------------
+
+mod send {
+    use super::*;
+    use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
+
+    async fn client(pool: &PgPool) -> (common::TestServer, Client<tonic::transport::Channel>) {
+        let server = common::spawn(pool.clone()).await;
+        let client = Client::new(server.channel().await);
+        (server, client)
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn send_persists_messages_flips_running_and_enqueues_one_job(pool: PgPool) {
+        common::engine::seed_model(&pool).await;
+        let server = common::spawn(pool.clone()).await;
+        let mut sc = glyph_backend::proto::pb::settings_service_client::SettingsServiceClient::new(
+            server.channel().await,
+        );
+        sc.update_settings(glyph_backend::proto::pb::UpdateSettingsRequest {
+            chat_model_id: Some("velox/test-model".into()),
+        })
+        .await
+        .unwrap();
+        let chat = new_chat(&pool).await;
+        let mut cc = Client::new(server.channel().await);
+        cc.send_message(glyph_backend::proto::pb::SendMessageRequest {
+            chat_id: chat.id.to_string(),
+            text: " hello ".into(),
+        })
+        .await
+        .unwrap();
+        let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(stored.status, ChatStatus::Running);
+        assert_eq!(stored.title, "hello");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].kind, MessageKind::User);
+        assert_eq!(messages[0].text.as_deref(), Some("hello"));
+        assert_eq!(messages[1].kind, MessageKind::Assistant);
+        assert_eq!(messages[1].status, MessageStatus::Streaming);
+        let jobs: Vec<(String, serde_json::Value)> = sqlx::query_as(
+            "SELECT kind, payload FROM jobs WHERE finished_at IS NULL",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(jobs.len(), 1, "exactly one job: {jobs:?}");
+        assert_eq!(jobs[0].0, "run_chat_turn");
+        assert_eq!(
+            jobs[0].1,
+            serde_json::json!({ "chat_id": chat.id.to_string() })
+        );
+        let events: Vec<String> = sqlx::query_scalar(
+            "SELECT event_type FROM events WHERE stream = $1 ORDER BY id",
+        )
+        .bind(format!("Chat${}", chat.id))
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert!(events.contains(&"ChatTurnStarted".to_string()), "{events:?}");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn second_send_while_running_is_rejected_and_writes_nothing(pool: PgPool) {
+        common::engine::seed_model(&pool).await;
+        let server = common::spawn(pool.clone()).await;
+        let mut sc = glyph_backend::proto::pb::settings_service_client::SettingsServiceClient::new(
+            server.channel().await,
+        );
+        sc.update_settings(glyph_backend::proto::pb::UpdateSettingsRequest {
+            chat_model_id: Some("velox/test-model".into()),
+        })
+        .await
+        .unwrap();
+        let chat = new_chat(&pool).await;
+        let mut cc = Client::new(server.channel().await);
+        cc.send_message(glyph_backend::proto::pb::SendMessageRequest {
+            chat_id: chat.id.to_string(),
+            text: "one".into(),
+        })
+        .await
+        .unwrap();
+        let error = cc
+            .send_message(glyph_backend::proto::pb::SendMessageRequest {
+                chat_id: chat.id.to_string(),
+                text: "two".into(),
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::FailedPrecondition);
+        let info = glyph_backend::proto::status::error_info(&error).unwrap();
+        assert_eq!(info.reason, "CHAT_TURN_RUNNING");
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(messages.len(), 2, "no extra writes: {messages:?}");
+        let jobs: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM jobs WHERE kind = 'run_chat_turn' AND finished_at IS NULL",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+        assert_eq!(jobs, 1);
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn send_without_a_model_writes_nothing(pool: PgPool) {
+        let chat = new_chat(&pool).await;
+        let (_server, mut cc) = client(&pool).await;
+        let error = cc
+            .send_message(glyph_backend::proto::pb::SendMessageRequest {
+                chat_id: chat.id.to_string(),
+                text: "hello".into(),
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::FailedPrecondition);
+        let info = glyph_backend::proto::status::error_info(&error).unwrap();
+        assert_eq!(info.reason, "CHAT_MODEL_MISSING");
+        let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(stored.status, ChatStatus::Idle);
+        assert!(messages.is_empty());
+        let jobs: i64 = sqlx::query_scalar("SELECT count(*) FROM jobs")
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(jobs, 0);
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn blank_send_is_invalid_argument(pool: PgPool) {
+        let chat = new_chat(&pool).await;
+        let (_server, mut cc) = client(&pool).await;
+        let error = cc
+            .send_message(glyph_backend::proto::pb::SendMessageRequest {
+                chat_id: chat.id.to_string(),
+                text: "  ".into(),
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::InvalidArgument, "{}", error);
+    }
+}

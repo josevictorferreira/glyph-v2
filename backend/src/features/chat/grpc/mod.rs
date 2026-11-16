@@ -120,4 +120,11 @@ impl Rpc for ChatGrpc {
             .await?;
         Ok(Response::new(pb::DeleteChatResponse {}))
     }
+    async fn send_message(&self, r: Request<pb::SendMessageRequest>) -> Rsp<pb::SendMessageResponse> {
+        let r = r.into_inner();
+        self.service
+            .send(parse_id(&r.chat_id, "chat_id")?, &r.text)
+            .await?;
+        Ok(Response::new(pb::SendMessageResponse {}))
+    }
 }

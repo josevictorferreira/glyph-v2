@@ -10,6 +10,7 @@ service ChatService {
   rpc CreateChat(CreateChatRequest) returns (CreateChatResponse);
   rpc RenameChat(RenameChatRequest) returns (RenameChatResponse);
   rpc DeleteChat(DeleteChatRequest) returns (DeleteChatResponse);
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
 }
 
 enum ChatStatus {
@@ -115,3 +116,9 @@ message DeleteChatRequest {
 }
 
 message DeleteChatResponse {}
+
+message SendMessageRequest {
+  string chat_id = 1;
+  string text = 2;
+}
+message SendMessageResponse {}
