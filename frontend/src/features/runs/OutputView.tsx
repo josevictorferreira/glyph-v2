@@ -4,29 +4,17 @@
 // runs in an opaque origin, so scripts have no ambient authority), JSON is
 // shown as a tree. Every format offers Raw, Copy and Download.
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
 import { toJson, type JsonValue } from "@bufbuild/protobuf";
 import { ValueSchema, type Value } from "@bufbuild/protobuf/wkt";
 import { OutputFileFormat, StepKind } from "@/gen/glyph/v1/common_pb";
 import type { StepRun } from "@/gen/glyph/v1/run_pb";
 import { cn } from "@/shared/lib/cn";
-import { CopyButton, Download } from "@/shared/ui";
+import { CopyButton, Download, Markdown } from "@/shared/ui";
 
 export function valueToJson(value: Value | undefined): JsonValue | undefined {
   return value ? toJson(ValueSchema, value) : undefined;
 }
 
-export function Markdown({ text }: { text: string }) {
-  return (
-    <div className="glyph-prose text-sm leading-relaxed text-ink" data-testid="markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
-        {text}
-      </ReactMarkdown>
-    </div>
-  );
-}
 
 export function JsonTree({ value, depth = 0 }: { value: JsonValue; depth?: number }) {
   if (value === null || typeof value !== "object") {

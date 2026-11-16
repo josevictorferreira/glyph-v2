@@ -31,7 +31,8 @@ import {
 } from "@/shared/ui";
 import { useStepRun } from "./hooks";
 import { isLiveRun, isLiveStepRun, looksLikeJson } from "./lib/run-view";
-import { ClippedText, JsonTree, Markdown, StepOutput, valueToJson } from "./OutputView";
+import { ClippedText, JsonTree, StepOutput, valueToJson } from "./OutputView";
+import { Markdown } from "@/shared/ui";
 import { useRetryStep } from "./use-run-actions";
 
 const SECTION_KEY = "glyph.stepRunPanel.sections";

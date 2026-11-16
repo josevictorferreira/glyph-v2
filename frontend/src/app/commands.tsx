@@ -165,6 +165,20 @@ export function useAppCommands() {
         hint: "/",
         run: () => void navigate({ to: "/" }),
       },
+      {
+        id: "nav:chat",
+        group: "Navigation",
+        label: "Chat",
+        hint: "/chat",
+        run: () => void navigate({ to: "/chat" }),
+      },
+      {
+        id: "nav:settings",
+        group: "Navigation",
+        label: "Settings",
+        hint: "/settings",
+        run: () => void navigate({ to: "/settings" }),
+      },
       ...(data?.workflows ?? []).map((w) => ({
         id: `nav:wf-${w.id}`,
         group: "Navigation",

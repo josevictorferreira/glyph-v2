@@ -68,6 +68,8 @@ describe("command palette", () => {
     await screen.findByTestId("library-row-wf-1");
     await openPalette();
     expect(screen.getByTestId("command-nav:home")).toBeInTheDocument();
+    expect(screen.getByTestId("command-nav:chat")).toBeInTheDocument();
+    expect(screen.getByTestId("command-nav:settings")).toBeInTheDocument();
     expect(screen.getByTestId("command-nav:wf-wf-1")).toHaveTextContent("Tournament");
     expect(screen.getByTestId("command-global:new")).toBeInTheDocument();
     expect(screen.getByTestId("command-global:theme")).toBeInTheDocument();

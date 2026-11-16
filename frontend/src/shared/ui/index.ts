@@ -52,6 +52,7 @@ export {
   type BadgeTone,
 } from "./badge";
 export { EmptyState, Skeleton, Disclosure, CopyButton } from "./feedback";
+export { Markdown } from "./markdown";
 export { PanelGroup, Panel, PanelHandle } from "./resizable";
 export { RelativeTime, Duration } from "./time";
 export { SaveIndicator, ConnectionIndicator } from "./indicators";

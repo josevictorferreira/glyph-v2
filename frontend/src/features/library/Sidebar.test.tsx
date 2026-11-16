@@ -51,6 +51,14 @@ const mount = (
   });
 
 describe("LibrarySidebar", () => {
+  it("shows Chat and Settings links (spec 0024)", async () => {
+    const { unmount } = mount([]);
+    await screen.findByRole("link", { name: "Home" });
+    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    unmount();
+  });
+
   it("renders sorted rows with secondary lines", async () => {
     const { unmount } = mount([
       summary("plain", "Plain draft"),
