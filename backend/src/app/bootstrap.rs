@@ -18,6 +18,7 @@ use crate::config::{Config, StepRunnerKind};
 use crate::features::catalog::grpc::CatalogGrpc;
 use crate::features::chat::grpc::ChatGrpc;
 use crate::features::chat::ChatService;
+use crate::features::chat::ports::{ChatPublisher, ChatRunner};
 use crate::features::catalog::{
     CatalogStore, ListModels, ModelGateway, Provider, RefreshModels, WorkflowFlagger,
 };
@@ -32,6 +33,7 @@ use crate::features::settings::grpc::SettingsGrpc;
 use crate::features::workflows::WorkflowService;
 use crate::features::workflows::grpc::WorkflowGrpc;
 use crate::infrastructure::crypto::{AesGcmCipher, Cipher};
+use crate::infrastructure::fake_chat_runner::FakeChatRunner;
 use crate::infrastructure::fake_runner::FakeStepRunner;
 use crate::infrastructure::gateways::OpenAiCompatibleGateway;
 use crate::infrastructure::jobs::recovery::{self, Recovery};
@@ -58,6 +60,7 @@ pub struct Overrides {
     pub clock: Option<Arc<dyn Clock>>,
     pub gateways: Option<Vec<Arc<dyn ModelGateway>>>,
     pub step_runner: Option<Arc<dyn StepRunner>>,
+    pub chat_runner: Option<Arc<dyn ChatRunner>>,
     /// Start background tasks even when `worker_enabled` is false.
     pub background: Option<bool>,
 }
@@ -165,6 +168,16 @@ pub async fn build_with(
     );
     // --- chat --------------------------------------------------------------
     let chat = ChatService::new(Arc::new(store.clone()), settings.clone(), clock.clone());
+    let chat_runner: Arc<dyn ChatRunner> = match overrides.chat_runner.clone() {
+        Some(runner) => runner,
+        None => match config.step_runner {
+            StepRunnerKind::Fake => Arc::new(FakeChatRunner::new()),
+            // The real Pi chat runner arrives with phase 5; until then the
+            // deterministic runner stands in so wiring is exercised.
+            StepRunnerKind::Pi => Arc::new(FakeChatRunner::new()),
+        },
+    };
+    let chat_publisher: Arc<dyn ChatPublisher> = Arc::new(store.clone());
 
     // --- runs --------------------------------------------------------------
     let step_runner: Arc<dyn StepRunner> = match overrides.step_runner.clone() {
@@ -230,7 +243,7 @@ pub async fn build_with(
         )))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
         .add_service(SettingsServiceServer::new(SettingsGrpc::new(settings)))
-        .add_service(ChatServiceServer::new(ChatGrpc::new(chat)))
+        .add_service(ChatServiceServer::new(ChatGrpc::new(chat.clone())))
         .add_service(LiveServiceServer::new(LiveGrpc::new(
             Arc::new(hub),
             config.live_heartbeat,
@@ -243,8 +256,16 @@ pub async fn build_with(
     // --- background --------------------------------------------------------
     let scheduling = DispatchDueWorkflows::new(Arc::new(store.clone()), runs.clone());
     if overrides.background.unwrap_or(config.worker_enabled) {
-        let worker = worker(pool.clone(), config, &runs)
-            .queue(SCHEDULING_QUEUE, 1)
+        let worker = worker(
+            pool.clone(),
+            config,
+            &runs,
+            &chat,
+            chat_runner.clone(),
+            chat_publisher.clone(),
+            redactor(config),
+        )
+        .queue(SCHEDULING_QUEUE, 1)
             .queue(MAINTENANCE_QUEUE, 1)
             .handle(DISPATCH_DUE, {
                 let (scheduling, clock) = (scheduling.clone(), clock.clone());
@@ -314,11 +335,33 @@ fn id_from<T: std::str::FromStr>(payload: &serde_json::Value, key: &str) -> anyh
 }
 
 /// Job kinds → application operations.
-fn worker(pool: PgPool, config: &Config, runs: &RunService) -> Worker {
+#[allow(clippy::too_many_arguments)]
+fn worker(
+    pool: PgPool,
+    config: &Config,
+    runs: &RunService,
+    chat: &ChatService,
+    chat_runner: Arc<dyn ChatRunner>,
+    chat_publisher: Arc<dyn ChatPublisher>,
+    redactor: Redactor,
+) -> Worker {
     let (run_exec, step_exec) = (runs.clone(), runs.clone());
     Worker::new(pool)
         .queue(runs::application::RUN_QUEUE, 2)
         .queue(runs::application::STEP_QUEUE, config.step_concurrency)
+        .queue(crate::features::chat::CHAT_QUEUE, 1)
+        .handle(crate::features::chat::application::RUN_CHAT_TURN, {
+            let (chat, chat_runner, chat_publisher, redactor) =
+                (chat.clone(), chat_runner, chat_publisher, redactor);
+            move |payload| {
+                let (chat, chat_runner, chat_publisher, redactor) =
+                    (chat.clone(), chat_runner.clone(), chat_publisher.clone(), redactor.clone());
+                async move {
+                    let chat_id: crate::shared::ids::ChatId = id_from(&payload, "chat_id")?;
+                    Ok(chat.run_turn(chat_id, chat_runner, chat_publisher, redactor).await?)
+                }
+            }
+        })
         .handle(runs::application::EXECUTE_RUN, move |payload| {
             let runs = run_exec.clone();
             async move { Ok(runs.execute_run(id_from(&payload, "run_id")?).await?) }

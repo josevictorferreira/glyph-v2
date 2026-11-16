@@ -496,3 +496,226 @@ mod send {
         assert_eq!(error.code(), tonic::Code::InvalidArgument, "{}", error);
     }
 }
+
+// --- Turn loop and fake runner (3.4) -----------------------------------------
+
+mod turn {
+    use super::*;
+    use glyph_backend::features::chat::domain::events::ChatEventKind;
+    use glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner;
+    use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
+    use glyph_backend::proto::pb;
+    use std::time::Duration;
+
+    async fn seeded(pool: &PgPool) -> common::TestServer {
+        runner_server(pool, Arc::new(FakeChatRunner::new())).await
+    }
+
+    async fn runner_server(pool: &PgPool, runner: Arc<dyn glyph_backend::features::chat::ports::ChatRunner>) -> common::TestServer {
+        common::engine::seed_model(pool).await;
+        common::spawn_with(
+            pool.clone(),
+            common::test_config(),
+            glyph_backend::app::bootstrap::Overrides {
+                chat_runner: Some(runner),
+                background: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
+    async fn send(server: &common::TestServer, chat: ChatId, text: &str) {
+        let mut cc = Client::new(server.channel().await);
+        cc.send_message(pb::SendMessageRequest {
+            chat_id: chat.to_string(),
+            text: text.into(),
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn set_model(server: &common::TestServer) {
+        let mut sc = glyph_backend::proto::pb::settings_service_client::SettingsServiceClient::new(
+            server.channel().await,
+        );
+        sc.update_settings(pb::UpdateSettingsRequest {
+            chat_model_id: Some("velox/test-model".into()),
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn events_for(pool: &PgPool, chat: ChatId) -> Vec<String> {
+        sqlx::query_scalar("SELECT event_type FROM events WHERE stream = $1 ORDER BY id")
+            .bind(format!("Chat${}", chat))
+            .fetch_all(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn wait_idle(pool: &PgPool, chat: ChatId) {
+        for _ in 0..100 {
+            let (stored, _) = store(pool).find(chat).await.unwrap().unwrap();
+            if stored.status == ChatStatus::Idle {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("chat never went idle");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn happy_turn_persists_done_message_and_session(pool: PgPool) {
+        let server = seeded(&pool).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "hello").await;
+        wait_idle(&pool, chat.id).await;
+        let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(stored.status, ChatStatus::Idle);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[1].kind, MessageKind::Assistant);
+        assert_eq!(messages[1].status, MessageStatus::Done);
+        assert_eq!(
+            messages[1].text.as_deref(),
+            Some("Fake reply to: hello")
+        );
+        let events = events_for(&pool, chat.id).await;
+        assert!(events.contains(&"ChatTurnFinished".to_string()), "{events:?}");
+        let session: Option<i32> = sqlx::query_scalar(
+            "SELECT octet_length(pi_session) FROM chats WHERE id = $1",
+        )
+        .bind(chat.id.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(session.unwrap_or(0) > 0, "session blob saved");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn deltas_concatenate_with_contiguous_offsets(pool: PgPool) {
+        use glyph_backend::features::chat::ports::ChatBus;
+        use glyph_backend::infrastructure::postgres::listener::ChatHub;
+        let server = seeded(&pool).await;
+        set_model(&server).await;
+        let hub = ChatHub::new(64);
+        let stop = tokio_util::sync::CancellationToken::new();
+        let task = hub.clone().spawn_listener(pool.clone(), stop.clone());
+        let mut rx = ChatBus::subscribe(&hub);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "one two three").await;
+        let mut got = String::new();
+        let mut expect_offset = 0usize;
+        for _ in 0..200 {
+            let event = match tokio::time::timeout(Duration::from_millis(500), rx.recv()).await {
+                Ok(Ok(event)) => event,
+                _ => break,
+            };
+            if event.kind != ChatEventKind::TextDelta { continue; }
+            assert_eq!(event.offset, Some(expect_offset), "contiguous offsets");
+            expect_offset += event.text.clone().unwrap_or_default().chars().count();
+            got.push_str(&event.text.unwrap_or_default());
+            if got.chars().count() >= "Fake reply to: one two three".chars().count() {
+                break;
+            }
+        }
+        assert_eq!(got, "Fake reply to: one two three");
+        stop.cancel();
+        let _ = task.await;
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn mid_turn_getchat_shows_streaming_and_matching_length(pool: PgPool) {
+        use glyph_backend::infrastructure::fake_chat_runner::Script;
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            Script::Delta("word ".repeat(40)),
+            Script::Sleep(2000),
+            Script::Delta(" done".into()),
+        ]))).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "hello").await;
+        let mut cc = Client::new(server.channel().await);
+        let mut streaming_seen = false;
+        for _ in 0..100 {
+            let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+            if stored.status == ChatStatus::Running {
+                let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+                if assistant.status == MessageStatus::Streaming {
+                    let response = cc
+                        .get_chat(pb::GetChatRequest { chat_id: chat.id.to_string() })
+                        .await
+                        .unwrap()
+                        .into_inner();
+                    let m = response.messages.last().unwrap();
+                    assert_eq!(m.status, pb::ChatMessageStatus::Streaming as i32);
+                    assert_eq!(m.length as usize, assistant.text.as_deref().map(|t| t.chars().count()).unwrap_or(0));
+                    streaming_seen = true;
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(streaming_seen, "never observed a streaming assistant message");
+        wait_idle(&pool, chat.id).await;
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn scripted_secret_never_publishes_nor_stores(pool: PgPool) {
+        use glyph_backend::features::chat::ports::ChatBus;
+        use glyph_backend::infrastructure::fake_chat_runner::Script;
+        use glyph_backend::infrastructure::postgres::listener::ChatHub;
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            Script::Delta("The key is sk-live-abcdef123456".into()),
+            Script::Sleep(100),
+        ]))).await;
+        set_model(&server).await;
+        let hub = ChatHub::new(64);
+        let stop = tokio_util::sync::CancellationToken::new();
+        let task = hub.clone().spawn_listener(pool.clone(), stop.clone());
+        let mut rx = ChatBus::subscribe(&hub);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "leak").await;
+        let mut published = String::new();
+        loop {
+            let event = match tokio::time::timeout(Duration::from_millis(300), rx.recv()).await {
+                Ok(Ok(event)) => event,
+                _ => break,
+            };
+            if event.kind == ChatEventKind::TextDelta {
+                published.push_str(&event.text.unwrap_or_default());
+            }
+        }
+        assert!(!published.contains("sk-live-abcdef123456"), "secret leaked in a delta: {published:?}");
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+        assert!(!assistant.text.as_deref().unwrap_or("").contains("sk-live-abcdef123456"));
+        stop.cancel();
+        let _ = task.await;
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn runner_error_fails_message_keeps_partial_text(pool: PgPool) {
+        use glyph_backend::infrastructure::fake_chat_runner::Script;
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            Script::Delta("partial answer ".into()),
+            Script::Fail("The agent failed to answer.".into()),
+        ]))).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "hello").await;
+        wait_idle(&pool, chat.id).await;
+        let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(stored.status, ChatStatus::Idle);
+        let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+        assert_eq!(assistant.status, MessageStatus::Failed);
+        assert_eq!(assistant.error.as_deref(), Some("The agent failed to answer."));
+        assert!(assistant.text.as_deref().unwrap_or("").starts_with("partial answer"));
+        let events = events_for(&pool, chat.id).await;
+        assert!(events.contains(&"ChatTurnFailed".to_string()), "{events:?}");
+    }
+}
