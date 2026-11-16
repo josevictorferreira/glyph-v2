@@ -175,3 +175,105 @@ async fn session_round_trips(pool: PgPool) {
     assert_eq!(loaded.relative_path, "group/abc.jsonl");
     assert_eq!(loaded.bytes, b"line1\nline2\n");
 }
+
+// --- ChatService CRUD over gRPC --------------------------------------------
+
+use glyph_backend::proto::pb;
+use glyph_backend::proto::pb::chat_service_client::ChatServiceClient;
+use tonic::Code;
+use tonic::transport::Channel;
+
+type Grpc = ChatServiceClient<Channel>;
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn crud_round_trip(pool: PgPool) {
+    let server = common::spawn(pool).await;
+    let mut client = Grpc::new(server.channel().await);
+
+    let created = client
+        .create_chat(pb::CreateChatRequest {})
+        .await
+        .unwrap()
+        .into_inner()
+        .chat
+        .unwrap();
+    assert_eq!(created.title, "");
+    assert_eq!(created.status, pb::ChatStatus::Idle as i32);
+
+    let listed = client.list_chats(pb::ListChatsRequest {}).await.unwrap().into_inner();
+    assert_eq!(listed.chats.len(), 1);
+    assert_eq!(listed.chats[0].id, created.id);
+
+    let renamed = client
+        .rename_chat(pb::RenameChatRequest {
+            chat_id: created.id.clone(),
+            title: "  My plan  ".into(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .chat
+        .unwrap();
+    assert_eq!(renamed.title, "My plan");
+
+    let chat = client
+        .get_chat(pb::GetChatRequest { chat_id: created.id.clone() })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(chat.chat.unwrap().title, "My plan");
+    assert!(chat.messages.is_empty());
+
+    client
+        .delete_chat(pb::DeleteChatRequest { chat_id: created.id })
+        .await
+        .unwrap();
+    let listed = client.list_chats(pb::ListChatsRequest {}).await.unwrap().into_inner();
+    assert!(listed.chats.is_empty());
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn get_unknown_chat_is_not_found(pool: PgPool) {
+    let server = common::spawn(pool).await;
+    let mut client = Grpc::new(server.channel().await);
+    let error = client
+        .get_chat(pb::GetChatRequest {
+            chat_id: ChatId::new().to_string(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), Code::NotFound);
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn delete_running_chat_is_refused(pool: PgPool) {
+    let chat = new_chat(&pool).await;
+    let mut tx = store(&pool).begin().await.unwrap();
+    assert!(tx.begin_turn(chat.id).await.unwrap());
+    tx.commit().await.unwrap();
+
+    let server = common::spawn(pool).await;
+    let mut client = Grpc::new(server.channel().await);
+    let error = client
+        .delete_chat(pb::DeleteChatRequest { chat_id: chat.id.to_string() })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), Code::FailedPrecondition);
+    assert_eq!(error.message(), "Stop the agent before deleting this chat.");
+}
+
+#[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+async fn message_length_counts_characters(pool: PgPool) {
+    let chat = new_chat(&pool).await;
+    insert(&pool, chat.id, MessageKind::User, "héllo wörld").await; // 11 chars
+    let server = common::spawn(pool).await;
+    let mut client = Grpc::new(server.channel().await);
+    let response = client
+        .get_chat(pb::GetChatRequest { chat_id: chat.id.to_string() })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.messages.len(), 1);
+    assert_eq!(response.messages[0].text, "héllo wörld");
+    assert_eq!(response.messages[0].length, 11);
+}

@@ -16,6 +16,8 @@ use tonic_web::GrpcWebLayer;
 use crate::app::{router, state::AppState};
 use crate::config::{Config, StepRunnerKind};
 use crate::features::catalog::grpc::CatalogGrpc;
+use crate::features::chat::grpc::ChatGrpc;
+use crate::features::chat::ChatService;
 use crate::features::catalog::{
     CatalogStore, ListModels, ModelGateway, Provider, RefreshModels, WorkflowFlagger,
 };
@@ -40,6 +42,7 @@ use crate::infrastructure::postgres::listener::{self, LiveHub};
 use crate::infrastructure::postgres::{self, PgStore};
 use crate::proto;
 use crate::proto::pb::catalog_service_server::CatalogServiceServer;
+use crate::proto::pb::chat_service_server::ChatServiceServer;
 use crate::proto::pb::definition_service_server::DefinitionServiceServer;
 use crate::proto::pb::live_service_server::LiveServiceServer;
 use crate::proto::pb::run_service_server::RunServiceServer;
@@ -154,6 +157,9 @@ pub async fn build_with(
         clock.clone(),
     );
 
+    // --- chat --------------------------------------------------------------
+    let chat = ChatService::new(Arc::new(store.clone()), clock.clone());
+
     // --- settings ----------------------------------------------------------
     let settings = SettingsService::new(
         Arc::new(store.clone()),
@@ -225,6 +231,7 @@ pub async fn build_with(
         )))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
         .add_service(SettingsServiceServer::new(SettingsGrpc::new(settings)))
+        .add_service(ChatServiceServer::new(ChatGrpc::new(chat)))
         .add_service(LiveServiceServer::new(LiveGrpc::new(
             Arc::new(hub),
             config.live_heartbeat,

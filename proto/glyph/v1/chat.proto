@@ -1,0 +1,117 @@
+syntax = "proto3";
+package glyph.v1;
+import "google/protobuf/timestamp.proto";
+
+// Conversations with the chat agent (spec 0024). RPCs are added by the task
+// that implements them.
+service ChatService {
+  rpc ListChats(ListChatsRequest) returns (ListChatsResponse);
+  rpc GetChat(GetChatRequest) returns (GetChatResponse);
+  rpc CreateChat(CreateChatRequest) returns (CreateChatResponse);
+  rpc RenameChat(RenameChatRequest) returns (RenameChatResponse);
+  rpc DeleteChat(DeleteChatRequest) returns (DeleteChatResponse);
+}
+
+enum ChatStatus {
+  CHAT_STATUS_UNSPECIFIED = 0;
+  CHAT_STATUS_IDLE = 1;
+  CHAT_STATUS_RUNNING = 2;
+}
+
+enum ChatMessageKind {
+  CHAT_MESSAGE_KIND_UNSPECIFIED = 0;
+  CHAT_MESSAGE_KIND_USER = 1;
+  CHAT_MESSAGE_KIND_ASSISTANT = 2;
+  CHAT_MESSAGE_KIND_TOOL = 3;
+}
+
+enum ChatMessageStatus {
+  CHAT_MESSAGE_STATUS_UNSPECIFIED = 0;
+  CHAT_MESSAGE_STATUS_STREAMING = 1;
+  CHAT_MESSAGE_STATUS_DONE = 2;
+  CHAT_MESSAGE_STATUS_FAILED = 3;
+}
+
+enum ChatEventType {
+  CHAT_EVENT_TYPE_UNSPECIFIED = 0;
+  CHAT_EVENT_TYPE_TEXT_DELTA = 1;
+  CHAT_EVENT_TYPE_MESSAGE_UPDATED = 2;
+  CHAT_EVENT_TYPE_CHAT_UPDATED = 3;
+  CHAT_EVENT_TYPE_RESYNC = 4;
+  CHAT_EVENT_TYPE_HEARTBEAT = 5;
+}
+
+message Chat {
+  string id = 1;
+  string title = 2;
+  ChatStatus status = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// What a tool call did. The pre-change YAML never travels here; `revertible`
+// is derived server-side.
+message ToolCall {
+  string name = 1;
+  string summary = 2;
+  bool is_error = 3;
+  optional string workflow_id = 4;
+  optional string workflow_name = 5;
+  optional string run_id = 6;
+  bool revertible = 7;
+  bool reverted = 8;
+  // Expandable body, e.g. validation errors.
+  optional string detail = 9;
+}
+
+message ChatMessage {
+  string id = 1;
+  string chat_id = 2;
+  int32 seq = 3;
+  ChatMessageKind kind = 4;
+  ChatMessageStatus status = 5;
+  // Markdown; empty for tool messages.
+  string text = 6;
+  // Characters of `text`: the unit of ChatEvent offsets.
+  int32 length = 7;
+  optional ToolCall tool = 8;
+  optional string error = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message ListChatsRequest {}
+
+message ListChatsResponse {
+  // Newest first.
+  repeated Chat chats = 1;
+}
+
+message GetChatRequest {
+  string chat_id = 1;
+}
+
+message GetChatResponse {
+  Chat chat = 1;
+  repeated ChatMessage messages = 2;
+}
+
+message CreateChatRequest {}
+
+message CreateChatResponse {
+  Chat chat = 1;
+}
+
+message RenameChatRequest {
+  string chat_id = 1;
+  string title = 2;
+}
+
+message RenameChatResponse {
+  Chat chat = 1;
+}
+
+message DeleteChatRequest {
+  string chat_id = 1;
+}
+
+message DeleteChatResponse {}

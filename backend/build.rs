@@ -4,6 +4,7 @@ use std::path::PathBuf;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_root = PathBuf::from("../proto");
     let files = [
+        "glyph/v1/chat.proto",
         "glyph/v1/common.proto",
         "glyph/v1/catalog.proto",
         "glyph/v1/workflow.proto",

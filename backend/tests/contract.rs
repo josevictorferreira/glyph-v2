@@ -60,7 +60,7 @@ async fn every_rpc_is_routed(pool: PgPool) {
         methods.len()
     );
     let services: std::collections::BTreeSet<_> = methods.iter().map(|(s, _)| s.clone()).collect();
-    assert_eq!(services.len(), 6, "{services:?}");
+    assert_eq!(services.len(), 7, "{services:?}");
 
     for (service, method) in &methods {
         let status = grpc_web_status(&server.router, service, method).await;
