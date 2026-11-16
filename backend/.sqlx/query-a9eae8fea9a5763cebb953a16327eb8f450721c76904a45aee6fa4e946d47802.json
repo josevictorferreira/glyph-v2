@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pi_session, pi_session_path FROM chats WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pi_session",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "chats",
+            "name": "pi_session"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pi_session_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "chats",
+            "name": "pi_session_path"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "a9eae8fea9a5763cebb953a16327eb8f450721c76904a45aee6fa4e946d47802"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE chats SET pi_session = $2, pi_session_path = $3, updated_at = now()\n                     WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6ec8588433290582e0631377f037837924e61a4d75730f4e4fdb6c6db5cb5a4"
+}

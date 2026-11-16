@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO chat_messages (chat_id, seq, kind, status, content)\n             VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM chat_messages WHERE chat_id = $1),\n                     $2, $3, $4)\n             RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "chat_messages",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7c433970fb47747ab03d80c4cb389e45996210a5f9219b2c38f4dd4a49ef40ef"
+}

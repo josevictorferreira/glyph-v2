@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE chats SET status = 'running', cancel_requested = false, updated_at = now()\n             WHERE id = $1 AND status = 'idle'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9b0c2156126cc0ba516b5af668f76e797815ce41858fb7f2289890b34b6ace73"
+}

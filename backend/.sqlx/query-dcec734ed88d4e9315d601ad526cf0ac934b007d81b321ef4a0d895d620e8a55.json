@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO chats (id, title, status, cancel_requested, created_at, updated_at)\n             VALUES ($1, $2, 'idle', false, $3, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dcec734ed88d4e9315d601ad526cf0ac934b007d81b321ef4a0d895d620e8a55"
+}

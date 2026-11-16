@@ -1,4 +1,5 @@
 pub mod catalog_repo;
+pub mod chats_repo;
 pub mod jobs;
 pub mod listener;
 pub mod migrate;
