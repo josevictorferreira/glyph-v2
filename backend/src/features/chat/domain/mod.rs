@@ -1,5 +1,6 @@
 //! Chat domain: model, statuses, title derivation, streaming buffer.
 pub mod model;
+pub mod stream;
 #[cfg(test)]
 mod tests {
     use super::model::*;

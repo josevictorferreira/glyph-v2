@@ -51,6 +51,11 @@ impl Redactor {
     pub fn redact_opt(&self, text: Option<&str>) -> Option<String> {
         text.map(|t| self.redact(t))
     }
+
+    /// Longest known secret value, in characters (0 when none).
+    pub fn longest_secret(&self) -> usize {
+        self.secrets.iter().map(|s| s.chars().count()).max().unwrap_or(0)
+    }
 }
 
 /// The password component of a `postgres://user:password@host/db` URL.
