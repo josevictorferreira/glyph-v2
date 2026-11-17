@@ -130,3 +130,19 @@ pub async fn orphaned_step_runs(pool: &PgPool, kind: &str) -> Result<Vec<Uuid>, 
     .fetch_all(pool)
     .await
 }
+
+/// Chats stuck `running` with no unfinished `run_chat_turn` job.
+pub async fn orphaned_chats(pool: &PgPool, kind: &str) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT c.id FROM chats c
+         WHERE c.status = 'running'
+           AND NOT EXISTS (
+             SELECT 1 FROM jobs j
+             WHERE j.kind = $1 AND j.finished_at IS NULL
+               AND j.payload->>'chat_id' = c.id::text
+           )",
+        kind,
+    )
+    .fetch_all(pool)
+    .await
+}

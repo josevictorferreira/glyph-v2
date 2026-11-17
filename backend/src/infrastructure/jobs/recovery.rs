@@ -25,8 +25,11 @@ pub struct Recovery {
     pub stale_after: Duration,
     /// Job kind that executes one step run (`payload.step_run_id`).
     pub step_kind: String,
+    /// Job kind that executes one chat turn (`payload.chat_id`).
+    pub chat_kind: String,
     pub recover_job: Arc<dyn Fn(ClaimedJob) -> JobFuture + Send + Sync>,
     pub recover_step: Arc<dyn Fn(Uuid) -> JobFuture + Send + Sync>,
+    pub recover_chat: Arc<dyn Fn(Uuid) -> JobFuture + Send + Sync>,
 }
 
 pub async fn sweep(pool: &PgPool, recovery: &Recovery) -> Result<(), sqlx::Error> {
@@ -40,6 +43,12 @@ pub async fn sweep(pool: &PgPool, recovery: &Recovery) -> Result<(), sqlx::Error
         tracing::warn!(step_run_id = %id, "recovering a running step run without a job");
         if let Err(error) = (recovery.recover_step)(id).await {
             tracing::warn!(error = %format!("{error:#}"), %id, "step run recovery failed");
+        }
+    }
+    for id in jobs::orphaned_chats(pool, &recovery.chat_kind).await? {
+        tracing::warn!(chat_id = %id, "recovering a running chat without a job");
+        if let Err(error) = (recovery.recover_chat)(id).await {
+            tracing::warn!(error = %format!("{error:#}"), %id, "chat recovery failed");
         }
     }
     Ok(())

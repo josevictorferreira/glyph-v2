@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id FROM chats c\n         WHERE c.status = 'running'\n           AND NOT EXISTS (\n             SELECT 1 FROM jobs j\n             WHERE j.kind = $1 AND j.finished_at IS NULL\n               AND j.payload->>'chat_id' = c.id::text\n           )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "chats",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "272c2380fe592519b1fe1fef4db8aa7b9481288959e5bb50046033044cb62489"
+}

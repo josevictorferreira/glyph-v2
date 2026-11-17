@@ -355,7 +355,7 @@ async fn publish_and_subscribe_round_trip(pool: PgPool) {
 
 mod send {
     use super::*;
-    use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
+    pub(super) use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
 
     async fn client(pool: &PgPool) -> (common::TestServer, Client<tonic::transport::Channel>) {
         let server = common::spawn(pool.clone()).await;
@@ -364,7 +364,7 @@ mod send {
     }
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
-    async fn send_persists_messages_flips_running_and_enqueues_one_job(pool: PgPool) {
+    pub(super) async fn send_persists_messages_flips_running_and_enqueues_one_job(pool: PgPool) {
         common::engine::seed_model(&pool).await;
         let server = common::spawn(pool.clone()).await;
         let mut sc = glyph_backend::proto::pb::settings_service_client::SettingsServiceClient::new(
@@ -457,7 +457,7 @@ mod send {
     }
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
-    async fn send_without_a_model_writes_nothing(pool: PgPool) {
+    pub(super) async fn send_without_a_model_writes_nothing(pool: PgPool) {
         let chat = new_chat(&pool).await;
         let (_server, mut cc) = client(&pool).await;
         let error = cc
@@ -503,15 +503,15 @@ mod turn {
     use super::*;
     use glyph_backend::features::chat::domain::events::ChatEventKind;
     use glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner;
-    use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
+    pub(super) use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
     use glyph_backend::proto::pb;
     use std::time::Duration;
 
-    async fn seeded(pool: &PgPool) -> common::TestServer {
+    pub(super) async fn seeded(pool: &PgPool) -> common::TestServer {
         runner_server(pool, Arc::new(FakeChatRunner::new())).await
     }
 
-    async fn runner_server(pool: &PgPool, runner: Arc<dyn glyph_backend::features::chat::ports::ChatRunner>) -> common::TestServer {
+    pub(super) async fn runner_server(pool: &PgPool, runner: Arc<dyn glyph_backend::features::chat::ports::ChatRunner>) -> common::TestServer {
         common::engine::seed_model(pool).await;
         common::spawn_with(
             pool.clone(),
@@ -525,7 +525,7 @@ mod turn {
         .await
     }
 
-    async fn send(server: &common::TestServer, chat: ChatId, text: &str) {
+    pub(super) async fn send(server: &common::TestServer, chat: ChatId, text: &str) {
         let mut cc = Client::new(server.channel().await);
         cc.send_message(pb::SendMessageRequest {
             chat_id: chat.to_string(),
@@ -535,7 +535,7 @@ mod turn {
         .unwrap();
     }
 
-    async fn set_model(server: &common::TestServer) {
+    pub(super) async fn set_model(server: &common::TestServer) {
         let mut sc = glyph_backend::proto::pb::settings_service_client::SettingsServiceClient::new(
             server.channel().await,
         );
@@ -546,7 +546,7 @@ mod turn {
         .unwrap();
     }
 
-    async fn events_for(pool: &PgPool, chat: ChatId) -> Vec<String> {
+    pub(super) async fn events_for(pool: &PgPool, chat: ChatId) -> Vec<String> {
         sqlx::query_scalar("SELECT event_type FROM events WHERE stream = $1 ORDER BY id")
             .bind(format!("Chat${}", chat))
             .fetch_all(pool)
@@ -554,7 +554,7 @@ mod turn {
             .unwrap()
     }
 
-    async fn wait_idle(pool: &PgPool, chat: ChatId) {
+    pub(super) async fn wait_idle(pool: &PgPool, chat: ChatId) {
         for _ in 0..100 {
             let (stored, _) = store(pool).find(chat).await.unwrap().unwrap();
             if stored.status == ChatStatus::Idle {
@@ -717,5 +717,147 @@ mod turn {
         assert!(assistant.text.as_deref().unwrap_or("").starts_with("partial answer"));
         let events = events_for(&pool, chat.id).await;
         assert!(events.contains(&"ChatTurnFailed".to_string()), "{events:?}");
+    }
+}
+
+// --- Cancel and recovery (3.5) -----------------------------------------------
+
+mod cancel {
+    use super::turn::{runner_server, seeded, send, set_model, wait_idle, Client};
+    use super::*;
+    use glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner;
+    use std::time::Duration;
+    use glyph_backend::infrastructure::fake_chat_runner::Script;
+
+    async fn sleep_server(pool: &PgPool) -> common::TestServer {
+        runner_server(pool, Arc::new(FakeChatRunner::scripted(vec![
+            Script::Delta("thinking ".into()),
+            Script::Sleep(600_000),
+        ]))).await
+    }
+
+    async fn recovery_server(pool: &PgPool) -> common::TestServer {
+        common::engine::seed_model(pool).await;
+        common::spawn_with(
+            pool.clone(),
+            common::config_with(&[("GLYPH_RECOVERY_SWEEP_SECONDS", "1")]),
+            glyph_backend::app::bootstrap::Overrides {
+                chat_runner: Some(Arc::new(FakeChatRunner::scripted(vec![
+                    Script::Delta("thinking ".into()),
+                    Script::Sleep(600_000),
+                ]))),
+                background: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn cancel_during_sleep_fails_within_two_seconds(pool: PgPool) {
+        let server = sleep_server(&pool).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "long").await;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let mut cc = Client::new(server.channel().await);
+        cc.cancel_turn(glyph_backend::proto::pb::CancelTurnRequest {
+            chat_id: chat.id.to_string(),
+        })
+        .await
+        .unwrap();
+        let started = std::time::Instant::now();
+        wait_idle(&pool, chat.id).await;
+        assert!(started.elapsed() < Duration::from_secs(2), "cancel took {:?}", started.elapsed());
+        let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(stored.status, ChatStatus::Idle);
+        let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+        assert_eq!(assistant.status, MessageStatus::Failed);
+        assert_eq!(assistant.error.as_deref(), Some("Cancelled."));
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn cancel_on_idle_chat_is_a_noop(pool: PgPool) {
+        let server = seeded(&pool).await;
+        let chat = new_chat(&pool).await;
+        let mut cc = Client::new(server.channel().await);
+        cc.cancel_turn(glyph_backend::proto::pb::CancelTurnRequest {
+            chat_id: chat.id.to_string(),
+        })
+        .await
+        .unwrap();
+        let (stored, _) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(stored.status, ChatStatus::Idle);
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn abandoned_job_is_recovered_as_interrupted(pool: PgPool) {
+        let server = recovery_server(&pool).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "long").await;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        // Simulate a dead worker: stale lock, no heartbeat.
+        sqlx::query("UPDATE jobs SET locked_at = now() - interval '10 minutes', locked_by = 'dead-worker'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM job_workers")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let started = std::time::Instant::now();
+        loop {
+            let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+            let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant);
+            if stored.status == ChatStatus::Idle
+                && assistant
+                    .and_then(|m| m.error.clone())
+                    .as_deref()
+                    == Some("The turn was interrupted before it finished.")
+            {
+                break;
+            }
+            assert!(started.elapsed() < Duration::from_secs(120), "not recovered in time");
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn running_chat_without_job_is_recovered(pool: PgPool) {
+        let server = recovery_server(&pool).await;
+        let chat = new_chat(&pool).await;
+        let mut tx = store(&pool).begin().await.unwrap();
+        assert!(tx.begin_turn(chat.id).await.unwrap());
+        tx.insert_message(&glyph_backend::features::chat::ports::NewMessage {
+            chat_id: chat.id,
+            kind: MessageKind::Assistant,
+            status: MessageStatus::Streaming,
+            text: None,
+            tool: None,
+        })
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        let started = std::time::Instant::now();
+        loop {
+            let (stored, _) = store(&pool).find(chat.id).await.unwrap().unwrap();
+            if stored.status == ChatStatus::Idle {
+                let assistant_error: Option<String> = sqlx::query_scalar(
+                    "SELECT m.error FROM chat_messages m WHERE m.chat_id = $1 AND m.kind = 'assistant' ORDER BY m.seq DESC LIMIT 1",
+                )
+                .bind(chat.id.as_uuid())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+                assert_eq!(
+                    assistant_error.as_deref(),
+                    Some("The turn was interrupted before it finished.")
+                );
+                break;
+            }
+            assert!(started.elapsed() < Duration::from_secs(120), "not recovered in time");
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
     }
 }

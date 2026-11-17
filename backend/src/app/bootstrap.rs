@@ -293,7 +293,7 @@ pub async fn build_with(
         background.push(worker.spawn(stop.clone(), config.shutdown_grace));
         background.push(recovery::spawn(
             pool.clone(),
-            recovery(config, &runs),
+            recovery(config, &runs, &chat),
             stop.clone(),
         ));
         background.push(recurring::spawn(
@@ -373,16 +373,18 @@ fn worker(
 }
 
 /// Dead-worker recovery → application operations.
-fn recovery(config: &Config, runs: &RunService) -> Recovery {
+fn recovery(config: &Config, runs: &RunService, chat: &ChatService) -> Recovery {
     let (job_runs, step_runs) = (runs.clone(), runs.clone());
+    let chat_job_recovery = chat.clone();
     Recovery {
         every: config.recovery_every,
         // Far above the worker's 10s heartbeat: a struggling database delays
         // heartbeats, and recovering a live step would lose its result.
         stale_after: Duration::from_secs(5 * 60),
         step_kind: runs::application::EXECUTE_STEP.into(),
+        chat_kind: crate::features::chat::RUN_CHAT_TURN.into(),
         recover_job: Arc::new(move |job| {
-            let runs = job_runs.clone();
+            let (runs, chat) = (job_runs.clone(), chat_job_recovery.clone());
             Box::pin(async move {
                 match job.kind.as_str() {
                     runs::application::EXECUTE_STEP => {
@@ -391,6 +393,9 @@ fn recovery(config: &Config, runs: &RunService) -> Recovery {
                     }
                     runs::application::EXECUTE_RUN => {
                         runs.requeue_run(id_from(&job.payload, "run_id")?).await?
+                    }
+                    crate::features::chat::RUN_CHAT_TURN => {
+                        chat.interrupt_turn(id_from(&job.payload, "chat_id")?).await?
                     }
                     // Recurring kinds are enqueued again by their ticker.
                     _ => {}
@@ -401,6 +406,13 @@ fn recovery(config: &Config, runs: &RunService) -> Recovery {
         recover_step: Arc::new(move |id| {
             let runs = step_runs.clone();
             Box::pin(async move { Ok(runs.interrupt_step(id.into()).await?) })
+        }),
+        recover_chat: Arc::new({
+            let chat = chat.clone();
+            move |id| {
+                let chat = chat.clone();
+                Box::pin(async move { Ok(chat.interrupt_turn(id.into()).await?) })
+            }
         }),
     }
 }

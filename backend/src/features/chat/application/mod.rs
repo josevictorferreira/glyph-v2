@@ -96,6 +96,47 @@ impl ChatService {
         self.chat(id).await
     }
 
+    /// Marks the running turn for cancellation; the turn loop notices
+    /// within its poll interval. Idempotent on idle chats.
+    pub async fn cancel_turn(&self, id: ChatId) -> DomainResult<()> {
+        let mut tx = self.store.begin().await?;
+        tx.request_cancel(id).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Crash recovery: a turn whose worker died is finalised `failed` with
+    /// the interrupted message, in one transaction.
+    pub async fn interrupt_turn(&self, id: ChatId) -> DomainResult<()> {
+        let (chat, messages) = self.store.find(id).await?.ok_or(DomainError::NotFound("chat"))?;
+        if chat.status != ChatStatus::Running {
+            return Ok(());
+        }
+        let assistant = messages
+            .iter()
+            .rev()
+            .find(|m| m.kind == MessageKind::Assistant)
+            .ok_or(DomainError::internal(anyhow::anyhow!("running chat without assistant message")))?;
+        let mut tx = self.store.begin().await?;
+        if assistant.status == MessageStatus::Streaming {
+            tx.set_message_status(
+                assistant.id,
+                MessageStatus::Failed,
+                Some("The turn was interrupted before it finished."),
+            )
+            .await?;
+        }
+        tx.end_turn(id, ChatStatus::Idle).await?;
+        tx.append_events(&[Self::chat_event(
+            "ChatTurnFailed",
+            id,
+            serde_json::json!({ "reason": "interrupted" }),
+        )])
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Appends the user message and an empty `streaming` assistant message,
     /// flips the chat to `running` (CAS) and enqueues exactly one turn job.
     pub async fn send(&self, id: ChatId, text: &str) -> DomainResult<()> {

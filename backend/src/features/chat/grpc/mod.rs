@@ -127,4 +127,10 @@ impl Rpc for ChatGrpc {
             .await?;
         Ok(Response::new(pb::SendMessageResponse {}))
     }
+    async fn cancel_turn(&self, r: Request<pb::CancelTurnRequest>) -> Rsp<pb::CancelTurnResponse> {
+        self.service
+            .cancel_turn(parse_id(&r.get_ref().chat_id, "chat_id")?)
+            .await?;
+        Ok(Response::new(pb::CancelTurnResponse {}))
+    }
 }
