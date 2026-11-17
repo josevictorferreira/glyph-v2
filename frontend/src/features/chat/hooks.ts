@@ -41,3 +41,26 @@ export function useDeleteChat() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: chatKeys.lists() }),
   });
 }
+export function useSendMessage() {
+  const transport = useTransport();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { chatId: string; text: string }) =>
+      createClient(ChatService, transport).sendMessage(input),
+    onSuccess: (_d, { chatId }) => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.detail(chatId) });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.lists() });
+    },
+  });
+}
+export function useCancelTurn() {
+  const transport = useTransport();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { chatId: string }) =>
+      createClient(ChatService, transport).cancelTurn(input),
+    onSuccess: (_d, { chatId }) => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.detail(chatId) });
+    },
+  });
+}

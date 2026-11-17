@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file glyph/v1/chat.proto.
  */
 export const file_glyph_v1_chat: GenFile = /*@__PURE__*/
-  fileDesc("ChNnbHlwaC92MS9jaGF0LnByb3RvEghnbHlwaC52MSKnAQoEQ2hhdBIKCgJpZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIkCgZzdGF0dXMYAyABKA4yFC5nbHlwaC52MS5DaGF0U3RhdHVzEi4KCmNyZWF0ZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIvkBCghUb29sQ2FsbBIMCgRuYW1lGAEgASgJEg8KB3N1bW1hcnkYAiABKAkSEAoIaXNfZXJyb3IYAyABKAgSGAoLd29ya2Zsb3dfaWQYBCABKAlIAIgBARIaCg13b3JrZmxvd19uYW1lGAUgASgJSAGIAQESEwoGcnVuX2lkGAYgASgJSAKIAQESEgoKcmV2ZXJ0aWJsZRgHIAEoCBIQCghyZXZlcnRlZBgIIAEoCBITCgZkZXRhaWwYCSABKAlIA4gBAUIOCgxfd29ya2Zsb3dfaWRCEAoOX3dvcmtmbG93X25hbWVCCQoHX3J1bl9pZEIJCgdfZGV0YWlsIqkCCgtDaGF0TWVzc2FnZRIKCgJpZBgBIAEoCRIPCgdjaGF0X2lkGAIgASgJEgsKA3NlcRgDIAEoBRInCgRraW5kGAQgASgOMhkuZ2x5cGgudjEuQ2hhdE1lc3NhZ2VLaW5kEisKBnN0YXR1cxgFIAEoDjIbLmdseXBoLnYxLkNoYXRNZXNzYWdlU3RhdHVzEgwKBHRleHQYBiABKAkSDgoGbGVuZ3RoGAcgASgFEiUKBHRvb2wYCCABKAsyEi5nbHlwaC52MS5Ub29sQ2FsbEgAiAEBEhIKBWVycm9yGAkgASgJSAGIAQESLgoKY3JlYXRlZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCBwoFX3Rvb2xCCAoGX2Vycm9yIhIKEExpc3RDaGF0c1JlcXVlc3QiMgoRTGlzdENoYXRzUmVzcG9uc2USHQoFY2hhdHMYASADKAsyDi5nbHlwaC52MS5DaGF0IiEKDkdldENoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkiWAoPR2V0Q2hhdFJlc3BvbnNlEhwKBGNoYXQYASABKAsyDi5nbHlwaC52MS5DaGF0EicKCG1lc3NhZ2VzGAIgAygLMhUuZ2x5cGgudjEuQ2hhdE1lc3NhZ2UiEwoRQ3JlYXRlQ2hhdFJlcXVlc3QiMgoSQ3JlYXRlQ2hhdFJlc3BvbnNlEhwKBGNoYXQYASABKAsyDi5nbHlwaC52MS5DaGF0IjMKEVJlbmFtZUNoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkSDQoFdGl0bGUYAiABKAkiMgoSUmVuYW1lQ2hhdFJlc3BvbnNlEhwKBGNoYXQYASABKAsyDi5nbHlwaC52MS5DaGF0IiQKEURlbGV0ZUNoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkiFAoSRGVsZXRlQ2hhdFJlc3BvbnNlKlgKCkNoYXRTdGF0dXMSGwoXQ0hBVF9TVEFUVVNfVU5TUEVDSUZJRUQQABIUChBDSEFUX1NUQVRVU19JRExFEAESFwoTQ0hBVF9TVEFUVVNfUlVOTklORxACKo0BCg9DaGF0TWVzc2FnZUtpbmQSIQodQ0hBVF9NRVNTQUdFX0tJTkRfVU5TUEVDSUZJRUQQABIaChZDSEFUX01FU1NBR0VfS0lORF9VU0VSEAESHwobQ0hBVF9NRVNTQUdFX0tJTkRfQVNTSVNUQU5UEAISGgoWQ0hBVF9NRVNTQUdFX0tJTkRfVE9PTBADKpkBChFDaGF0TWVzc2FnZVN0YXR1cxIjCh9DSEFUX01FU1NBR0VfU1RBVFVTX1VOU1BFQ0lGSUVEEAASIQodQ0hBVF9NRVNTQUdFX1NUQVRVU19TVFJFQU1JTkcQARIcChhDSEFUX01FU1NBR0VfU1RBVFVTX0RPTkUQAhIeChpDSEFUX01FU1NBR0VfU1RBVFVTX0ZBSUxFRBADKtIBCg1DaGF0RXZlbnRUeXBlEh8KG0NIQVRfRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEh4KGkNIQVRfRVZFTlRfVFlQRV9URVhUX0RFTFRBEAESIwofQ0hBVF9FVkVOVF9UWVBFX01FU1NBR0VfVVBEQVRFRBACEiAKHENIQVRfRVZFTlRfVFlQRV9DSEFUX1VQREFURUQQAxIaChZDSEFUX0VWRU5UX1RZUEVfUkVTWU5DEAQSHQoZQ0hBVF9FVkVOVF9UWVBFX0hFQVJUQkVBVBAFMu4CCgtDaGF0U2VydmljZRJECglMaXN0Q2hhdHMSGi5nbHlwaC52MS5MaXN0Q2hhdHNSZXF1ZXN0GhsuZ2x5cGgudjEuTGlzdENoYXRzUmVzcG9uc2USPgoHR2V0Q2hhdBIYLmdseXBoLnYxLkdldENoYXRSZXF1ZXN0GhkuZ2x5cGgudjEuR2V0Q2hhdFJlc3BvbnNlEkcKCkNyZWF0ZUNoYXQSGy5nbHlwaC52MS5DcmVhdGVDaGF0UmVxdWVzdBocLmdseXBoLnYxLkNyZWF0ZUNoYXRSZXNwb25zZRJHCgpSZW5hbWVDaGF0EhsuZ2x5cGgudjEuUmVuYW1lQ2hhdFJlcXVlc3QaHC5nbHlwaC52MS5SZW5hbWVDaGF0UmVzcG9uc2USRwoKRGVsZXRlQ2hhdBIbLmdseXBoLnYxLkRlbGV0ZUNoYXRSZXF1ZXN0GhwuZ2x5cGgudjEuRGVsZXRlQ2hhdFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChNnbHlwaC92MS9jaGF0LnByb3RvEghnbHlwaC52MSKnAQoEQ2hhdBIKCgJpZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIkCgZzdGF0dXMYAyABKA4yFC5nbHlwaC52MS5DaGF0U3RhdHVzEi4KCmNyZWF0ZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIvkBCghUb29sQ2FsbBIMCgRuYW1lGAEgASgJEg8KB3N1bW1hcnkYAiABKAkSEAoIaXNfZXJyb3IYAyABKAgSGAoLd29ya2Zsb3dfaWQYBCABKAlIAIgBARIaCg13b3JrZmxvd19uYW1lGAUgASgJSAGIAQESEwoGcnVuX2lkGAYgASgJSAKIAQESEgoKcmV2ZXJ0aWJsZRgHIAEoCBIQCghyZXZlcnRlZBgIIAEoCBITCgZkZXRhaWwYCSABKAlIA4gBAUIOCgxfd29ya2Zsb3dfaWRCEAoOX3dvcmtmbG93X25hbWVCCQoHX3J1bl9pZEIJCgdfZGV0YWlsIqkCCgtDaGF0TWVzc2FnZRIKCgJpZBgBIAEoCRIPCgdjaGF0X2lkGAIgASgJEgsKA3NlcRgDIAEoBRInCgRraW5kGAQgASgOMhkuZ2x5cGgudjEuQ2hhdE1lc3NhZ2VLaW5kEisKBnN0YXR1cxgFIAEoDjIbLmdseXBoLnYxLkNoYXRNZXNzYWdlU3RhdHVzEgwKBHRleHQYBiABKAkSDgoGbGVuZ3RoGAcgASgFEiUKBHRvb2wYCCABKAsyEi5nbHlwaC52MS5Ub29sQ2FsbEgAiAEBEhIKBWVycm9yGAkgASgJSAGIAQESLgoKY3JlYXRlZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCBwoFX3Rvb2xCCAoGX2Vycm9yIhIKEExpc3RDaGF0c1JlcXVlc3QiMgoRTGlzdENoYXRzUmVzcG9uc2USHQoFY2hhdHMYASADKAsyDi5nbHlwaC52MS5DaGF0IiEKDkdldENoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkiWAoPR2V0Q2hhdFJlc3BvbnNlEhwKBGNoYXQYASABKAsyDi5nbHlwaC52MS5DaGF0EicKCG1lc3NhZ2VzGAIgAygLMhUuZ2x5cGgudjEuQ2hhdE1lc3NhZ2UiEwoRQ3JlYXRlQ2hhdFJlcXVlc3QiMgoSQ3JlYXRlQ2hhdFJlc3BvbnNlEhwKBGNoYXQYASABKAsyDi5nbHlwaC52MS5DaGF0IjMKEVJlbmFtZUNoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkSDQoFdGl0bGUYAiABKAkiMgoSUmVuYW1lQ2hhdFJlc3BvbnNlEhwKBGNoYXQYASABKAsyDi5nbHlwaC52MS5DaGF0IiQKEURlbGV0ZUNoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkiFAoSRGVsZXRlQ2hhdFJlc3BvbnNlIjMKElNlbmRNZXNzYWdlUmVxdWVzdBIPCgdjaGF0X2lkGAEgASgJEgwKBHRleHQYAiABKAkiFQoTU2VuZE1lc3NhZ2VSZXNwb25zZSIkChFDYW5jZWxUdXJuUmVxdWVzdBIPCgdjaGF0X2lkGAEgASgJIhQKEkNhbmNlbFR1cm5SZXNwb25zZSIjChBXYXRjaENoYXRSZXF1ZXN0Eg8KB2NoYXRfaWQYASABKAkipgEKCUNoYXRFdmVudBIlCgR0eXBlGAEgASgOMhcuZ2x5cGgudjEuQ2hhdEV2ZW50VHlwZRIPCgdjaGF0X2lkGAIgASgJEhIKCm1lc3NhZ2VfaWQYAyABKAkSDgoGb2Zmc2V0GAQgASgFEgwKBHRleHQYBSABKAkSLwoLb2NjdXJyZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIjcKEVdhdGNoQ2hhdFJlc3BvbnNlEiIKBWV2ZW50GAEgASgLMhMuZ2x5cGgudjEuQ2hhdEV2ZW50KlgKCkNoYXRTdGF0dXMSGwoXQ0hBVF9TVEFUVVNfVU5TUEVDSUZJRUQQABIUChBDSEFUX1NUQVRVU19JRExFEAESFwoTQ0hBVF9TVEFUVVNfUlVOTklORxACKo0BCg9DaGF0TWVzc2FnZUtpbmQSIQodQ0hBVF9NRVNTQUdFX0tJTkRfVU5TUEVDSUZJRUQQABIaChZDSEFUX01FU1NBR0VfS0lORF9VU0VSEAESHwobQ0hBVF9NRVNTQUdFX0tJTkRfQVNTSVNUQU5UEAISGgoWQ0hBVF9NRVNTQUdFX0tJTkRfVE9PTBADKpkBChFDaGF0TWVzc2FnZVN0YXR1cxIjCh9DSEFUX01FU1NBR0VfU1RBVFVTX1VOU1BFQ0lGSUVEEAASIQodQ0hBVF9NRVNTQUdFX1NUQVRVU19TVFJFQU1JTkcQARIcChhDSEFUX01FU1NBR0VfU1RBVFVTX0RPTkUQAhIeChpDSEFUX01FU1NBR0VfU1RBVFVTX0ZBSUxFRBADKtIBCg1DaGF0RXZlbnRUeXBlEh8KG0NIQVRfRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEh4KGkNIQVRfRVZFTlRfVFlQRV9URVhUX0RFTFRBEAESIwofQ0hBVF9FVkVOVF9UWVBFX01FU1NBR0VfVVBEQVRFRBACEiAKHENIQVRfRVZFTlRfVFlQRV9DSEFUX1VQREFURUQQAxIaChZDSEFUX0VWRU5UX1RZUEVfUkVTWU5DEAQSHQoZQ0hBVF9FVkVOVF9UWVBFX0hFQVJUQkVBVBAFMssECgtDaGF0U2VydmljZRJECglMaXN0Q2hhdHMSGi5nbHlwaC52MS5MaXN0Q2hhdHNSZXF1ZXN0GhsuZ2x5cGgudjEuTGlzdENoYXRzUmVzcG9uc2USPgoHR2V0Q2hhdBIYLmdseXBoLnYxLkdldENoYXRSZXF1ZXN0GhkuZ2x5cGgudjEuR2V0Q2hhdFJlc3BvbnNlEkcKCkNyZWF0ZUNoYXQSGy5nbHlwaC52MS5DcmVhdGVDaGF0UmVxdWVzdBocLmdseXBoLnYxLkNyZWF0ZUNoYXRSZXNwb25zZRJHCgpSZW5hbWVDaGF0EhsuZ2x5cGgudjEuUmVuYW1lQ2hhdFJlcXVlc3QaHC5nbHlwaC52MS5SZW5hbWVDaGF0UmVzcG9uc2USRwoKRGVsZXRlQ2hhdBIbLmdseXBoLnYxLkRlbGV0ZUNoYXRSZXF1ZXN0GhwuZ2x5cGgudjEuRGVsZXRlQ2hhdFJlc3BvbnNlEkoKC1NlbmRNZXNzYWdlEhwuZ2x5cGgudjEuU2VuZE1lc3NhZ2VSZXF1ZXN0Gh0uZ2x5cGgudjEuU2VuZE1lc3NhZ2VSZXNwb25zZRJHCgpDYW5jZWxUdXJuEhsuZ2x5cGgudjEuQ2FuY2VsVHVyblJlcXVlc3QaHC5nbHlwaC52MS5DYW5jZWxUdXJuUmVzcG9uc2USRgoJV2F0Y2hDaGF0EhouZ2x5cGgudjEuV2F0Y2hDaGF0UmVxdWVzdBobLmdseXBoLnYxLldhdGNoQ2hhdFJlc3BvbnNlMAFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message glyph.v1.Chat
@@ -350,6 +350,147 @@ export const DeleteChatResponseSchema: GenMessage<DeleteChatResponse> = /*@__PUR
   messageDesc(file_glyph_v1_chat, 12);
 
 /**
+ * @generated from message glyph.v1.SendMessageRequest
+ */
+export type SendMessageRequest = Message<"glyph.v1.SendMessageRequest"> & {
+  /**
+   * @generated from field: string chat_id = 1;
+   */
+  chatId: string;
+
+  /**
+   * @generated from field: string text = 2;
+   */
+  text: string;
+};
+
+/**
+ * Describes the message glyph.v1.SendMessageRequest.
+ * Use `create(SendMessageRequestSchema)` to create a new message.
+ */
+export const SendMessageRequestSchema: GenMessage<SendMessageRequest> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 13);
+
+/**
+ * @generated from message glyph.v1.SendMessageResponse
+ */
+export type SendMessageResponse = Message<"glyph.v1.SendMessageResponse"> & {
+};
+
+/**
+ * Describes the message glyph.v1.SendMessageResponse.
+ * Use `create(SendMessageResponseSchema)` to create a new message.
+ */
+export const SendMessageResponseSchema: GenMessage<SendMessageResponse> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 14);
+
+/**
+ * @generated from message glyph.v1.CancelTurnRequest
+ */
+export type CancelTurnRequest = Message<"glyph.v1.CancelTurnRequest"> & {
+  /**
+   * @generated from field: string chat_id = 1;
+   */
+  chatId: string;
+};
+
+/**
+ * Describes the message glyph.v1.CancelTurnRequest.
+ * Use `create(CancelTurnRequestSchema)` to create a new message.
+ */
+export const CancelTurnRequestSchema: GenMessage<CancelTurnRequest> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 15);
+
+/**
+ * @generated from message glyph.v1.CancelTurnResponse
+ */
+export type CancelTurnResponse = Message<"glyph.v1.CancelTurnResponse"> & {
+};
+
+/**
+ * Describes the message glyph.v1.CancelTurnResponse.
+ * Use `create(CancelTurnResponseSchema)` to create a new message.
+ */
+export const CancelTurnResponseSchema: GenMessage<CancelTurnResponse> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 16);
+
+/**
+ * @generated from message glyph.v1.WatchChatRequest
+ */
+export type WatchChatRequest = Message<"glyph.v1.WatchChatRequest"> & {
+  /**
+   * @generated from field: string chat_id = 1;
+   */
+  chatId: string;
+};
+
+/**
+ * Describes the message glyph.v1.WatchChatRequest.
+ * Use `create(WatchChatRequestSchema)` to create a new message.
+ */
+export const WatchChatRequestSchema: GenMessage<WatchChatRequest> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 17);
+
+/**
+ * @generated from message glyph.v1.ChatEvent
+ */
+export type ChatEvent = Message<"glyph.v1.ChatEvent"> & {
+  /**
+   * @generated from field: glyph.v1.ChatEventType type = 1;
+   */
+  type: ChatEventType;
+
+  /**
+   * @generated from field: string chat_id = 2;
+   */
+  chatId: string;
+
+  /**
+   * @generated from field: string message_id = 3;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: int32 offset = 4;
+   */
+  offset: number;
+
+  /**
+   * @generated from field: string text = 5;
+   */
+  text: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp occurred_at = 6;
+   */
+  occurredAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message glyph.v1.ChatEvent.
+ * Use `create(ChatEventSchema)` to create a new message.
+ */
+export const ChatEventSchema: GenMessage<ChatEvent> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 18);
+
+/**
+ * @generated from message glyph.v1.WatchChatResponse
+ */
+export type WatchChatResponse = Message<"glyph.v1.WatchChatResponse"> & {
+  /**
+   * @generated from field: glyph.v1.ChatEvent event = 1;
+   */
+  event?: ChatEvent | undefined;
+};
+
+/**
+ * Describes the message glyph.v1.WatchChatResponse.
+ * Use `create(WatchChatResponseSchema)` to create a new message.
+ */
+export const WatchChatResponseSchema: GenMessage<WatchChatResponse> = /*@__PURE__*/
+  messageDesc(file_glyph_v1_chat, 19);
+
+/**
  * @generated from enum glyph.v1.ChatStatus
  */
 export enum ChatStatus {
@@ -524,6 +665,30 @@ export const ChatService: GenService<{
     methodKind: "unary";
     input: typeof DeleteChatRequestSchema;
     output: typeof DeleteChatResponseSchema;
+  },
+  /**
+   * @generated from rpc glyph.v1.ChatService.SendMessage
+   */
+  sendMessage: {
+    methodKind: "unary";
+    input: typeof SendMessageRequestSchema;
+    output: typeof SendMessageResponseSchema;
+  },
+  /**
+   * @generated from rpc glyph.v1.ChatService.CancelTurn
+   */
+  cancelTurn: {
+    methodKind: "unary";
+    input: typeof CancelTurnRequestSchema;
+    output: typeof CancelTurnResponseSchema;
+  },
+  /**
+   * @generated from rpc glyph.v1.ChatService.WatchChat
+   */
+  watchChat: {
+    methodKind: "server_streaming";
+    input: typeof WatchChatRequestSchema;
+    output: typeof WatchChatResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_glyph_v1_chat, 0);

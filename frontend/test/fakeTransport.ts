@@ -26,6 +26,20 @@ export interface FakeServices {
 }
 
 export function fakeTransport(impl: FakeServices = {}): Transport {
+  // Tests that render chat UI without caring about liveness or settings
+  // still mount hooks that open a WatchChat stream and read Settings.
+  const chat = impl.chat ?? {};
+  if (!chat.watchChat) {
+    chat.watchChat = async function* (): AsyncIterable<{ event?: never }> {
+      // Immediately ends; the hook treats a closed stream like a server
+      // restart and reconnects with backoff.
+    };
+  }
+  const settings = impl.settings ?? {};
+  if (!settings.getSettings) {
+    settings.getSettings = () => Promise.resolve({});
+  }
+  impl = { ...impl, chat, settings };
   return createRouterTransport(({ service }) => {
     const register = <T extends { typeName: string }>(
       svc: T,
