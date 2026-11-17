@@ -825,7 +825,7 @@ mod cancel {
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
     async fn running_chat_without_job_is_recovered(pool: PgPool) {
-        let server = recovery_server(&pool).await;
+        recovery_server(&pool).await;
         let chat = new_chat(&pool).await;
         let mut tx = store(&pool).begin().await.unwrap();
         assert!(tx.begin_turn(chat.id).await.unwrap());
@@ -859,5 +859,160 @@ mod cancel {
             assert!(started.elapsed() < Duration::from_secs(120), "not recovered in time");
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
+    }
+}
+
+// --- WatchChat (3.6) ----------------------------------------------------------
+
+mod watch {
+    use super::*;
+    use glyph_backend::features::chat::domain::events::ChatEventKind;
+    use glyph_backend::proto::pb;
+    use http_body_util::BodyExt;
+    use prost::Message;
+    use std::time::Duration;
+    use tower::util::ServiceExt;
+
+    /// One decoded gRPC-Web frame from the response body.
+    async fn frame(body: &mut axum::body::Body, buf: &mut Vec<u8>) -> Option<pb::WatchChatResponse> {
+        loop {
+            while buf.len() >= 5 {
+                let len = u32::from_be_bytes(buf[1..5].try_into().unwrap()) as usize;
+                if buf.len() < 5 + len {
+                    break;
+                }
+                let event = pb::WatchChatResponse::decode(&buf[5..5 + len]).unwrap();
+                buf.drain(..5 + len);
+                return Some(event);
+            }
+            let frame = body.frame().await?.ok()?;
+            if let Ok(data) = frame.into_data() {
+                buf.extend_from_slice(&data);
+            }
+        }
+    }
+
+    async fn open(server: &common::TestServer, chat: ChatId) -> (axum::body::Body, Vec<u8>) {
+        let request = pb::WatchChatRequest { chat_id: chat.to_string() }.encode_to_vec();
+        let mut wire = vec![0u8];
+        wire.extend_from_slice(&(request.len() as u32).to_be_bytes());
+        wire.extend_from_slice(&request);
+        let response = server
+            .router
+            .clone()
+            .oneshot(
+                axum::http::Request::post("/glyph.v1.ChatService/WatchChat")
+                    .header("content-type", "application/grpc-web+proto")
+                    .header("x-grpc-web", "1")
+                    .body(axum::body::Body::from(wire))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        (response.into_body(), Vec::new())
+    }
+
+    fn kind(event: &pb::WatchChatResponse) -> pb::ChatEventType {
+        event.event.as_ref().unwrap().r#type()
+    }
+
+    async fn notify(pool: &PgPool, kind: ChatEventKind, chat: ChatId, text: &str) {
+        sqlx::query("SELECT pg_notify('glyph_chat', $1)")
+            .bind(
+                serde_json::to_string(&glyph_backend::features::chat::domain::events::ChatEvent {
+                    kind,
+                    chat_id: chat.to_string(),
+                    offset: Some(0),
+                    text: Some(text.into()),
+                    message_id: None,
+                    occurred_at: chrono::Utc::now(),
+                })
+                .unwrap(),
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn stream_opens_with_heartbeat_and_delivers_deltas_and_updates(pool: PgPool) {
+        let server = super::turn::runner_server(
+            &pool,
+            Arc::new(glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner::scripted(vec![
+                glyph_backend::infrastructure::fake_chat_runner::Script::Delta(
+                    "The quick brown fox jumps over the lazy dog again and again".into(),
+                ),
+            ])),
+        )
+        .await;
+        super::turn::set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        let (mut body, mut buf) = open(&server, chat.id).await;
+        let first = tokio::time::timeout(Duration::from_secs(5), frame(&mut body, &mut buf))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(kind(&first), pb::ChatEventType::Heartbeat);
+        super::turn::send(&server, chat.id, "hi").await;
+        let mut saw_delta = false;
+        let event = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let event = frame(&mut body, &mut buf).await.expect("stream ended");
+                match kind(&event) {
+                    pb::ChatEventType::TextDelta => {
+                        let e = event.event.as_ref().unwrap();
+                        assert_eq!(e.chat_id, chat.id.to_string());
+                        saw_delta = true;
+                    }
+                    pb::ChatEventType::ChatUpdated | pb::ChatEventType::MessageUpdated if saw_delta => {
+                        return event;
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert!(matches!(
+            kind(&event),
+            pb::ChatEventType::ChatUpdated | pb::ChatEventType::MessageUpdated
+        ));
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn idle_yields_heartbeats_and_other_chats_are_filtered(pool: PgPool) {
+        let server = common::spawn_with(
+            pool.clone(),
+            common::config_with(&[("GLYPH_LIVE_HEARTBEAT_SECONDS", "1")]),
+            glyph_backend::app::bootstrap::Overrides {
+                background: Some(true),
+                ..Default::default()
+            },
+        )
+        .await;
+        let watched = new_chat(&pool).await;
+        let other = new_chat(&pool).await;
+        let (mut body, mut buf) = open(&server, watched.id).await;
+        // Give the listener a moment, then publish another chat's delta.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        notify(&pool, ChatEventKind::TextDelta, other.id, "noise").await;
+        let event = tokio::time::timeout(Duration::from_secs(5), async {
+            let _ = frame(&mut body, &mut buf).await; // greeting heartbeat
+            loop {
+                let event = frame(&mut body, &mut buf).await.expect("stream ended");
+                if kind(&event) == pb::ChatEventType::Heartbeat {
+                    return event;
+                }
+                assert_ne!(
+                    event.event.as_ref().unwrap().chat_id,
+                    other.id.to_string(),
+                    "another chat's delta leaked"
+                );
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(kind(&event), pb::ChatEventType::Heartbeat);
     }
 }

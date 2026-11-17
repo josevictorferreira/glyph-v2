@@ -189,6 +189,24 @@ impl ChatService {
             serde_json::json!({}),
         )]).await?;
         tx.commit().await?;
+        // Bus notifications for the streaming client: the message (status,
+        // text) and then the chat (idle) changed.
+        publisher.publish(&ChatEvent {
+            kind: ChatEventKind::MessageUpdated,
+            chat_id: chat_id.to_string(),
+            offset: None,
+            text: None,
+            message_id: Some(assistant.to_string()),
+            occurred_at: chrono::Utc::now(),
+        });
+        publisher.publish(&ChatEvent {
+            kind: ChatEventKind::ChatUpdated,
+            chat_id: chat_id.to_string(),
+            offset: None,
+            text: None,
+            message_id: None,
+            occurred_at: chrono::Utc::now(),
+        });
         Ok(())
     }
 

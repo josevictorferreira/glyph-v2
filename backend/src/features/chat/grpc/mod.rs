@@ -1,20 +1,130 @@
-//! `ChatService` gRPC edge.
+//! `ChatService` gRPC edge, including the `WatchChat` stream.
+use std::pin::Pin;
+use std::sync::Arc;
+use std::time::Duration;
+use chrono::Utc;
+use futures_core::Stream;
+use futures_util::StreamExt;
+use tokio::sync::broadcast::error::RecvError;
+use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
+use crate::features::chat::domain::events::{ChatEvent, ChatEventKind};
+use crate::features::chat::ports::ChatBus;
 use crate::features::chat::application::ChatService;
 use crate::features::chat::domain::model::*;
 use crate::proto::convert::{parse_id, timestamp};
+use crate::shared::ids::ChatId;
 use crate::proto::pb;
 use crate::proto::pb::chat_service_server::ChatService as Rpc;
 
 #[derive(Clone)]
 pub struct ChatGrpc {
     service: ChatService,
+    bus: Arc<dyn ChatBus>,
+    heartbeat: Option<Duration>,
+    stop: CancellationToken,
 }
 
 impl ChatGrpc {
-    pub fn new(service: ChatService) -> Self {
-        Self { service }
+    pub fn new(service: ChatService, bus: Arc<dyn ChatBus>, heartbeat: Option<Duration>, stop: CancellationToken) -> Self {
+        Self { service, bus, heartbeat, stop }
     }
+}
+
+fn event_kind(k: ChatEventKind) -> pb::ChatEventType {
+    match k {
+        ChatEventKind::TextDelta => pb::ChatEventType::TextDelta,
+        ChatEventKind::MessageUpdated => pb::ChatEventType::MessageUpdated,
+        ChatEventKind::ChatUpdated => pb::ChatEventType::ChatUpdated,
+        ChatEventKind::Resync => pb::ChatEventType::Resync,
+        ChatEventKind::Heartbeat => pb::ChatEventType::Heartbeat,
+    }
+}
+
+fn watch_message(chat: &str, event: &ChatEvent) -> pb::WatchChatResponse {
+    pb::WatchChatResponse {
+        event: Some(pb::ChatEvent {
+            r#type: event_kind(event.kind) as i32,
+            chat_id: chat.to_string(),
+            message_id: event.message_id.clone().unwrap_or_default(),
+            offset: event.offset.unwrap_or(0) as i32,
+            text: event.text.clone().unwrap_or_default(),
+            occurred_at: Some(crate::proto::convert::timestamp(event.occurred_at)),
+        }),
+    }
+}
+
+fn synthetic(k: ChatEventKind, chat: &str) -> ChatEvent {
+    ChatEvent {
+        kind: k,
+        chat_id: chat.to_string(),
+        offset: None,
+        text: None,
+        message_id: None,
+        occurred_at: Utc::now(),
+    }
+}
+
+pub type ChatEventStream =
+    Pin<Box<dyn Stream<Item = Result<pb::WatchChatResponse, Status>> + Send>>;
+
+struct State {
+    rx: tokio::sync::broadcast::Receiver<ChatEvent>,
+    chat: String,
+    heartbeat: Option<tokio::time::Interval>,
+    stop: CancellationToken,
+}
+
+/// Events for `chat` (and broadcast RESYNCs); a lagging subscriber gets a
+/// RESYNC instead of the events it missed. Opens with a HEARTBEAT so clients
+/// can mark the connection live without waiting for an event. Ends when the
+/// bus closes or on server shutdown.
+pub fn watch(
+    bus: &dyn ChatBus,
+    chat: ChatId,
+    heartbeat: Option<Duration>,
+    stop: CancellationToken,
+) -> ChatEventStream {
+    let greeting = watch_message(
+        &chat.to_string(),
+        &synthetic(ChatEventKind::Heartbeat, &chat.to_string()),
+    );
+    let state = State {
+        rx: bus.subscribe(),
+        chat: chat.to_string(),
+        heartbeat: heartbeat.map(|every| {
+            let mut i = tokio::time::interval_at(tokio::time::Instant::now() + every, every);
+            i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            i
+        }),
+        stop,
+    };
+    Box::pin(
+        futures_util::stream::once(async move { Ok(greeting) }).chain(
+            futures_util::stream::unfold(state, |mut s| async move {
+                loop {
+                    let beat = async {
+                        match s.heartbeat.as_mut() {
+                            Some(i) => i.tick().await,
+                            None => std::future::pending::<tokio::time::Instant>().await,
+                        }
+                    };
+                    let event = tokio::select! {
+                        _ = s.stop.cancelled() => return None,
+                        _ = beat => synthetic(ChatEventKind::Heartbeat, &s.chat),
+                        received = s.rx.recv() => match received {
+                            Ok(e) if e.chat_id == s.chat || (e.kind == ChatEventKind::Resync && e.chat_id.is_empty()) => e,
+                            Ok(_) => continue,
+                            Err(RecvError::Lagged(_)) => synthetic(ChatEventKind::Resync, &s.chat),
+                            Err(RecvError::Closed) => return None,
+                        },
+                    };
+                    let msg = watch_message(&s.chat, &event);
+                    return Some((Ok(msg), s));
+                }
+            }),
+        ),
+    )
 }
 
 fn chat(c: &Chat) -> pb::Chat {
@@ -132,5 +242,17 @@ impl Rpc for ChatGrpc {
             .cancel_turn(parse_id(&r.get_ref().chat_id, "chat_id")?)
             .await?;
         Ok(Response::new(pb::CancelTurnResponse {}))
+    }
+    async fn watch_chat(
+        &self,
+        request: Request<pb::WatchChatRequest>,
+    ) -> Result<Response<ChatEventStream>, Status> {
+        let chat = parse_id(&request.get_ref().chat_id, "chat_id")?;
+        Ok(Response::new(watch(
+            self.bus.as_ref(),
+            chat,
+            self.heartbeat,
+            self.stop.clone(),
+        )))
     }
 }

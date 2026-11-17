@@ -12,6 +12,7 @@ service ChatService {
   rpc DeleteChat(DeleteChatRequest) returns (DeleteChatResponse);
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
   rpc CancelTurn(CancelTurnRequest) returns (CancelTurnResponse);
+  rpc WatchChat(WatchChatRequest) returns (stream WatchChatResponse);
 }
 
 enum ChatStatus {
@@ -128,3 +129,20 @@ message CancelTurnRequest {
   string chat_id = 1;
 }
 message CancelTurnResponse {}
+
+message WatchChatRequest {
+  string chat_id = 1;
+}
+
+message ChatEvent {
+  ChatEventType type = 1;
+  string chat_id = 2;
+  string message_id = 3;
+  int32 offset = 4;
+  string text = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+}
+
+message WatchChatResponse {
+  ChatEvent event = 1;
+}

@@ -40,7 +40,7 @@ use crate::infrastructure::jobs::recovery::{self, Recovery};
 use crate::infrastructure::jobs::recurring::{self, Recurring};
 use crate::infrastructure::jobs::worker::Worker;
 use crate::infrastructure::pi::runner::{PiConfig, PiStepRunner};
-use crate::infrastructure::postgres::listener::{self, LiveHub};
+use crate::infrastructure::postgres::listener::{self, ChatHub, LiveHub};
 use crate::infrastructure::postgres::{self, PgStore};
 use crate::proto;
 use crate::proto::pb::catalog_service_server::CatalogServiceServer;
@@ -206,7 +206,11 @@ pub async fn build_with(
     // --- live --------------------------------------------------------------
     let stop = CancellationToken::new();
     let hub = LiveHub::new(listener::CAPACITY);
-    let mut background = vec![hub.clone().spawn_listener(pool.clone(), stop.clone())];
+    let chat_hub = ChatHub::new(listener::CAPACITY);
+    let mut background = vec![
+        hub.clone().spawn_listener(pool.clone(), stop.clone()),
+        chat_hub.clone().spawn_listener(pool.clone(), stop.clone()),
+    ];
 
     // --- transport ---------------------------------------------------------
     let state = AppState {
@@ -243,7 +247,12 @@ pub async fn build_with(
         )))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
         .add_service(SettingsServiceServer::new(SettingsGrpc::new(settings)))
-        .add_service(ChatServiceServer::new(ChatGrpc::new(chat.clone())))
+        .add_service(ChatServiceServer::new(ChatGrpc::new(
+            chat.clone(),
+            Arc::new(chat_hub),
+            config.live_heartbeat,
+            stop.clone(),
+        )))
         .add_service(LiveServiceServer::new(LiveGrpc::new(
             Arc::new(hub),
             config.live_heartbeat,
