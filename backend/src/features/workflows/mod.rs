@@ -8,7 +8,7 @@ pub mod domain;
 pub mod grpc;
 pub mod ports;
 
-pub use application::{Mutation, WorkflowService};
+pub use application::{MAX_LIST_LIMIT, Mutation, WorkflowService};
 pub use domain::catalog_view::{self, CatalogView};
 pub use domain::events;
 pub use domain::model::{self, Workflow, WorkflowStatus};
@@ -19,4 +19,4 @@ pub use domain::validator;
 pub use domain::workflow::{Events, WorkflowInputFields};
 pub use grpc::workflow_to_pb;
 pub use ports::catalog::CatalogReader;
-pub use ports::repository::{WorkflowStore, WorkflowTx};
+pub use ports::repository::{ListFilter, WorkflowStore, WorkflowTx};

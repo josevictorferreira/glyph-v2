@@ -236,14 +236,14 @@ pub async fn build_with(
     let grpc = Routes::new(health_service)
         .add_service(reflection)
         .add_service(CatalogServiceServer::new(CatalogGrpc::new(
-            list_models,
+            list_models.clone(),
             refresh_models.clone(),
         )))
         .add_service(WorkflowServiceServer::new(WorkflowGrpc::new(
             workflows.clone(),
         )))
         .add_service(DefinitionServiceServer::new(DefinitionGrpc::new(
-            definitions,
+            definitions.clone(),
         )))
         .add_service(RunServiceServer::new(RunGrpc::new(runs.clone())))
         .add_service(SettingsServiceServer::new(SettingsGrpc::new(settings)))
@@ -327,8 +327,14 @@ pub async fn build_with(
         }
     }
 
+    let agent = crate::features::chat::http::AgentApi::new(
+        workflows.clone(),
+        definitions.clone(),
+        list_models.clone(),
+        runs.clone(),
+    );
     Ok(App {
-        router: router::build(state, grpc, router::cors(&config.cors_origins)),
+        router: router::build(state, agent, grpc, router::cors(&config.cors_origins)),
         listen_addr: config.listen_addr,
         stop,
         background,

@@ -5,10 +5,15 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::app::state::AppState;
-use crate::features::{definition, health, runs};
+use crate::features::{chat, definition, health, runs};
 
 /// One router, one port: plain HTTP routes + gRPC (native h2 and gRPC-Web).
-pub fn build(state: AppState, grpc: Router, cors: CorsLayer) -> Router {
+pub fn build(
+    state: AppState,
+    agent: chat::http::AgentApi,
+    grpc: Router,
+    cors: CorsLayer,
+) -> Router {
     Router::new()
         .route("/up", get(health::http::up))
         .route(definition::SCHEMA_ROUTE, get(definition::http::schema))
@@ -21,6 +26,7 @@ pub fn build(state: AppState, grpc: Router, cors: CorsLayer) -> Router {
             get(runs::http::preview),
         )
         .with_state(state)
+        .nest("/agent/v1", chat::http::routes(agent))
         .merge(grpc)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
