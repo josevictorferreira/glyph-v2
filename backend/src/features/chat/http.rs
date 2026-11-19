@@ -94,32 +94,73 @@ impl IntoResponse for ToolOk {
 }
 
 /// `DomainError` → HTTP with the same message its gRPC twin returns
-/// (`proto::status`), so the agent can act on the words.
+/// (`proto::status`), so the agent can act on the words. Refusals carry
+/// their blocking issues in `details` so the model can fix them.
 fn error_response(error: DomainError) -> Response {
-    let (status, message): (StatusCode, String) = match error {
-        DomainError::NotFound(what) => (StatusCode::NOT_FOUND, format!("{what} not found")),
-        DomainError::Invalid(message) => (StatusCode::UNPROCESSABLE_ENTITY, message),
+    let (status, message, details): (StatusCode, String, Option<Value>) = match error {
+        DomainError::NotFound(what) => {
+            (StatusCode::NOT_FOUND, format!("{what} not found"), None)
+        }
+        DomainError::Invalid(message) => (StatusCode::UNPROCESSABLE_ENTITY, message, None),
         DomainError::Violations(violations) => {
             let message = violations
                 .first()
                 .map(|v| v.message.clone())
                 .unwrap_or_else(|| "The document is invalid.".into());
-            (StatusCode::UNPROCESSABLE_ENTITY, message)
+            (StatusCode::UNPROCESSABLE_ENTITY, message, None)
         }
-        DomainError::Precondition { reason, .. } => (StatusCode::CONFLICT, reason),
+        DomainError::Precondition { reason, issues, .. } => (
+            StatusCode::CONFLICT,
+            reason,
+            Some(json!({ "issues": issues_json(&issues) })),
+        ),
         DomainError::Conflict => (
             StatusCode::CONFLICT,
-            "The workflow changed since this definition was loaded. Reload and try again.".into(),
+            "The workflow changed since you exported it. Call get_workflow_yaml again and reapply your edit."
+                .into(),
+            None,
         ),
         DomainError::Internal(error) => {
             tracing::error!(error = %format!("{error:#}"), "internal error");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Something went wrong. Try again.".into(),
+                None,
             )
         }
     };
-    (status, Json(json!({ "error": message }))).into_response()
+    let body = match details {
+        Some(details) => json!({ "error": message, "details": details }),
+        None => json!({ "error": message }),
+    };
+    (status, Json(body)).into_response()
+}
+
+/// Issues as the agent sees them: message, location and blockingness.
+fn issues_json(issues: &[crate::shared::issue::Issue]) -> Vec<Value> {
+    issues
+        .iter()
+        .map(|issue| {
+            json!({
+                "message": issue.message,
+                "entity": format!("{}:{}", entity_kind(issue.entity_type), issue.entity_id),
+                "field": issue.field,
+                "blocking": issue.blocking(),
+            })
+        })
+        .collect()
+}
+
+fn entity_kind(entity: crate::shared::issue::EntityType) -> &'static str {
+    use crate::shared::issue::EntityType as E;
+    match entity {
+        E::Workflow => "workflow",
+        E::WorkflowStep => "step",
+        E::StepInput => "step_input",
+        E::WorkflowInput => "workflow_input",
+        E::WorkflowConnection => "connection",
+        E::WorkflowSchedule => "schedule",
+    }
 }
 
 fn workflow_id(params: &Value) -> Result<WorkflowId, DomainError> {
@@ -265,10 +306,156 @@ async fn run(api: &AgentApi, tool: &str, params: &Value) -> Result<ToolOk, Domai
                     .collect::<Vec<_>>() }),
             })
         }
-        // Write tools land with task 4.2; reaching one is a programming
-        // error on the extension side, not a missing route.
-        "update_workflow" | "create_workflow" | "set_workflow_state" | "start_run" | "get_run" => {
-            Err(DomainError::invalid("this tool is not implemented yet."))
+        "update_workflow" => {
+            let id = workflow_id(params)?;
+            let fingerprint = params["fingerprint"].as_str().unwrap_or("");
+            if fingerprint.is_empty() {
+                return Err(DomainError::invalid(
+                    "update_workflow needs the fingerprint from get_workflow_yaml.",
+                ));
+            }
+            let yaml = params["yaml"]
+                .as_str()
+                .ok_or_else(|| DomainError::invalid("yaml is required."))?;
+            let previous = api.definitions.export(id).await?;
+            let mutation = api.definitions.apply(id, yaml, Some(fingerprint)).await?;
+            Ok(ToolOk {
+                text: format!(
+                    "Updated {} ({}).",
+                    mutation.workflow.name,
+                    mutation.workflow.status.as_str()
+                ),
+                details: json!({
+                    "workflow_id": id.as_uuid().to_string(),
+                    "workflow_name": mutation.workflow.name,
+                    "fingerprint": mutation.value,
+                    "previous_yaml": previous.yaml,
+                    "summary": "Edited the definition.",
+                    "issues": issues_json(&mutation.issues),
+                }),
+            })
+        }
+        "create_workflow" => {
+            let yaml = params["yaml"]
+                .as_str()
+                .ok_or_else(|| DomainError::invalid("yaml is required."))?;
+            let mutation = api.definitions.import(yaml).await?;
+            Ok(ToolOk {
+                text: format!(
+                    "Created {} ({}).",
+                    mutation.workflow.name,
+                    mutation.workflow.status.as_str()
+                ),
+                details: json!({
+                    "workflow_id": mutation.workflow.id.as_uuid().to_string(),
+                    "workflow_name": mutation.workflow.name,
+                    "issues": issues_json(&mutation.issues),
+                }),
+            })
+        }
+        "set_workflow_state" => {
+            let id = workflow_id(params)?;
+            let action = params["action"]
+                .as_str()
+                .ok_or_else(|| DomainError::invalid("action is required."))?;
+            let (text, status, issues) = match action {
+                "activate" => {
+                    let mutation = api.workflows.activate(id).await?;
+                    (
+                        format!("Activated {}.", mutation.workflow.name),
+                        mutation.workflow.status.as_str(),
+                        mutation.issues,
+                    )
+                }
+                "pause" => {
+                    let mutation = api.workflows.pause(id).await?;
+                    (
+                        format!("Paused {}.", mutation.workflow.name),
+                        mutation.workflow.status.as_str(),
+                        mutation.issues,
+                    )
+                }
+                "resume" => {
+                    let mutation = api.workflows.resume(id).await?;
+                    let resumed = mutation.value;
+                    let name = mutation.workflow.name.clone();
+                    (
+                        if resumed {
+                            format!("Resumed {name}.")
+                        } else {
+                            format!("{name} has unresolved issues and needs attention.")
+                        },
+                        mutation.workflow.status.as_str(),
+                        mutation.issues,
+                    )
+                }
+                other => {
+                    return Err(DomainError::invalid(format!(
+                        "action must be activate, pause or resume, not {other}."
+                    )));
+                }
+            };
+            Ok(ToolOk {
+                text,
+                details: json!({
+                    "workflow_id": id.as_uuid().to_string(),
+                    "status": status,
+                    "issues": issues_json(&issues),
+                }),
+            })
+        }
+        "start_run" => {
+            let id = workflow_id(params)?;
+            let mut values = serde_json::Map::new();
+            if let Some(object) = params["values"].as_object() {
+                for (name, value) in object {
+                    let text = match value {
+                        Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    if !text.trim().is_empty() {
+                        values.insert(name.clone(), Value::String(text));
+                    }
+                }
+            }
+            let run = api.runs.start_run(id, values).await?;
+            Ok(ToolOk {
+                text: format!("Run {} is {}.", run.id.as_uuid(), run.status.as_str()),
+                details: json!({
+                    "workflow_id": id.as_uuid().to_string(),
+                    "run_id": run.id.as_uuid().to_string(),
+                    "status": run.status.as_str(),
+                }),
+            })
+        }
+        "get_run" => {
+            let id = workflow_id(params)?;
+            let run_id = params["run_id"]
+                .as_str()
+                .and_then(|raw| raw.parse().ok())
+                .ok_or_else(|| DomainError::invalid("run_id is required."))?;
+            let (run, step_runs) = api.runs.get_run(id, run_id).await?;
+            let mut text = format!("Run {} is {}.\n", run.id.as_uuid(), run.status.as_str());
+            for step in &step_runs {
+                text.push_str(&format!("- {}: {}\n", step.step_name, step.status.as_str()));
+            }
+            Ok(ToolOk {
+                text,
+                details: json!({
+                    "workflow_id": id.as_uuid().to_string(),
+                    "run_id": run.id.as_uuid().to_string(),
+                    "status": run.status.as_str(),
+                    "steps": step_runs
+                        .iter()
+                        .map(|s| json!({
+                            "id": s.id.as_uuid().to_string(),
+                            "name": s.step_name,
+                            "status": s.status.as_str(),
+                            "error": s.human_error,
+                        }))
+                        .collect::<Vec<_>>(),
+                }),
+            })
         }
         _ => Err(DomainError::invalid("unknown tool.")),
     }

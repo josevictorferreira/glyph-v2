@@ -168,3 +168,293 @@ async fn maps_domain_errors_verbatim(pool: PgPool) {
     let (status, body) = call(&server, "no_such_tool", json!({})).await;
     assert_eq!(status, 404, "{body}");
 }
+
+// --- Write tools (4.2) --------------------------------------------------------
+
+mod write {
+    use super::*;
+    use glyph_backend::proto::pb;
+    use glyph_backend::proto::pb::workflow_service_client::WorkflowServiceClient;
+
+    /// The full fixture with a changed description, kept as YAML text.
+    fn edited_yaml(original: &str) -> String {
+        original.replace(
+            "Summarise competitor moves every Monday.",
+            "Summarise competitor moves every Monday, briefly.",
+        )
+    }
+
+    /// A helper-only workflow: valid without any provider catalog.
+    const HELPERS: &str = "name: Helpers\nsteps:\n - name: one\n   kind: helper\n";
+
+    async fn helper_workflow(server: &common::TestServer) -> String {
+        let (status, body) = call(&server, "create_workflow", json!({ "yaml": HELPERS })).await;
+        assert_eq!(status, 200, "{body}");
+        body["details"]["workflow_id"].as_str().unwrap().to_string()
+    }
+
+    async fn export_yaml(server: &common::TestServer, id: &str) -> (String, String) {
+        let mut defs = DefinitionServiceClient::new(server.channel().await);
+        let export = defs
+            .export_definition(glyph_backend::proto::pb::ExportDefinitionRequest {
+                workflow_id: id.to_string(),
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        (export.yaml, export.fingerprint)
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn update_workflow_needs_fingerprint_and_rejects_stale(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let id = seeded_workflow(&server).await;
+        let (yaml, fingerprint) = export_yaml(&server, &id).await;
+        let edited = edited_yaml(&yaml);
+        // No fingerprint → rejected, nothing changes.
+        let (status, body) = call(
+            &server,
+            "update_workflow",
+            json!({ "workflow_id": id, "yaml": edited }),
+        )
+        .await;
+        assert_eq!(status, 422, "{body}");
+        assert_eq!(
+            body["error"],
+            "update_workflow needs the fingerprint from get_workflow_yaml."
+        );
+        let (again, _) = export_yaml(&server, &id).await;
+        assert_eq!(again, yaml, "changed without a fingerprint");
+        // Stale fingerprint → re-export message.
+        let (status, body) = call(
+            &server,
+            "update_workflow",
+            json!({ "workflow_id": id, "yaml": edited, "fingerprint": "stale" }),
+        )
+        .await;
+        assert_eq!(status, 409, "{body}");
+        assert_eq!(
+            body["error"],
+            "The workflow changed since you exported it. Call get_workflow_yaml again and reapply your edit."
+        );
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn update_workflow_applies_and_carries_revert_details(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let id = seeded_workflow(&server).await;
+        let (yaml, fingerprint) = export_yaml(&server, &id).await;
+        let edited = edited_yaml(&yaml);
+        let (status, body) = call(
+            &server,
+            "update_workflow",
+            json!({ "workflow_id": id, "yaml": edited, "fingerprint": fingerprint }),
+        )
+        .await;
+        assert_eq!(status, 200, "{body}");
+        let details = &body["details"];
+        assert_eq!(details["workflow_name"], "Weekly competitor digest");
+        assert_eq!(details["workflow_id"], id);
+        assert_eq!(details["previous_yaml"], yaml);
+        assert_eq!(details["summary"], "Edited the definition.");
+        let new_fingerprint = details["fingerprint"].as_str().unwrap().to_string();
+        assert!(!new_fingerprint.is_empty(), "{body}");
+        assert_ne!(new_fingerprint, fingerprint);
+        // The change is applied; the old fingerprint is stale now.
+        let (after, _) = export_yaml(&server, &id).await;
+        assert!(after.contains("briefly"), "{after}");
+        let (status, body) = call(
+            &server,
+            "update_workflow",
+            json!({ "workflow_id": id, "yaml": edited, "fingerprint": fingerprint }),
+        )
+        .await;
+        assert_eq!(status, 409, "{body}");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn update_workflow_sets_and_round_trips_schedule(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let id = seeded_workflow(&server).await;
+        let (yaml, fingerprint) = export_yaml(&server, &id).await;
+        // cron 0 9 * * 1 → 0 9 * * 2 (Tuesdays), new timezone. The
+        // exporter writes the cron unquoted.
+        let edited = yaml
+            .replace("cron: 0 9 * * 1", "cron: 0 9 * * 2")
+            .replace("timezone: America/Sao_Paulo", "timezone: UTC");
+        let (status, body) = call(
+            &server,
+            "update_workflow",
+            json!({ "workflow_id": id, "yaml": edited, "fingerprint": fingerprint }),
+        )
+        .await;
+        assert_eq!(status, 200, "{body}");
+        let (after, _) = export_yaml(&server, &id).await;
+        assert!(after.contains("cron: 0 9 * * 2"), "{after}");
+        assert!(after.contains("timezone: UTC"), "{after}");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn create_workflow_returns_id_and_issues(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let (status, body) = call(
+            &server,
+            "create_workflow",
+            json!({ "yaml": "name: Agent made\ndescription: From chat.\nsteps:\n - name: only\n   prompt: Hi\n" }),
+        )
+        .await;
+        assert_eq!(status, 200, "{body}");
+        let id = body["details"]["workflow_id"].as_str().unwrap().to_string();
+        assert!(!id.is_empty(), "{body}");
+        assert_eq!(body["details"]["workflow_name"], "Agent made");
+        // The model-less step reports its blocking issues in `details`.
+        assert!(
+            !body["details"]["issues"].as_array().unwrap().is_empty(),
+            "{body}"
+        );
+        // It exists, as a draft.
+        let mut workflows = WorkflowServiceClient::new(server.channel().await);
+        let got = workflows
+            .get_workflow(glyph_backend::proto::pb::GetWorkflowRequest { id })
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(
+            got.workflow.unwrap().summary.unwrap().status(),
+            pb::WorkflowStatus::Draft
+        );
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn create_workflow_rejects_invalid_yaml(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let (status, body) = call(
+            &server,
+            "create_workflow",
+            json!({ "yaml": "name: Broken\nsteps:\n - name: only\n   prompt: Hi\n   inputs:\n     notes: ghost\n" }),
+        )
+        .await;
+        assert_eq!(status, 422, "{body}");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap()
+                .contains("not a step or a workflow input"),
+            "{body}"
+        );
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn set_workflow_state_activates_pauses_resumes_and_refuses_blocking(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        // Blocking issues (missing models) refuse activation.
+        let id = seeded_workflow(&server).await;
+        let (status, body) = call(
+            &server,
+            "set_workflow_state",
+            json!({ "workflow_id": id, "action": "activate" }),
+        )
+        .await;
+        assert_eq!(status, 409, "{body}");
+        assert_eq!(
+            body["error"],
+            "Resolve the issues before activating the workflow."
+        );
+        assert!(
+            body["details"]["issues"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|issue| issue["blocking"] == true),
+            "{body}"
+        );
+        // A helper-only flow cycles through every action.
+        let helper_id = helper_workflow(&server).await;
+        for (action, verb, expected) in [
+            ("activate", "Activated", "active"),
+            ("pause", "Paused", "paused"),
+            ("resume", "Resumed", "active"),
+            ("pause", "Paused", "paused"),
+            ("resume", "Resumed", "active"),
+        ] {
+            let (status, body) = call(
+                &server,
+                "set_workflow_state",
+                json!({ "workflow_id": helper_id, "action": action }),
+            )
+            .await;
+            assert_eq!(status, 200, "{action}: {body}");
+            assert!(
+                body["text"].as_str().unwrap().contains(verb),
+                "{action}: {body}"
+            );
+            assert_eq!(body["details"]["status"], expected, "{action}: {body}");
+        }
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn set_workflow_state_rejects_unknown_action(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let id = seeded_workflow(&server).await;
+        let (status, body) = call(
+            &server,
+            "set_workflow_state",
+            json!({ "workflow_id": id, "action": "explode" }),
+        )
+        .await;
+        assert_eq!(status, 422, "{body}");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn start_run_returns_id_and_get_run_reports_steps(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let id = helper_workflow(&server).await;
+        let (status, body) = call(&server, "start_run", json!({ "workflow_id": id })).await;
+        assert_eq!(status, 200, "{body}");
+        let run_id = body["details"]["run_id"].as_str().unwrap().to_string();
+        assert!(!run_id.is_empty(), "{body}");
+        // Worker disabled → queued, with one step run visible.
+        let (status, body) = call(
+            &server,
+            "get_run",
+            json!({ "workflow_id": id, "run_id": run_id }),
+        )
+        .await;
+        assert_eq!(status, 200, "{body}");
+        assert!(body["text"].as_str().unwrap().contains("queued"), "{body}");
+        assert_eq!(body["details"]["status"], "queued");
+        let steps = body["details"]["steps"].as_array().unwrap();
+        assert_eq!(steps.len(), 1, "{body}");
+        assert_eq!(steps[0]["name"], "one");
+        assert_eq!(steps[0]["status"], "queued");
+        // Unknown run → 404.
+        let (status, body) = call(
+            &server,
+            "get_run",
+            json!({
+                "workflow_id": id,
+                "run_id": "00000000-0000-0000-0000-000000000000",
+            }),
+        )
+        .await;
+        assert_eq!(status, 404, "{body}");
+        assert_eq!(body["error"], "run not found");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn start_run_refuses_workflow_with_issues(pool: PgPool) {
+        let server = common::spawn(pool).await;
+        let id = seeded_workflow(&server).await;
+        // No `company` value and unavailable models → refused.
+        let (status, body) = call(&server, "start_run", json!({ "workflow_id": id })).await;
+        assert_eq!(status, 409, "{body}");
+        assert!(
+            body["details"]["issues"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|issue| issue["blocking"] == true),
+            "{body}"
+        );
+    }
+}
