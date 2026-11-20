@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -168,13 +168,24 @@ pub async fn build_with(
     );
     // --- chat --------------------------------------------------------------
     let chat = ChatService::new(Arc::new(store.clone()), settings.clone(), clock.clone());
-    let chat_runner: Arc<dyn ChatRunner> = match overrides.chat_runner.clone() {
-        Some(runner) => runner,
+    // The default fake carries a slot `FAKE_TOOL:` markers use to call the
+    // agent routes; bootstrap fills it once the router exists (the runner
+    // is behind an `Arc` before then).
+    let default_chat_runner = || {
+        let runner = FakeChatRunner::new();
+        let slot = runner.router_slot();
+        (Arc::new(runner) as Arc<dyn ChatRunner>, slot)
+    };
+    let (chat_runner, agent_router_slot): (Arc<dyn ChatRunner>, _) = match overrides
+        .chat_runner
+        .clone()
+    {
+        Some(runner) => (runner, Arc::new(OnceLock::new())),
         None => match config.step_runner {
-            StepRunnerKind::Fake => Arc::new(FakeChatRunner::new()),
             // The real Pi chat runner arrives with phase 5; until then the
             // deterministic runner stands in so wiring is exercised.
-            StepRunnerKind::Pi => Arc::new(FakeChatRunner::new()),
+            StepRunnerKind::Fake => default_chat_runner(),
+            StepRunnerKind::Pi => default_chat_runner(),
         },
     };
     let chat_publisher: Arc<dyn ChatPublisher> = Arc::new(store.clone());
@@ -333,6 +344,8 @@ pub async fn build_with(
         list_models.clone(),
         runs.clone(),
     );
+    // The fake runner's tool markers now reach the real agent routes.
+    let _ = agent_router_slot.set(crate::features::chat::http::routes(agent.clone()));
     Ok(App {
         router: router::build(state, agent, grpc, router::cors(&config.cors_origins)),
         listen_addr: config.listen_addr,

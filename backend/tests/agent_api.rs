@@ -188,7 +188,7 @@ mod write {
     const HELPERS: &str = "name: Helpers\nsteps:\n - name: one\n   kind: helper\n";
 
     async fn helper_workflow(server: &common::TestServer) -> String {
-        let (status, body) = call(&server, "create_workflow", json!({ "yaml": HELPERS })).await;
+        let (status, body) = call(server, "create_workflow", json!({ "yaml": HELPERS })).await;
         assert_eq!(status, 200, "{body}");
         body["details"]["workflow_id"].as_str().unwrap().to_string()
     }
@@ -209,7 +209,7 @@ mod write {
     async fn update_workflow_needs_fingerprint_and_rejects_stale(pool: PgPool) {
         let server = common::spawn(pool).await;
         let id = seeded_workflow(&server).await;
-        let (yaml, fingerprint) = export_yaml(&server, &id).await;
+        let (yaml, _fingerprint) = export_yaml(&server, &id).await;
         let edited = edited_yaml(&yaml);
         // No fingerprint → rejected, nothing changes.
         let (status, body) = call(

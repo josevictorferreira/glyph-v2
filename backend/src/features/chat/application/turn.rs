@@ -1,6 +1,11 @@
 //! One chat turn: consume `AgentEvent`s from a runner, publish redacted
 //! deltas, persist published text, watch cancellation, finalise in one
 //! transaction. Runners never touch storage.
+//!
+//! Tool calls split the reply into segments: `ToolStarted` closes the
+//! streaming assistant segment (deleting it when no text ever arrived),
+//! `ToolFinished` stores the tool card, and the next delta opens a fresh
+//! segment. Offsets are per segment and restart at zero.
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -56,9 +61,10 @@ impl ChatService {
         let turn = Turn { chat_id, model_id, message: user_text, session };
         let drive = tokio::spawn(async move { runner.run(turn, tx_events, cancel.clone()).await });
 
+        // The open assistant segment, if any: `SendMessage` created one.
+        let mut current: Option<ChatMessageId> = Some(assistant);
         let mut buffer = StreamBuffer::new(redactor.clone());
         let mut published = String::new();
-        let mut open_tool: Option<ToolCall> = None;
         let mut pending = String::new();
         let mut since_publish = tokio::time::Instant::now();
         let mut final_event = "ChatTurnFinished";
@@ -68,6 +74,18 @@ impl ChatService {
             tokio::select! {
                 event = rx_events.recv() => match event {
                     Some(AgentEvent::TextDelta(delta)) => {
+                        if current.is_none() {
+                            // First delta after a tool call: a new segment.
+                            let mut tx = self.store.begin().await?;
+                            current = Some(tx.insert_message(&NewMessage {
+                                chat_id,
+                                kind: MessageKind::Assistant,
+                                status: MessageStatus::Streaming,
+                                text: None,
+                                tool: None,
+                            }).await?);
+                            tx.commit().await?;
+                        }
                         // Coalesce: accumulate and advance the buffer only
                         // when the flush interval elapses, so every published
                         // event is emitted, none silently swallowed.
@@ -75,10 +93,10 @@ impl ChatService {
                         if since_publish.elapsed() >= COALESCE {
                             if let Some(d) = buffer.push(&pending) {
                                 pending.clear();
-                                self.publish_delta(&d, &publisher, chat_id, assistant).await?;
+                                self.publish_delta(&d, &publisher, chat_id, current.unwrap()).await?;
                                 published = buffer.published().to_string();
                                 let mut tx = self.store.begin().await?;
-                                tx.update_message_text(assistant, &published, MessageStatus::Streaming).await?;
+                                tx.update_message_text(current.unwrap(), &published, MessageStatus::Streaming).await?;
                                 tx.commit().await?;
                             } else {
                                 pending.clear();
@@ -86,43 +104,30 @@ impl ChatService {
                             since_publish = tokio::time::Instant::now();
                         }
                     }
-                    Some(AgentEvent::ToolStarted { call_id: _, name }) => {
-                        if let Some(open) = open_tool.take() {
-                            let mut tx = self.store.begin().await?;
-                            tx.insert_message(&NewMessage {
-                                chat_id,
-                                kind: MessageKind::Tool,
-                                status: MessageStatus::Done,
-                                text: None,
-                                tool: Some(open),
-                            }).await?;
-                            tx.commit().await?;
-                        }
-                        let summary = format!("Calling {name}…");
-                        open_tool = Some(ToolCall {
-                            name,
-                            summary,
-                            is_error: false,
-                            workflow_id: None,
-                            workflow_name: None,
-                            run_id: None,
-                            detail: None,
-                            revert: None,
-                            reverted: false,
-                        });
+                    Some(AgentEvent::ToolStarted { call_id: _, name: _ }) => {
+                        // Close the open segment: keep it when text was
+                        // published, delete the placeholder when none was.
+                        self.close_segment(
+                            chat_id,
+                            current.take(),
+                            &mut buffer,
+                            &mut published,
+                            &mut pending,
+                            &publisher,
+                        )
+                        .await?;
                     }
-                    Some(AgentEvent::ToolFinished { call_id: _, name, text, details: _, is_error }) => {
-                        open_tool = Some(ToolCall {
-                            name,
-                            summary: text,
-                            is_error,
-                            workflow_id: None,
-                            workflow_name: None,
-                            run_id: None,
-                            detail: None,
-                            revert: None,
-                            reverted: false,
-                        });
+                    Some(AgentEvent::ToolFinished { call_id: _, name, text, details, is_error }) => {
+                        let call = tool_call_from(&name, &text, &details, is_error, &redactor);
+                        let mut tx = self.store.begin().await?;
+                        tx.insert_message(&NewMessage {
+                            chat_id,
+                            kind: MessageKind::Tool,
+                            status: MessageStatus::Done,
+                            text: None,
+                            tool: Some(call),
+                        }).await?;
+                        tx.commit().await?;
                     }
                     None => break,
                 },
@@ -146,11 +151,11 @@ impl ChatService {
         };
         // Flush whatever the coalescing window never emitted.
         if let Some(d) = (!pending.is_empty()).then(|| buffer.push(&pending)).flatten() {
-            self.publish_delta(&d, &publisher, chat_id, assistant).await?;
+            self.publish_delta(&d, &publisher, chat_id, current.unwrap_or(assistant)).await?;
         }
         let end = end.unwrap_or(crate::features::chat::ports::TurnEnd { session: None, error: None });
         if let Some(delta) = buffer.finish() {
-            self.publish_delta(&delta, &publisher, chat_id, assistant).await?;
+            self.publish_delta(&delta, &publisher, chat_id, current.unwrap_or(assistant)).await?;
             published = buffer.published().to_string();
         }
         let (status, error) = match (&end.error, &failed_text) {
@@ -162,24 +167,17 @@ impl ChatService {
             (None, None) => (MessageStatus::Done, None),
         };
         let mut tx = self.store.begin().await?;
-        match status {
-            MessageStatus::Done => {
-                tx.update_message_text(assistant, &published, MessageStatus::Done).await?;
+        if let Some(open) = current {
+            match status {
+                MessageStatus::Done => {
+                    tx.update_message_text(open, &published, MessageStatus::Done).await?;
+                }
+                MessageStatus::Failed => {
+                    tx.update_message_text(open, &published, MessageStatus::Failed).await?;
+                    tx.set_message_status(open, MessageStatus::Failed, error.as_deref()).await?;
+                }
+                MessageStatus::Streaming => unreachable!(),
             }
-            MessageStatus::Failed => {
-                tx.update_message_text(assistant, &published, MessageStatus::Failed).await?;
-                tx.set_message_status(assistant, MessageStatus::Failed, error.as_deref()).await?;
-            }
-            MessageStatus::Streaming => unreachable!(),
-        }
-        if let Some(open) = open_tool.take() {
-            tx.insert_message(&NewMessage {
-                chat_id,
-                kind: MessageKind::Tool,
-                status: MessageStatus::Done,
-                text: None,
-                tool: Some(open),
-            }).await?;
         }
         tx.save_session(chat_id, end.session.as_ref()).await?;
         tx.end_turn(chat_id, ChatStatus::Idle).await?;
@@ -191,14 +189,16 @@ impl ChatService {
         tx.commit().await?;
         // Bus notifications for the streaming client: the message (status,
         // text) and then the chat (idle) changed.
-        publisher.publish(&ChatEvent {
-            kind: ChatEventKind::MessageUpdated,
-            chat_id: chat_id.to_string(),
-            offset: None,
-            text: None,
-            message_id: Some(assistant.to_string()),
-            occurred_at: chrono::Utc::now(),
-        });
+        if let Some(open) = current {
+            publisher.publish(&ChatEvent {
+                kind: ChatEventKind::MessageUpdated,
+                chat_id: chat_id.to_string(),
+                offset: None,
+                text: None,
+                message_id: Some(open.to_string()),
+                occurred_at: chrono::Utc::now(),
+            });
+        }
         publisher.publish(&ChatEvent {
             kind: ChatEventKind::ChatUpdated,
             chat_id: chat_id.to_string(),
@@ -207,6 +207,52 @@ impl ChatService {
             message_id: None,
             occurred_at: chrono::Utc::now(),
         });
+        Ok(())
+    }
+
+    /// Closes the streaming assistant segment before a tool card: flush the
+    /// tail, mark it done (or delete the never-written placeholder) and
+    /// reset the per-segment streaming state.
+    #[allow(clippy::too_many_arguments)]
+    async fn close_segment(
+        &self,
+        chat_id: ChatId,
+        current: Option<ChatMessageId>,
+        buffer: &mut StreamBuffer,
+        published: &mut String,
+        pending: &mut String,
+        publisher: &Arc<dyn ChatPublisher>,
+    ) -> DomainResult<()> {
+        let Some(message) = current else {
+            return Ok(());
+        };
+        if !pending.is_empty() {
+            if let Some(d) = buffer.push(pending) {
+                self.publish_delta(&d, publisher, chat_id, message).await?;
+            }
+            pending.clear();
+        }
+        if let Some(delta) = buffer.finish() {
+            self.publish_delta(&delta, publisher, chat_id, message).await?;
+            *published = buffer.published().to_string();
+        }
+        let mut tx = self.store.begin().await?;
+        if published.is_empty() {
+            tx.delete_message(message).await?;
+        } else {
+            tx.update_message_text(message, published, MessageStatus::Done).await?;
+        }
+        tx.commit().await?;
+        publisher.publish(&ChatEvent {
+            kind: ChatEventKind::MessageUpdated,
+            chat_id: chat_id.to_string(),
+            offset: None,
+            text: None,
+            message_id: Some(message.to_string()),
+            occurred_at: chrono::Utc::now(),
+        });
+        *buffer = StreamBuffer::new(buffer.redactor().clone());
+        published.clear();
         Ok(())
     }
 
@@ -238,4 +284,69 @@ fn assistant_of(messages: &[Message]) -> DomainResult<ChatMessageId> {
         .find(|m| m.kind == MessageKind::Assistant)
         .map(|m| m.id)
         .ok_or_else(|| DomainError::internal(anyhow::anyhow!("no streaming assistant message")))
+}
+
+/// The stored tool card: what the proto exposes, plus the revert data the
+/// proto never carries. Every model-facing string is redacted.
+fn tool_call_from(
+    name: &str,
+    text: &str,
+    details: &serde_json::Value,
+    is_error: bool,
+    redactor: &Redactor,
+) -> ToolCall {
+    let summary = details
+        .get("summary")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(text);
+    let detail = details
+        .get("detail")
+        .and_then(serde_json::Value::as_str)
+        .map(|d| redactor.redact(d))
+        .or_else(|| issues_detail(details, redactor));
+    // `previous_yaml` is Glyph's own stored export, not agent text: revert
+    // needs the exact bytes, so it is kept verbatim.
+    let revert = if name == "update_workflow" && !is_error {
+        details
+            .get("previous_yaml")
+            .and_then(serde_json::Value::as_str)
+            .zip(details.get("fingerprint").and_then(serde_json::Value::as_str))
+            .map(|(previous_yaml, fingerprint)| Revert {
+                previous_yaml: previous_yaml.to_string(),
+                fingerprint: fingerprint.to_string(),
+            })
+    } else {
+        None
+    };
+    ToolCall {
+        name: name.to_string(),
+        summary: redactor.redact(summary),
+        is_error,
+        workflow_id: details
+            .get("workflow_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        workflow_name: details
+            .get("workflow_name")
+            .and_then(serde_json::Value::as_str)
+            .map(|n| redactor.redact(n)),
+        run_id: details
+            .get("run_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        detail,
+        revert,
+        reverted: false,
+    }
+}
+
+/// Blocking issues become the expandable body of the card.
+fn issues_detail(details: &serde_json::Value, redactor: &Redactor) -> Option<String> {
+    let issues = details.get("issues")?.as_array()?;
+    let lines: Vec<String> = issues
+        .iter()
+        .filter_map(|issue| issue.get("message").and_then(serde_json::Value::as_str))
+        .map(|message| redactor.redact(message))
+        .collect();
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }

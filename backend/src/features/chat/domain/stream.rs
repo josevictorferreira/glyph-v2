@@ -52,6 +52,10 @@ impl StreamBuffer {
     pub fn published(&self) -> &str {
         &self.published
     }
+    /// The redactor this buffer holds back with (a new segment reuses it).
+    pub fn redactor(&self) -> &Redactor {
+        &self.redactor
+    }
 
     /// Feed one raw chunk; returns the (possibly empty) safe-to-publish delta.
     pub fn push(&mut self, chunk: &str) -> Option<Delta> {

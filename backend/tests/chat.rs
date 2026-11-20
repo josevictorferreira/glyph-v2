@@ -825,7 +825,7 @@ mod cancel {
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
     async fn running_chat_without_job_is_recovered(pool: PgPool) {
-        recovery_server(&pool).await;
+        let _server = recovery_server(&pool).await;
         let chat = new_chat(&pool).await;
         let mut tx = store(&pool).begin().await.unwrap();
         assert!(tx.begin_turn(chat.id).await.unwrap());
@@ -875,6 +875,7 @@ mod watch {
 
     /// One decoded gRPC-Web frame from the response body.
     async fn frame(body: &mut axum::body::Body, buf: &mut Vec<u8>) -> Option<pb::WatchChatResponse> {
+        #[allow(clippy::never_loop)]
         loop {
             while buf.len() >= 5 {
                 let len = u32::from_be_bytes(buf[1..5].try_into().unwrap()) as usize;
@@ -1014,5 +1015,196 @@ mod watch {
         .await
         .unwrap();
         assert_eq!(kind(&event), pb::ChatEventType::Heartbeat);
+    }
+}
+// --- Tool calls in the turn loop (4.3) ----------------------------------------
+
+mod tools {
+    use super::turn::{runner_server, send, set_model, wait_idle};
+    use super::*;
+    use glyph_backend::infrastructure::fake_chat_runner::{FakeChatRunner, Script};
+
+    /// A tool event pair the fake can emit without HTTP.
+    fn tool_finished(text: &str, details: serde_json::Value, is_error: bool) -> Script {
+        Script::ToolResult {
+            name: "update_workflow".into(),
+            text: text.into(),
+            details,
+            is_error,
+        }
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn text_tool_text_produces_three_messages_in_seq_order(pool: PgPool) {
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            Script::Delta("Thinking about it… ".into()),
+            tool_finished(
+                "Edited the definition.",
+                serde_json::json!({
+                    "workflow_id": "11111111-1111-1111-1111-111111111111",
+                    "workflow_name": "Weekly digest",
+                    "summary": "Edited the definition.",
+                    "previous_yaml": "name: Old\n",
+                    "fingerprint": "abc123",
+                }),
+                false,
+            ),
+            Script::Delta("Done, the schedule is set.".into()),
+        ]))).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "add a schedule").await;
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let kinds: Vec<_> = messages.iter().map(|m| (m.kind, m.seq)).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                (MessageKind::User, 1),
+                (MessageKind::Assistant, 2),
+                (MessageKind::Tool, 3),
+                (MessageKind::Assistant, 4),
+            ],
+            "{kinds:?}"
+        );
+        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let call = tool.tool.as_ref().unwrap();
+        assert_eq!(call.name, "update_workflow");
+        assert_eq!(call.summary, "Edited the definition.");
+        assert!(!call.is_error);
+        assert_eq!(call.workflow_name.as_deref(), Some("Weekly digest"));
+        assert!(call.revertible(), "{call:?}");
+        assert_eq!(call.revert.as_ref().unwrap().previous_yaml, "name: Old\n");
+        // The pre-change YAML never leaves through the proto.
+        let mut cc = turn::Client::new(server.channel().await);
+        let response = cc
+            .get_chat(pb::GetChatRequest { chat_id: chat.id.to_string() })
+            .await
+            .unwrap()
+            .into_inner();
+        let tool_msg = response.messages.iter().find(|m| m.kind == pb::ChatMessageKind::Tool as i32).unwrap();
+        let exposed = tool_msg.tool.as_ref().unwrap();
+        assert!(exposed.revertible);
+        assert_eq!(exposed.summary, "Edited the definition.");
+        // The proto exposes no revert payload at all: no yaml, no fingerprint
+        // field to carry one.
+        assert_eq!(exposed.detail, None, "detail must not carry the yaml");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn tool_without_preceding_text_leaves_no_empty_assistant(pool: PgPool) {
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            tool_finished(
+                "Edited the definition.",
+                serde_json::json!({
+                    "workflow_id": "11111111-1111-1111-1111-111111111111",
+                    "previous_yaml": "name: Old\n",
+                    "fingerprint": "abc123",
+                }),
+                false,
+            ),
+            Script::Delta("All done.".into()),
+        ]))).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "edit it").await;
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        assert_eq!(messages.len(), 3, "{messages:?}"); // user, tool, assistant
+        assert!(
+            messages.iter().all(|m| m.text.as_deref().is_none_or(|t| !t.is_empty())),
+            "an empty message survived: {messages:?}"
+        );
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn tool_summary_and_detail_are_redacted(pool: PgPool) {
+        // The dev secrets come from the environment; a literal database
+        // password style marker is caught by the sk- pattern instead.
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            tool_finished(
+                "Updated with sk-live-abcdef123456",
+                serde_json::json!({
+                    "workflow_id": "11111111-1111-1111-1111-111111111111",
+                    "detail": "token sk-live-abcdef123456 rejected",
+                    "previous_yaml": "name: Old\n",
+                    "fingerprint": "abc123",
+                }),
+                false,
+            ),
+            Script::Delta("Done.".into()),
+        ]))).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "edit").await;
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let call = tool.tool.as_ref().unwrap();
+        assert!(!call.summary.contains("sk-live-abcdef123456"), "{}", call.summary);
+        assert!(
+            !call.detail.as_deref().unwrap_or("").contains("sk-live-abcdef123456"),
+            "{:?}",
+            call.detail
+        );
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn failed_tool_call_is_stored_with_is_error(pool: PgPool) {
+        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
+            Script::ToolResult {
+                name: "update_workflow".into(),
+                text: "The workflow changed since you exported it. Call get_workflow_yaml again and reapply your edit.".into(),
+                details: serde_json::json!({}),
+                is_error: true,
+            },
+            Script::Delta("Let me re-export it first.".into()),
+        ]))).await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "edit").await;
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let call = tool.tool.as_ref().unwrap();
+        assert!(call.is_error);
+        assert!(call.summary.contains("changed since you exported"), "{}", call.summary);
+        assert!(!call.revertible());
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn fake_tool_marker_creates_a_real_workflow(pool: PgPool) {
+        let runner = FakeChatRunner::new();
+        let slot = runner.router_slot();
+        let server = runner_server(&pool, Arc::new(runner)).await;
+        // The test-owned fake gets the app router (agent routes included)
+        // the way bootstrap fills its own default runner.
+        let _ = slot.set(server.router.clone());
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(
+            &server,
+            chat.id,
+            "FAKE_TOOL:create_workflow {\"yaml\": \"name: Agent made\\nsteps:\\n - name: one\\n   kind: helper\\n\"}",
+        )
+        .await;
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let call = tool.tool.as_ref().unwrap();
+        assert_eq!(call.name, "create_workflow");
+        assert!(!call.is_error, "{:?}", call.summary);
+        let id = call.workflow_id.as_deref().unwrap();
+        // The workflow really exists through the app's own services.
+        let mut workflows =
+            glyph_backend::proto::pb::workflow_service_client::WorkflowServiceClient::new(
+                server.channel().await,
+            );
+        let got = workflows
+            .get_workflow(glyph_backend::proto::pb::GetWorkflowRequest { id: id.into() })
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(got.workflow.unwrap().summary.unwrap().name, "Agent made");
     }
 }
