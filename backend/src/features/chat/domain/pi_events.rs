@@ -39,7 +39,7 @@ struct Record {
     tool_name: Option<String>,
     #[serde(default)]
     result: Option<ToolResult>,
-    #[serde(default)]
+    #[serde(default, rename = "isError")]
     is_error: Option<bool>,
 }
 
@@ -187,6 +187,14 @@ mod tests {
             })
             .collect();
         assert_eq!(errors, ["provider exploded"]);
+    }
+
+    #[test]
+    fn tool_errors_are_flagged_from_the_wire_field() {
+        let parsed = parse_line(
+            r#"{"type":"tool_execution_end","toolCallId":"c1","toolName":"list_workflows","result":{"content":[{"type":"text","text":"fetch failed"}]},"isError":true}"#,
+        );
+        assert!(matches!(&parsed, Parsed::ToolFinished { is_error: true, text, .. } if text == "fetch failed"));
     }
 
     #[test]

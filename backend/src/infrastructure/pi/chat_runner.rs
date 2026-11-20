@@ -211,7 +211,12 @@ impl PiChatRunner {
             .map_err(|e| fail("The agent could not complete this reply.", e.to_string()).unwrap())?;
         let home = workdir.path().join("home");
         let sessions = workdir.path().join("sessions");
-        let work = workdir.path().join("work");
+        // Pi pins sessions to the working directory they were created in
+        // and refuses to resume when that path is gone. So each chat gets
+        // one stable work dir, emptied every turn: the path always exists
+        // while the contents stay throwaway.
+        let work = std::env::temp_dir().join(format!("glyph-chat-{}-work", turn.chat_id));
+        let _ = std::fs::remove_dir_all(&work);
         std::fs::create_dir_all(&home)
             .and_then(|_| std::fs::create_dir_all(&sessions))
             .and_then(|_| std::fs::create_dir_all(&work))
@@ -257,36 +262,38 @@ async fn capture(
     timeout: Duration,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Captured {
+    // Pipes drain in their own tasks: `read_to_string` futures are not
+    // cancel-safe, so a select that drops them mid-read loses buffered
+    // output.
     let mut stdout = child.stdout.take().expect("stdout pipe");
     let mut stderr = child.stderr.take().expect("stderr pipe");
-    let mut out = String::new();
-    let mut err = String::new();
+    let out_task = tokio::spawn(async move {
+        let mut buf = String::new();
+        let _ = stdout.read_to_string(&mut buf).await;
+        buf
+    });
+    let err_task = tokio::spawn(async move {
+        let mut buf = String::new();
+        let _ = stderr.read_to_string(&mut buf).await;
+        buf
+    });
     let deadline = tokio::time::Instant::now() + timeout;
     let mut timed_out = false;
     let mut cancelled = false;
-    loop {
-        tokio::select! {
-            read = stdout.read_to_string(&mut out) => {
-                let _ = read;
-                break;
-            }
-            read = stderr.read_to_string(&mut err) => {
-                let _ = read;
-            }
-            _ = tokio::time::sleep_until(deadline) => {
-                timed_out = true;
-                break;
-            }
-            _ = cancel.cancelled() => {
-                cancelled = true;
-                break;
-            }
-        }
+    let mut exit_ok = false;
+    // Pi exiting means it is done writing; wait for that, the deadline or
+    // cancellation. The pipe tasks are only awaited after the child is
+    // fully reaped, so they always complete.
+    tokio::select! {
+        status = child.wait() => { exit_ok = matches!(status, Ok(s) if s.success()); }
+        _ = tokio::time::sleep_until(deadline) => { timed_out = true; }
+        _ = cancel.cancelled() => { cancelled = true; }
     }
     if timed_out || cancelled {
         process::terminate(child).await;
     }
-    let exit_ok = !timed_out && !cancelled && matches!(child.wait().await, Ok(status) if status.success());
+    let (out, err) = tokio::join!(out_task, err_task);
+    let (out, err) = (out.unwrap_or_default(), err.unwrap_or_default());
     Captured {
         stdout: out,
         stderr: err,
@@ -297,10 +304,8 @@ async fn capture(
 
 /// The newest `.jsonl` under the session dir, as a `SessionFile`.
 fn latest_session(sessions: &Path) -> Option<SessionFile> {
-    std::fs::read_dir(sessions)
-        .ok()?
-        .flatten()
-        .flat_map(|entry| walk_jsonl(entry.path()))
+    walk_jsonl(sessions.to_path_buf())
+        .into_iter()
         .filter_map(|path| {
             let bytes = std::fs::read(&path).ok()?;
             // Sessions group by working directory on disk; the stored
