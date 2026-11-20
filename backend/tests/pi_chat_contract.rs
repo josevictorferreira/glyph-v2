@@ -65,7 +65,10 @@ async fn completions(
             Some(script.remove(0))
         } else {
             script.first().map(|s| match s {
-                Step::Tool { name, args } => Step::Tool { name: name.clone(), args: args.clone() },
+                Step::Tool { name, args } => Step::Tool {
+                    name: name.clone(),
+                    args: args.clone(),
+                },
                 Step::Text(d) => Step::Text(d.clone()),
             })
         }
@@ -109,7 +112,10 @@ async fn agent_route(
 ) -> impl IntoResponse {
     seen.0.lock().unwrap().push((tool.clone(), json!({})));
     if let Some(message) = error.0.lock().unwrap().clone() {
-        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({ "error": message })));
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({ "error": message })),
+        );
     }
     (
         StatusCode::OK,
@@ -179,7 +185,10 @@ async fn real_pi_offers_the_ten_tools_and_round_trips_a_call() {
     let model_calls = ModelCalls::default();
     let agent_calls = AgentCalls::default();
     let script = Arc::new(Mutex::new(vec![
-        Step::Tool { name: "list_workflows".into(), args: "{}".into() },
+        Step::Tool {
+            name: "list_workflows".into(),
+            args: "{}".into(),
+        },
         Step::Text(vec!["Hello ".into(), "there.".into()]),
     ]));
     let model_addr = spawn(
@@ -206,7 +215,12 @@ async fn real_pi_offers_the_ten_tools_and_round_trips_a_call() {
         .as_array()
         .expect("tools in request")
         .iter()
-        .map(|t| t["function"]["name"].as_str().unwrap_or_default().to_string())
+        .map(|t| {
+            t["function"]["name"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
         .collect();
     let mut expected = AGENT_TOOLS.to_vec();
     expected.sort();
@@ -219,9 +233,13 @@ async fn real_pi_offers_the_ten_tools_and_round_trips_a_call() {
     assert_eq!(calls.len(), 1, "{calls:?}");
     assert_eq!(calls[0].0, "list_workflows");
     let finished = events.iter().find_map(|e| match e {
-        AgentEvent::ToolFinished { name, text, details, is_error, .. } if name == "list_workflows" => {
-            Some((text.clone(), details.clone(), *is_error))
-        }
+        AgentEvent::ToolFinished {
+            name,
+            text,
+            details,
+            is_error,
+            ..
+        } if name == "list_workflows" => Some((text.clone(), details.clone(), *is_error)),
         _ => None,
     });
     let (text, details, is_error) = finished.expect("tool finished");
@@ -297,7 +315,10 @@ async fn a_tool_route_error_becomes_is_error() {
     };
     let model_calls = ModelCalls::default();
     let script = Arc::new(Mutex::new(vec![
-        Step::Tool { name: "list_workflows".into(), args: "{}".into() },
+        Step::Tool {
+            name: "list_workflows".into(),
+            args: "{}".into(),
+        },
         Step::Text(vec!["Recovered.".into()]),
     ]));
     let model_addr = spawn(
@@ -319,9 +340,12 @@ async fn a_tool_route_error_becomes_is_error() {
     let (events, end) = drive(&runner, turn(ChatId::new(), "list them", None)).await;
     assert!(end.error.is_none(), "{:?}", end.error.map(|e| e.technical));
     let finished = events.iter().find_map(|e| match e {
-        AgentEvent::ToolFinished { name, text, is_error, .. } if name == "list_workflows" => {
-            Some((text.clone(), *is_error))
-        }
+        AgentEvent::ToolFinished {
+            name,
+            text,
+            is_error,
+            ..
+        } if name == "list_workflows" => Some((text.clone(), *is_error)),
         _ => None,
     });
     let (text, is_error) = finished.expect("tool finished");

@@ -4,11 +4,11 @@
 //! `FAKE_TOOL:<name> <json>` calls the real agent route in-process so
 //! tests and `nix run .#web` exercise the actual routes with no network.
 //! `scripted` emits a fixed event list instead (tests drive edge cases).
+use crate::features::chat::ports::{AgentEvent, ChatRunner, SessionFile, Turn, TurnEnd, TurnError};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use crate::features::chat::ports::{AgentEvent, ChatRunner, SessionFile, Turn, TurnEnd, TurnError};
 use tower::util::ServiceExt;
 
 enum Mode {
@@ -99,7 +99,10 @@ async fn call_tool(
     if status.is_success() {
         (
             value["text"].as_str().unwrap_or_default().to_string(),
-            value.get("details").cloned().unwrap_or(serde_json::Value::Null),
+            value
+                .get("details")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
             false,
         )
     } else {
@@ -108,7 +111,10 @@ async fn call_tool(
                 .as_str()
                 .unwrap_or("the tool call failed")
                 .to_string(),
-            value.get("details").cloned().unwrap_or(serde_json::Value::Null),
+            value
+                .get("details")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
             true,
         )
     }
@@ -116,7 +122,12 @@ async fn call_tool(
 
 #[async_trait::async_trait]
 impl ChatRunner for FakeChatRunner {
-    async fn run(&self, turn: Turn, events: mpsc::Sender<AgentEvent>, cancel: CancellationToken) -> TurnEnd {
+    async fn run(
+        &self,
+        turn: Turn,
+        events: mpsc::Sender<AgentEvent>,
+        cancel: CancellationToken,
+    ) -> TurnEnd {
         match &self.mode {
             Mode::Marker => {
                 if let Some(rest) = turn.message.strip_prefix("FAKE_FAIL") {
@@ -140,9 +151,10 @@ impl ChatRunner for FakeChatRunner {
                         Some((name, params)) => (name, params),
                         None => (call.trim(), ""),
                     };
-                    let router = self.router.get().expect(
-                        "FAKE_TOOL needs the app router; bootstrap must install it",
-                    );
+                    let router = self
+                        .router
+                        .get()
+                        .expect("FAKE_TOOL needs the app router; bootstrap must install it");
                     let _ = events
                         .send(AgentEvent::ToolStarted {
                             call_id: String::new(),
@@ -171,7 +183,9 @@ impl ChatRunner for FakeChatRunner {
                         break;
                     }
                     let glue = if i + 1 == words.len() { "" } else { " " };
-                    let _ = events.send(AgentEvent::TextDelta(format!("{word}{glue}"))).await;
+                    let _ = events
+                        .send(AgentEvent::TextDelta(format!("{word}{glue}")))
+                        .await;
                     tokio::time::sleep(Duration::from_millis(10)).await;
                 }
                 TurnEnd {
@@ -201,7 +215,12 @@ impl ChatRunner for FakeChatRunner {
                             )
                             .await;
                         }
-                        Script::ToolResult { name, text, details, is_error } => {
+                        Script::ToolResult {
+                            name,
+                            text,
+                            details,
+                            is_error,
+                        } => {
                             let _ = events
                                 .send(AgentEvent::ToolStarted {
                                     call_id: String::new(),

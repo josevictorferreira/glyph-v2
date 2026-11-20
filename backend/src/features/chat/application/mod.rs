@@ -1,6 +1,5 @@
 //! Chat use cases: CRUD today; send/cancel/watch/revert arrive with the
 //! turn pipeline. Mutations append their events in the same transaction.
-use std::sync::Arc;
 use crate::features::chat::domain::model::*;
 use crate::features::chat::ports::{ChatStore, NewMessage};
 use crate::features::definition::DefinitionService;
@@ -9,6 +8,7 @@ use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::events::Job;
 use crate::shared::ids::{ChatId, ChatMessageId, WorkflowId};
 use crate::shared::time::Clock;
+use std::sync::Arc;
 
 pub const RUN_CHAT_TURN: &str = "run_chat_turn";
 pub const CHAT_QUEUE: &str = "chat";
@@ -22,8 +22,17 @@ pub struct ChatService {
 }
 
 impl ChatService {
-    pub fn new(store: Arc<dyn ChatStore>, settings: SettingsService, clock: Arc<dyn Clock>) -> Self {
-        Self { store, settings, clock, definitions: None }
+    pub fn new(
+        store: Arc<dyn ChatStore>,
+        settings: SettingsService,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            store,
+            settings,
+            clock,
+            definitions: None,
+        }
     }
 
     /// Enables `RevertChange`; bootstrap wires the definition service once
@@ -33,7 +42,11 @@ impl ChatService {
         self
     }
 
-    fn chat_event(event_type: &str, chat: ChatId, extra: serde_json::Value) -> crate::shared::events::DomainEvent {
+    fn chat_event(
+        event_type: &str,
+        chat: ChatId,
+        extra: serde_json::Value,
+    ) -> crate::shared::events::DomainEvent {
         let mut data = serde_json::Map::new();
         data.insert("chat_id".into(), serde_json::json!(chat.to_string()));
         if let serde_json::Value::Object(fields) = extra {
@@ -117,7 +130,11 @@ impl ChatService {
     /// Crash recovery: a turn whose worker died is finalised `failed` with
     /// the interrupted message, in one transaction.
     pub async fn interrupt_turn(&self, id: ChatId) -> DomainResult<()> {
-        let (chat, messages) = self.store.find(id).await?.ok_or(DomainError::NotFound("chat"))?;
+        let (chat, messages) = self
+            .store
+            .find(id)
+            .await?
+            .ok_or(DomainError::NotFound("chat"))?;
         if chat.status != ChatStatus::Running {
             return Ok(());
         }
@@ -125,7 +142,9 @@ impl ChatService {
             .iter()
             .rev()
             .find(|m| m.kind == MessageKind::Assistant)
-            .ok_or(DomainError::internal(anyhow::anyhow!("running chat without assistant message")))?;
+            .ok_or(DomainError::internal(anyhow::anyhow!(
+                "running chat without assistant message"
+            )))?;
         let mut tx = self.store.begin().await?;
         if assistant.status == MessageStatus::Streaming {
             tx.set_message_status(
@@ -216,32 +235,42 @@ impl ChatService {
             .definitions
             .clone()
             .ok_or_else(|| DomainError::Internal(anyhow::anyhow!("definitions not wired")))?;
-        let (chat, messages) = self.store.find(chat_id).await?.ok_or(DomainError::NotFound("chat"))?;
+        let (chat, messages) = self
+            .store
+            .find(chat_id)
+            .await?
+            .ok_or(DomainError::NotFound("chat"))?;
         let _ = chat;
         let message = messages
             .iter()
             .find(|m| m.id == message_id)
             .ok_or(DomainError::NotFound("message"))?;
-        let call = message
-            .tool
-            .as_ref()
-            .ok_or(DomainError::precondition("CHAT_NOT_REVERTIBLE", "This message cannot be reverted."))?;
+        let call = message.tool.as_ref().ok_or(DomainError::precondition(
+            "CHAT_NOT_REVERTIBLE",
+            "This message cannot be reverted.",
+        ))?;
         if call.reverted {
             return Err(DomainError::precondition(
                 "CHAT_ALREADY_REVERTED",
                 "This change was already reverted.",
             ));
         }
-        let revert = call
-            .revert
-            .as_ref()
-            .filter(|_| call.revertible())
-            .ok_or(DomainError::precondition("CHAT_NOT_REVERTIBLE", "This message cannot be reverted."))?;
+        let revert =
+            call.revert
+                .as_ref()
+                .filter(|_| call.revertible())
+                .ok_or(DomainError::precondition(
+                    "CHAT_NOT_REVERTIBLE",
+                    "This message cannot be reverted.",
+                ))?;
         let workflow_id: WorkflowId = call
             .workflow_id
             .as_deref()
             .and_then(|id| id.parse().ok())
-            .ok_or(DomainError::precondition("CHAT_NOT_REVERTIBLE", "This message cannot be reverted."))?;
+            .ok_or(DomainError::precondition(
+                "CHAT_NOT_REVERTIBLE",
+                "This message cannot be reverted.",
+            ))?;
         // A Conflict means the workflow changed after the agent's edit;
         // the gRPC layer gives it the revert-specific message.
         definitions

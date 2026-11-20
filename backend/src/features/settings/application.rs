@@ -1,11 +1,11 @@
 //! Settings use cases: today, choosing the chat agent's model.
-use std::sync::Arc;
-use serde_json::json;
 use crate::features::catalog::ListModels;
 use crate::features::settings::{CHAT_MODEL_ID, SettingsStore};
 use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::events::DomainEvent;
 use crate::shared::time::Clock;
+use serde_json::json;
+use std::sync::Arc;
 
 pub const SETTINGS_STREAM: &str = "Settings$app";
 
@@ -22,8 +22,16 @@ pub struct Settings {
 }
 
 impl SettingsService {
-    pub fn new(store: Arc<dyn SettingsStore>, catalog: Arc<ListModels>, clock: Arc<dyn Clock>) -> Self {
-        Self { store, catalog, clock }
+    pub fn new(
+        store: Arc<dyn SettingsStore>,
+        catalog: Arc<ListModels>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            store,
+            catalog,
+            clock,
+        }
     }
 
     pub async fn get(&self) -> DomainResult<Settings> {
@@ -38,7 +46,9 @@ impl SettingsService {
     }
 
     pub async fn update(&self, chat_model_id: Option<String>) -> DomainResult<Settings> {
-        let chat_model_id = chat_model_id.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let chat_model_id = chat_model_id
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
         if let Some(id) = &chat_model_id {
             let models = self.catalog.models(false).await?;
             if !models.models.iter().any(|m| &m.full_id() == id) {

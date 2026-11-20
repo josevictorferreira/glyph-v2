@@ -6,9 +6,6 @@
 //! streaming assistant segment (deleting it when no text ever arrived),
 //! `ToolFinished` stores the tool card, and the next delta opens a fresh
 //! segment. Offsets are per segment and restart at zero.
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::mpsc;
 use crate::features::chat::application::ChatService;
 use crate::features::chat::domain::events::{ChatEvent, ChatEventKind};
 use crate::features::chat::domain::model::*;
@@ -17,6 +14,9 @@ use crate::features::chat::ports::{AgentEvent, ChatPublisher, ChatRunner, NewMes
 use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::ids::{ChatId, ChatMessageId};
 use crate::shared::redactor::Redactor;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::mpsc;
 
 /// Deltas are coalesced before publishing/persisting.
 const COALESCE: Duration = Duration::from_millis(75);
@@ -40,8 +40,12 @@ impl ChatService {
         let assistant = assistant_of(&messages)?;
         let Some(model_id) = self.settings.chat_model_id().await? else {
             let mut tx = self.store.begin().await?;
-            tx.set_message_status(assistant, MessageStatus::Failed, Some("Pick a model for the agent in Settings first."))
-                .await?;
+            tx.set_message_status(
+                assistant,
+                MessageStatus::Failed,
+                Some("Pick a model for the agent in Settings first."),
+            )
+            .await?;
             tx.end_turn(chat_id, ChatStatus::Idle).await?;
             tx.commit().await?;
             return Ok(());
@@ -58,7 +62,12 @@ impl ChatService {
         };
         let cancel = tokio_util::sync::CancellationToken::new();
         let (tx_events, mut rx_events) = mpsc::channel::<AgentEvent>(64);
-        let turn = Turn { chat_id, model_id, message: user_text, session };
+        let turn = Turn {
+            chat_id,
+            model_id,
+            message: user_text,
+            session,
+        };
         let drive = tokio::spawn(async move { runner.run(turn, tx_events, cancel.clone()).await });
 
         // The open assistant segment, if any: `SendMessage` created one.
@@ -150,12 +159,20 @@ impl ChatService {
             drive.await.ok()
         };
         // Flush whatever the coalescing window never emitted.
-        if let Some(d) = (!pending.is_empty()).then(|| buffer.push(&pending)).flatten() {
-            self.publish_delta(&d, &publisher, chat_id, current.unwrap_or(assistant)).await?;
+        if let Some(d) = (!pending.is_empty())
+            .then(|| buffer.push(&pending))
+            .flatten()
+        {
+            self.publish_delta(&d, &publisher, chat_id, current.unwrap_or(assistant))
+                .await?;
         }
-        let end = end.unwrap_or(crate::features::chat::ports::TurnEnd { session: None, error: None });
+        let end = end.unwrap_or(crate::features::chat::ports::TurnEnd {
+            session: None,
+            error: None,
+        });
         if let Some(delta) = buffer.finish() {
-            self.publish_delta(&delta, &publisher, chat_id, current.unwrap_or(assistant)).await?;
+            self.publish_delta(&delta, &publisher, chat_id, current.unwrap_or(assistant))
+                .await?;
             published = buffer.published().to_string();
         }
         let (status, error) = match (&end.error, &failed_text) {
@@ -170,11 +187,14 @@ impl ChatService {
         if let Some(open) = current {
             match status {
                 MessageStatus::Done => {
-                    tx.update_message_text(open, &published, MessageStatus::Done).await?;
+                    tx.update_message_text(open, &published, MessageStatus::Done)
+                        .await?;
                 }
                 MessageStatus::Failed => {
-                    tx.update_message_text(open, &published, MessageStatus::Failed).await?;
-                    tx.set_message_status(open, MessageStatus::Failed, error.as_deref()).await?;
+                    tx.update_message_text(open, &published, MessageStatus::Failed)
+                        .await?;
+                    tx.set_message_status(open, MessageStatus::Failed, error.as_deref())
+                        .await?;
                 }
                 MessageStatus::Streaming => unreachable!(),
             }
@@ -185,7 +205,8 @@ impl ChatService {
             final_event,
             chat_id,
             serde_json::json!({}),
-        )]).await?;
+        )])
+        .await?;
         tx.commit().await?;
         // Bus notifications for the streaming client: the message (status,
         // text) and then the chat (idle) changed.
@@ -233,14 +254,16 @@ impl ChatService {
             pending.clear();
         }
         if let Some(delta) = buffer.finish() {
-            self.publish_delta(&delta, publisher, chat_id, message).await?;
+            self.publish_delta(&delta, publisher, chat_id, message)
+                .await?;
             *published = buffer.published().to_string();
         }
         let mut tx = self.store.begin().await?;
         if published.is_empty() {
             tx.delete_message(message).await?;
         } else {
-            tx.update_message_text(message, published, MessageStatus::Done).await?;
+            tx.update_message_text(message, published, MessageStatus::Done)
+                .await?;
         }
         tx.commit().await?;
         publisher.publish(&ChatEvent {
@@ -310,7 +333,11 @@ fn tool_call_from(
         details
             .get("previous_yaml")
             .and_then(serde_json::Value::as_str)
-            .zip(details.get("fingerprint").and_then(serde_json::Value::as_str))
+            .zip(
+                details
+                    .get("fingerprint")
+                    .and_then(serde_json::Value::as_str),
+            )
             .map(|(previous_yaml, fingerprint)| Revert {
                 previous_yaml: previous_yaml.to_string(),
                 fingerprint: fingerprint.to_string(),

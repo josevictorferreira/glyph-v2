@@ -7,8 +7,8 @@ pub mod http;
 pub mod ports;
 
 pub use application::ChatService;
+pub use application::{CHAT_QUEUE, RUN_CHAT_TURN};
 pub use domain::model::{
     Chat, ChatStatus, Message, MessageKind, MessageStatus, ToolCall, title_from,
 };
 pub use ports::{ChatStore, ChatTx};
-pub use application::{CHAT_QUEUE, RUN_CHAT_TURN};

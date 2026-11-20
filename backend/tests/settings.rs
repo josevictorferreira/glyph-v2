@@ -1,10 +1,10 @@
 //! Settings storage (`app_settings`) and `SettingsService` over gRPC.
 mod common;
-use std::sync::Arc;
 use glyph_backend::features::settings::{SettingsStore, SettingsTx};
 use glyph_backend::infrastructure::crypto::AesGcmCipher;
 use glyph_backend::infrastructure::postgres::PgStore;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 fn store(pool: &PgPool) -> PgStore {
     PgStore::new(pool.clone(), Arc::new(AesGcmCipher::dev()))
@@ -35,10 +35,11 @@ async fn set_twice_keeps_one_row(pool: PgPool) {
         store.get("chat_model_id").await.unwrap().as_deref(),
         Some("velox/two")
     );
-    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM app_settings WHERE key = 'chat_model_id'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let rows: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM app_settings WHERE key = 'chat_model_id'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(rows, 1);
 }
 
@@ -94,7 +95,11 @@ async fn events(pool: &PgPool, stream: &str) -> Vec<String> {
 async fn get_settings_on_a_fresh_database_has_no_model(pool: PgPool) {
     let server = common::spawn(pool.clone()).await;
     let mut client = Client::new(server.channel().await);
-    let settings = client.get_settings(pb::GetSettingsRequest {}).await.unwrap().into_inner();
+    let settings = client
+        .get_settings(pb::GetSettingsRequest {})
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(settings.chat_model_id, None);
 }
 
@@ -115,7 +120,11 @@ async fn update_settings_stores_the_model_and_appends_an_event(pool: PgPool) {
         events(&pool, "Settings$app").await,
         vec!["SettingsUpdated".to_string()]
     );
-    let again = client.get_settings(pb::GetSettingsRequest {}).await.unwrap().into_inner();
+    let again = client
+        .get_settings(pb::GetSettingsRequest {})
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(again.chat_model_id.as_deref(), Some("velox/chat-model"));
 }
 
@@ -167,7 +176,9 @@ async fn update_settings_with_an_empty_id_clears_the_setting(pool: PgPool) {
         .await
         .unwrap();
     let settings = client
-        .update_settings(pb::UpdateSettingsRequest { chat_model_id: Some(String::new()) })
+        .update_settings(pb::UpdateSettingsRequest {
+            chat_model_id: Some(String::new()),
+        })
         .await
         .unwrap()
         .into_inner();

@@ -1,16 +1,14 @@
 //! Chat persistence. `content` and `pi_session` are AES-GCM encrypted
 //! because they carry workflow YAML, tool results and the Pi session.
-use async_trait::async_trait;
-use crate::features::chat::domain::model::*;
 use crate::features::chat::domain::events::{CHANNEL, ChatEvent};
-use crate::features::chat::ports::{ChatPublisher, 
-    ChatStore, ChatTx, NewMessage, SessionFile,
-};
+use crate::features::chat::domain::model::*;
+use crate::features::chat::ports::{ChatPublisher, ChatStore, ChatTx, NewMessage, SessionFile};
 use crate::infrastructure::crypto::Cipher;
 use crate::infrastructure::postgres::PgStore;
 use crate::infrastructure::postgres::uow::{PgTx, db};
 use crate::shared::error::{DomainError, DomainResult};
 use crate::shared::ids::{ChatId, ChatMessageId};
+use async_trait::async_trait;
 
 fn enc(cipher: &dyn Cipher, value: &str) -> Vec<u8> {
     cipher.encrypt(value.as_bytes())
@@ -99,10 +97,7 @@ impl ChatStore for PgStore {
         let mut messages = Vec::new();
         for r in rows {
             let (text, tool) = match kind(&r.kind) {
-                MessageKind::Tool => (
-                    None,
-                    Some(dec_tool(self.cipher.as_ref(), r.content)?),
-                ),
+                MessageKind::Tool => (None, Some(dec_tool(self.cipher.as_ref(), r.content)?)),
                 _ => (
                     Some(dec_text(self.cipher.as_ref(), r.content, "message")?),
                     None,
@@ -223,20 +218,22 @@ impl ChatTx for PgTx {
     }
 
     async fn cancel_requested(&mut self, id: ChatId) -> DomainResult<bool> {
-        sqlx::query_scalar!("SELECT cancel_requested FROM chats WHERE id = $1", id.as_uuid())
-            .fetch_optional(&mut *self.tx)
-            .await
-            .map_err(db)?
-            .ok_or(DomainError::NotFound("chat"))
+        sqlx::query_scalar!(
+            "SELECT cancel_requested FROM chats WHERE id = $1",
+            id.as_uuid()
+        )
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db)?
+        .ok_or(DomainError::NotFound("chat"))
     }
 
     async fn insert_message(&mut self, m: &NewMessage) -> DomainResult<ChatMessageId> {
         let content = match (&m.text, &m.tool) {
             (Some(text), _) => enc(self.cipher.as_ref(), text),
-            (None, Some(tool)) => {
-                self.cipher
-                    .encrypt(&serde_json::to_vec(tool).map_err(DomainError::internal)?)
-            }
+            (None, Some(tool)) => self
+                .cipher
+                .encrypt(&serde_json::to_vec(tool).map_err(DomainError::internal)?),
             (None, None) => enc(self.cipher.as_ref(), ""),
         };
         let kind = match m.kind {
@@ -344,7 +341,11 @@ impl ChatTx for PgTx {
         Ok(())
     }
 
-    async fn save_session(&mut self, id: ChatId, session: Option<&SessionFile>) -> DomainResult<()> {
+    async fn save_session(
+        &mut self,
+        id: ChatId,
+        session: Option<&SessionFile>,
+    ) -> DomainResult<()> {
         match session {
             Some(s) => {
                 sqlx::query!(
@@ -383,10 +384,9 @@ impl ChatTx for PgTx {
         .ok_or(DomainError::NotFound("chat"))?;
         match (row.pi_session, row.pi_session_path) {
             (Some(blob), Some(path)) => {
-                let bytes = self
-                    .cipher
-                    .decrypt(&blob)
-                    .map_err(|e| DomainError::Internal(anyhow::anyhow!("decrypting session: {e}")))?;
+                let bytes = self.cipher.decrypt(&blob).map_err(|e| {
+                    DomainError::Internal(anyhow::anyhow!("decrypting session: {e}"))
+                })?;
                 Ok(Some(SessionFile {
                     relative_path: path,
                     bytes,

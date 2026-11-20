@@ -13,9 +13,7 @@ use tokio::sync::mpsc;
 
 use crate::features::chat::domain::pi_events::{self, Parsed};
 use crate::features::chat::http::AGENT_TOOLS;
-use crate::features::chat::ports::{
-    AgentEvent, ChatRunner, SessionFile, Turn, TurnEnd, TurnError,
-};
+use crate::features::chat::ports::{AgentEvent, ChatRunner, SessionFile, Turn, TurnEnd, TurnError};
 use crate::infrastructure::pi::process;
 use crate::shared::redactor::Redactor;
 
@@ -55,7 +53,14 @@ impl PiChatRunner {
         Ok(agent_dir)
     }
 
-    fn argv(&self, turn: &Turn, agent_dir: &Path, sessions: &Path, message: &Path, api_key: String) -> Vec<String> {
+    fn argv(
+        &self,
+        turn: &Turn,
+        agent_dir: &Path,
+        sessions: &Path,
+        message: &Path,
+        api_key: String,
+    ) -> Vec<String> {
         let target = process::target(&turn.model_id, None);
         let mut args: Vec<String> = vec![
             "--print".into(),
@@ -124,11 +129,15 @@ impl ChatRunner for PiChatRunner {
                             let _ = events.send(AgentEvent::TextDelta(delta)).await;
                         }
                         Parsed::ToolStarted { call_id, name } => {
-                            let _ = events
-                                .send(AgentEvent::ToolStarted { call_id, name })
-                                .await;
+                            let _ = events.send(AgentEvent::ToolStarted { call_id, name }).await;
                         }
-                        Parsed::ToolFinished { call_id, name, text, details, is_error } => {
+                        Parsed::ToolFinished {
+                            call_id,
+                            name,
+                            text,
+                            details,
+                            is_error,
+                        } => {
                             let _ = events
                                 .send(AgentEvent::ToolFinished {
                                     call_id,
@@ -157,24 +166,18 @@ impl ChatRunner for PiChatRunner {
                                 "The agent took longer than {} seconds and was stopped.",
                                 self.config.timeout.as_secs()
                             ),
-                            technical: self.redactor.redact(
-                                "pi timed out and was terminated",
-                            ),
+                            technical: self.redactor.redact("pi timed out and was terminated"),
                         }
                     } else {
                         TurnError {
                             human: "The agent could not complete this reply.".into(),
-                            technical: self.redactor.redact(&format!(
-                                "pi exited with: {}",
-                                captured.stderr
-                            )),
+                            technical: self
+                                .redactor
+                                .redact(&format!("pi exited with: {}", captured.stderr)),
                         }
                     });
                 }
-                TurnEnd {
-                    session,
-                    error,
-                }
+                TurnEnd { session, error }
             }
             Err(failed) => TurnEnd {
                 session: None,
@@ -203,12 +206,16 @@ impl PiChatRunner {
             &self.config.velox_base_url,
             &self.config.velox_api_key,
         )
-        .map_err(|technical| fail("The agent could not complete this reply.", technical).unwrap())?;
+        .map_err(|technical| {
+            fail("The agent could not complete this reply.", technical).unwrap()
+        })?;
 
         let workdir = tempfile::Builder::new()
             .prefix("glyph-chat-turn-")
             .tempdir()
-            .map_err(|e| fail("The agent could not complete this reply.", e.to_string()).unwrap())?;
+            .map_err(|e| {
+                fail("The agent could not complete this reply.", e.to_string()).unwrap()
+            })?;
         let home = workdir.path().join("home");
         let sessions = workdir.path().join("sessions");
         // Pi pins sessions to the working directory they were created in
@@ -220,22 +227,28 @@ impl PiChatRunner {
         std::fs::create_dir_all(&home)
             .and_then(|_| std::fs::create_dir_all(&sessions))
             .and_then(|_| std::fs::create_dir_all(&work))
-            .map_err(|e| fail("The agent could not complete this reply.", e.to_string()).unwrap())?;
-        let agent_dir = self
-            .write_agent_dir(&home)
-            .map_err(|technical| fail("The agent could not complete this reply.", technical).unwrap())?;
-        process::write_models_json(&agent_dir, &target, &base_url)
-            .map_err(|technical| fail("The agent could not complete this reply.", technical).unwrap())?;
+            .map_err(|e| {
+                fail("The agent could not complete this reply.", e.to_string()).unwrap()
+            })?;
+        let agent_dir = self.write_agent_dir(&home).map_err(|technical| {
+            fail("The agent could not complete this reply.", technical).unwrap()
+        })?;
+        process::write_models_json(&agent_dir, &target, &base_url).map_err(|technical| {
+            fail("The agent could not complete this reply.", technical).unwrap()
+        })?;
         // Restore the stored session at its relative path.
         if let Some(session) = &turn.session {
             let file = sessions.join(&session.relative_path);
             std::fs::create_dir_all(file.parent().unwrap())
                 .and_then(|_| std::fs::write(&file, &session.bytes))
-                .map_err(|e| fail("The agent could not complete this reply.", e.to_string()).unwrap())?;
+                .map_err(|e| {
+                    fail("The agent could not complete this reply.", e.to_string()).unwrap()
+                })?;
         }
         let message = workdir.path().join("message.md");
-        std::fs::write(&message, &turn.message)
-            .map_err(|e| fail("The agent could not complete this reply.", e.to_string()).unwrap())?;
+        std::fs::write(&message, &turn.message).map_err(|e| {
+            fail("The agent could not complete this reply.", e.to_string()).unwrap()
+        })?;
 
         let argv = self.argv(turn, &agent_dir, &sessions, &message, api_key);
         let extra = vec![(
@@ -243,8 +256,9 @@ impl PiChatRunner {
             self.config.agent_api_url.clone(),
         )];
         let _ = events; // deltas stream from stdout below
-        let mut child = process::spawn(&self.config.pi_bin, &argv, &home, &work, &extra)
-            .map_err(|technical| fail("The agent could not complete this reply.", technical).unwrap())?;
+        let mut child = process::spawn(&self.config.pi_bin, &argv, &home, &work, &extra).map_err(
+            |technical| fail("The agent could not complete this reply.", technical).unwrap(),
+        )?;
         let captured = capture(&mut child, self.config.timeout, cancel).await;
         // Whatever the script wrote under the session dir comes back.
         let session = latest_session(&sessions);
@@ -311,11 +325,14 @@ fn latest_session(sessions: &Path) -> Option<SessionFile> {
             // Sessions group by working directory on disk; the stored
             // relative path is the file name only, so next turn's restore
             // writes it back the same way.
-            let relative = path
-                .file_name()?
-                .to_str()?
-                .to_string();
-            Some((path, SessionFile { relative_path: relative, bytes }))
+            let relative = path.file_name()?.to_str()?.to_string();
+            Some((
+                path,
+                SessionFile {
+                    relative_path: relative,
+                    bytes,
+                },
+            ))
         })
         .max_by_key(|(path, _)| {
             path.metadata()

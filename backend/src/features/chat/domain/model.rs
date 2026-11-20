@@ -55,10 +55,7 @@ impl ToolCall {
     /// Only a successful, unreverted `update_workflow` with stored YAML can
     /// be reverted; everything else links to the normal UI instead.
     pub fn revertible(&self) -> bool {
-        self.name == "update_workflow"
-            && !self.is_error
-            && !self.reverted
-            && self.revert.is_some()
+        self.name == "update_workflow" && !self.is_error && !self.reverted && self.revert.is_some()
     }
 }
 

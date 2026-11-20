@@ -157,9 +157,13 @@ mod tests {
             Some((&"call_abc123".to_string(), &"list_workflows".to_string()))
         );
         let finished = events.iter().find_map(|e| match e {
-            Parsed::ToolFinished { call_id, text, details, is_error, .. } => {
-                Some((call_id, text, details, is_error))
-            }
+            Parsed::ToolFinished {
+                call_id,
+                text,
+                details,
+                is_error,
+                ..
+            } => Some((call_id, text, details, is_error)),
             _ => None,
         });
         let (call_id, text, details, is_error) = finished.expect("tool finished");
@@ -194,7 +198,9 @@ mod tests {
         let parsed = parse_line(
             r#"{"type":"tool_execution_end","toolCallId":"c1","toolName":"list_workflows","result":{"content":[{"type":"text","text":"fetch failed"}]},"isError":true}"#,
         );
-        assert!(matches!(&parsed, Parsed::ToolFinished { is_error: true, text, .. } if text == "fetch failed"));
+        assert!(
+            matches!(&parsed, Parsed::ToolFinished { is_error: true, text, .. } if text == "fetch failed")
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
-use async_trait::async_trait;
 use crate::shared::error::DomainResult;
 use crate::shared::uow::UnitOfWork;
+use async_trait::async_trait;
 
 /// Key of the chat agent's model in `app_settings`.
 pub const CHAT_MODEL_ID: &str = "chat_model_id";

@@ -1,21 +1,21 @@
 //! `ChatService` gRPC edge, including the `WatchChat` stream.
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::features::chat::application::ChatService;
+use crate::features::chat::domain::events::{ChatEvent, ChatEventKind};
+use crate::features::chat::domain::model::*;
+use crate::features::chat::ports::ChatBus;
+use crate::proto::convert::{parse_id, timestamp};
+use crate::proto::pb;
+use crate::proto::pb::chat_service_server::ChatService as Rpc;
+use crate::shared::ids::ChatId;
 use chrono::Utc;
 use futures_core::Stream;
 use futures_util::StreamExt;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
-use crate::features::chat::domain::events::{ChatEvent, ChatEventKind};
-use crate::features::chat::ports::ChatBus;
-use crate::features::chat::application::ChatService;
-use crate::features::chat::domain::model::*;
-use crate::proto::convert::{parse_id, timestamp};
-use crate::shared::ids::ChatId;
-use crate::proto::pb;
-use crate::proto::pb::chat_service_server::ChatService as Rpc;
 
 #[derive(Clone)]
 pub struct ChatGrpc {
@@ -26,8 +26,18 @@ pub struct ChatGrpc {
 }
 
 impl ChatGrpc {
-    pub fn new(service: ChatService, bus: Arc<dyn ChatBus>, heartbeat: Option<Duration>, stop: CancellationToken) -> Self {
-        Self { service, bus, heartbeat, stop }
+    pub fn new(
+        service: ChatService,
+        bus: Arc<dyn ChatBus>,
+        heartbeat: Option<Duration>,
+        stop: CancellationToken,
+    ) -> Self {
+        Self {
+            service,
+            bus,
+            heartbeat,
+            stop,
+        }
     }
 }
 
@@ -212,7 +222,9 @@ impl Rpc for ChatGrpc {
 
     async fn create_chat(&self, _r: Request<pb::CreateChatRequest>) -> Rsp<pb::CreateChatResponse> {
         let c = self.service.create().await?;
-        Ok(Response::new(pb::CreateChatResponse { chat: Some(chat(&c)) }))
+        Ok(Response::new(pb::CreateChatResponse {
+            chat: Some(chat(&c)),
+        }))
     }
 
     async fn rename_chat(&self, r: Request<pb::RenameChatRequest>) -> Rsp<pb::RenameChatResponse> {
@@ -221,7 +233,9 @@ impl Rpc for ChatGrpc {
             .service
             .rename(parse_id(&r.chat_id, "chat_id")?, &r.title)
             .await?;
-        Ok(Response::new(pb::RenameChatResponse { chat: Some(chat(&c)) }))
+        Ok(Response::new(pb::RenameChatResponse {
+            chat: Some(chat(&c)),
+        }))
     }
 
     async fn delete_chat(&self, r: Request<pb::DeleteChatRequest>) -> Rsp<pb::DeleteChatResponse> {
@@ -230,7 +244,10 @@ impl Rpc for ChatGrpc {
             .await?;
         Ok(Response::new(pb::DeleteChatResponse {}))
     }
-    async fn send_message(&self, r: Request<pb::SendMessageRequest>) -> Rsp<pb::SendMessageResponse> {
+    async fn send_message(
+        &self,
+        r: Request<pb::SendMessageRequest>,
+    ) -> Rsp<pb::SendMessageResponse> {
         let r = r.into_inner();
         self.service
             .send(parse_id(&r.chat_id, "chat_id")?, &r.text)

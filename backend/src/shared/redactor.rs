@@ -54,7 +54,11 @@ impl Redactor {
 
     /// Longest known secret value, in characters (0 when none).
     pub fn longest_secret(&self) -> usize {
-        self.secrets.iter().map(|s| s.chars().count()).max().unwrap_or(0)
+        self.secrets
+            .iter()
+            .map(|s| s.chars().count())
+            .max()
+            .unwrap_or(0)
     }
 }
 

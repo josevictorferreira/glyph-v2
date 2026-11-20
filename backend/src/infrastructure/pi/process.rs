@@ -24,10 +24,7 @@ pub struct Target {
 /// `provider/model` → the pair; bare → catalog lookup by model id else the
 /// default provider (velox). A missing catalog never blocks: the default
 /// provider is used.
-pub fn target(
-    model_id: &str,
-    view: Option<&crate::features::workflows::CatalogView>,
-) -> Target {
+pub fn target(model_id: &str, view: Option<&crate::features::workflows::CatalogView>) -> Target {
     match model_id.split_once('/') {
         Some((provider, model)) => Target {
             provider: provider.to_string(),
@@ -67,11 +64,7 @@ pub fn provider_settings(
 }
 
 /// Writes `<agent_dir>/models.json` pointing Pi at one model.
-pub fn write_models_json(
-    agent_dir: &Path,
-    target: &Target,
-    base_url: &str,
-) -> Result<(), String> {
+pub fn write_models_json(agent_dir: &Path, target: &Target, base_url: &str) -> Result<(), String> {
     let models = json!({
         "providers": {
             target.provider.clone(): {

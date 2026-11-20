@@ -36,7 +36,10 @@ fn workflow_blocks() -> Vec<(usize, String)> {
 #[test]
 fn every_guide_workflow_parses_with_zero_errors() {
     let blocks = workflow_blocks();
-    assert!(!blocks.is_empty(), "the guide has no `yaml workflow` blocks");
+    assert!(
+        !blocks.is_empty(),
+        "the guide has no `yaml workflow` blocks"
+    );
     for (line, body) in blocks {
         let errors = parser::parse(&body, None).err().unwrap_or_default();
         assert!(
@@ -60,7 +63,11 @@ fn the_extension_registers_exactly_the_agent_tools() {
         .filter(|l| l.trim_start().starts_with("name: "))
         .filter_map(|l| l.split('"').nth(1).map(str::to_string))
         .collect();
-    assert_eq!(registered.len(), AGENT_TOOLS.len(), "extra tools: {registered:?}");
+    assert_eq!(
+        registered.len(),
+        AGENT_TOOLS.len(),
+        "extra tools: {registered:?}"
+    );
     for name in &registered {
         assert!(
             AGENT_TOOLS.contains(&name.as_str()),
@@ -92,14 +99,14 @@ fn the_guide_documents_every_top_level_definition_key() {
 #[test]
 fn the_guide_covers_the_agent_loop_and_common_mistakes() {
     for topic in [
-        "export",       // the export → edit → validate → apply loop
-        "validate",     //
-        "fingerprint",  // optimistic concurrency for update_workflow
-        "inputs",       // workflow inputs
-        "ref",          // shared texts { ref, vars }
-        "schedule",     // scheduling
-        "helper",       // helper steps
-        "connections",  // DAG connections
+        "export",      // the export → edit → validate → apply loop
+        "validate",    //
+        "fingerprint", // optimistic concurrency for update_workflow
+        "inputs",      // workflow inputs
+        "ref",         // shared texts { ref, vars }
+        "schedule",    // scheduling
+        "helper",      // helper steps
+        "connections", // DAG connections
     ] {
         assert!(GUIDE.contains(topic), "guide does not cover {topic}");
     }

@@ -1,13 +1,13 @@
 //! Ports for the chat feature: persistence, the runner, the event bus.
-use async_trait::async_trait;
-use tokio::sync::broadcast;
-use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use crate::features::chat::domain::events::ChatEvent;
 use crate::features::chat::domain::model::*;
 use crate::shared::error::DomainResult;
 use crate::shared::ids::{ChatId, ChatMessageId};
 use crate::shared::uow::UnitOfWork;
+use async_trait::async_trait;
+use tokio::sync::broadcast;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 /// A stored Pi session file: bytes plus its path relative to the session dir.
 pub struct SessionFile {
@@ -67,11 +67,8 @@ pub trait ChatTx: UnitOfWork {
     async fn delete_message(&mut self, id: ChatMessageId) -> DomainResult<()>;
     /// Flips a tool message's `reverted` flag (its stored ToolCall).
     async fn mark_message_reverted(&mut self, id: ChatMessageId) -> DomainResult<()>;
-    async fn save_session(
-        &mut self,
-        id: ChatId,
-        session: Option<&SessionFile>,
-    ) -> DomainResult<()>;
+    async fn save_session(&mut self, id: ChatId, session: Option<&SessionFile>)
+    -> DomainResult<()>;
     async fn load_session(&mut self, id: ChatId) -> DomainResult<Option<SessionFile>>;
 }
 

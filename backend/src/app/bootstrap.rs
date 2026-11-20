@@ -16,12 +16,12 @@ use tonic_web::GrpcWebLayer;
 use crate::app::{router, state::AppState};
 use crate::config::{Config, StepRunnerKind};
 use crate::features::catalog::grpc::CatalogGrpc;
-use crate::features::chat::grpc::ChatGrpc;
-use crate::features::chat::ChatService;
-use crate::features::chat::ports::{ChatPublisher, ChatRunner};
 use crate::features::catalog::{
     CatalogStore, ListModels, ModelGateway, Provider, RefreshModels, WorkflowFlagger,
 };
+use crate::features::chat::ChatService;
+use crate::features::chat::grpc::ChatGrpc;
+use crate::features::chat::ports::{ChatPublisher, ChatRunner};
 use crate::features::definition::DefinitionService;
 use crate::features::definition::grpc::DefinitionGrpc;
 use crate::features::live::grpc::LiveGrpc;
@@ -195,7 +195,10 @@ pub async fn build_with(
                     },
                     redactor(config),
                 );
-                (Arc::new(runner) as Arc<dyn ChatRunner>, Arc::new(OnceLock::new()))
+                (
+                    Arc::new(runner) as Arc<dyn ChatRunner>,
+                    Arc::new(OnceLock::new()),
+                )
             }
         },
     };
@@ -297,30 +300,30 @@ pub async fn build_with(
             redactor(config),
         )
         .queue(SCHEDULING_QUEUE, 1)
-            .queue(MAINTENANCE_QUEUE, 1)
-            .handle(DISPATCH_DUE, {
+        .queue(MAINTENANCE_QUEUE, 1)
+        .handle(DISPATCH_DUE, {
+            let (scheduling, clock) = (scheduling.clone(), clock.clone());
+            move |_| {
                 let (scheduling, clock) = (scheduling.clone(), clock.clone());
-                move |_| {
-                    let (scheduling, clock) = (scheduling.clone(), clock.clone());
-                    async move {
-                        let dispatched = scheduling.dispatch(clock.now()).await?;
-                        if dispatched > 0 {
-                            tracing::info!(dispatched, "scheduled runs created");
-                        }
-                        Ok(())
+                async move {
+                    let dispatched = scheduling.dispatch(clock.now()).await?;
+                    if dispatched > 0 {
+                        tracing::info!(dispatched, "scheduled runs created");
                     }
+                    Ok(())
                 }
-            })
-            .handle(REFRESH_MODELS, {
-                let refresh = refresh_models.clone();
-                move |_| {
-                    let refresh = refresh.clone();
-                    async move {
-                        refresh.refresh_all().await;
-                        Ok(())
-                    }
+            }
+        })
+        .handle(REFRESH_MODELS, {
+            let refresh = refresh_models.clone();
+            move |_| {
+                let refresh = refresh.clone();
+                async move {
+                    refresh.refresh_all().await;
+                    Ok(())
                 }
-            });
+            }
+        });
         background.push(worker.spawn(stop.clone(), config.shutdown_grace));
         background.push(recovery::spawn(
             pool.clone(),
@@ -395,11 +398,17 @@ fn worker(
             let (chat, chat_runner, chat_publisher, redactor) =
                 (chat.clone(), chat_runner, chat_publisher, redactor);
             move |payload| {
-                let (chat, chat_runner, chat_publisher, redactor) =
-                    (chat.clone(), chat_runner.clone(), chat_publisher.clone(), redactor.clone());
+                let (chat, chat_runner, chat_publisher, redactor) = (
+                    chat.clone(),
+                    chat_runner.clone(),
+                    chat_publisher.clone(),
+                    redactor.clone(),
+                );
                 async move {
                     let chat_id: crate::shared::ids::ChatId = id_from(&payload, "chat_id")?;
-                    Ok(chat.run_turn(chat_id, chat_runner, chat_publisher, redactor).await?)
+                    Ok(chat
+                        .run_turn(chat_id, chat_runner, chat_publisher, redactor)
+                        .await?)
                 }
             }
         })
@@ -436,7 +445,8 @@ fn recovery(config: &Config, runs: &RunService, chat: &ChatService) -> Recovery 
                         runs.requeue_run(id_from(&job.payload, "run_id")?).await?
                     }
                     crate::features::chat::RUN_CHAT_TURN => {
-                        chat.interrupt_turn(id_from(&job.payload, "chat_id")?).await?
+                        chat.interrupt_turn(id_from(&job.payload, "chat_id")?)
+                            .await?
                     }
                     // Recurring kinds are enqueued again by their ticker.
                     _ => {}

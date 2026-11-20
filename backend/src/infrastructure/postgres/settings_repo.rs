@@ -1,9 +1,9 @@
 //! `app_settings` adapter.
-use async_trait::async_trait;
 use crate::features::settings::{SettingsStore, SettingsTx};
 use crate::infrastructure::postgres::PgStore;
 use crate::infrastructure::postgres::uow::{PgTx, db};
 use crate::shared::error::DomainResult;
+use async_trait::async_trait;
 
 #[async_trait]
 impl SettingsStore for PgStore {

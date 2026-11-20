@@ -62,7 +62,11 @@ impl StreamBuffer {
         self.raw.push_str(chunk);
         let candidate = self.redactor.redact(&self.raw);
         let total = candidate.chars().count();
-        let hold = self.redactor.longest_secret().saturating_sub(1).max(BASE_HOLD);
+        let hold = self
+            .redactor
+            .longest_secret()
+            .saturating_sub(1)
+            .max(BASE_HOLD);
         let mut safe = total.saturating_sub(hold);
         if safe == 0 {
             return None;
@@ -109,9 +113,8 @@ mod tests {
     }
 
     fn whole() -> String {
-        let text = format!(
-            "the key is {SECRET} and sk-abc123def456ghi789 plus Bearer eyJtoken123456789"
-        );
+        let text =
+            format!("the key is {SECRET} and sk-abc123def456ghi789 plus Bearer eyJtoken123456789");
         Redactor::new([SECRET.to_string()]).redact(&text)
     }
 
@@ -119,9 +122,8 @@ mod tests {
     /// that concatenate exactly to `redact(whole)`, with contiguous offsets.
     #[test]
     fn every_split_concatenates_to_the_whole_redaction() {
-        let raw = format!(
-            "the key is {SECRET} and sk-abc123def456ghi789 plus Bearer eyJtoken123456789"
-        );
+        let raw =
+            format!("the key is {SECRET} and sk-abc123def456ghi789 plus Bearer eyJtoken123456789");
         for parts in [2usize, 3] {
             for i in 1..raw.len() {
                 let chunks: Vec<&str> = if parts == 2 {

@@ -1,12 +1,12 @@
 //! Chat storage and (later) ChatService over gRPC (spec 0024).
 mod common;
-use std::sync::Arc;
 use glyph_backend::features::chat::domain::model::*;
-use glyph_backend::shared::ids::ChatId;
 use glyph_backend::features::chat::ports::{ChatStore, NewMessage};
 use glyph_backend::infrastructure::crypto::AesGcmCipher;
 use glyph_backend::infrastructure::postgres::PgStore;
+use glyph_backend::shared::ids::ChatId;
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 fn store(pool: &PgPool) -> PgStore {
@@ -200,7 +200,11 @@ async fn crud_round_trip(pool: PgPool) {
     assert_eq!(created.title, "");
     assert_eq!(created.status, pb::ChatStatus::Idle as i32);
 
-    let listed = client.list_chats(pb::ListChatsRequest {}).await.unwrap().into_inner();
+    let listed = client
+        .list_chats(pb::ListChatsRequest {})
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(listed.chats.len(), 1);
     assert_eq!(listed.chats[0].id, created.id);
 
@@ -217,7 +221,9 @@ async fn crud_round_trip(pool: PgPool) {
     assert_eq!(renamed.title, "My plan");
 
     let chat = client
-        .get_chat(pb::GetChatRequest { chat_id: created.id.clone() })
+        .get_chat(pb::GetChatRequest {
+            chat_id: created.id.clone(),
+        })
         .await
         .unwrap()
         .into_inner();
@@ -225,10 +231,16 @@ async fn crud_round_trip(pool: PgPool) {
     assert!(chat.messages.is_empty());
 
     client
-        .delete_chat(pb::DeleteChatRequest { chat_id: created.id })
+        .delete_chat(pb::DeleteChatRequest {
+            chat_id: created.id,
+        })
         .await
         .unwrap();
-    let listed = client.list_chats(pb::ListChatsRequest {}).await.unwrap().into_inner();
+    let listed = client
+        .list_chats(pb::ListChatsRequest {})
+        .await
+        .unwrap()
+        .into_inner();
     assert!(listed.chats.is_empty());
 }
 
@@ -255,7 +267,9 @@ async fn delete_running_chat_is_refused(pool: PgPool) {
     let server = common::spawn(pool).await;
     let mut client = Grpc::new(server.channel().await);
     let error = client
-        .delete_chat(pb::DeleteChatRequest { chat_id: chat.id.to_string() })
+        .delete_chat(pb::DeleteChatRequest {
+            chat_id: chat.id.to_string(),
+        })
         .await
         .unwrap_err();
     assert_eq!(error.code(), Code::FailedPrecondition);
@@ -269,7 +283,9 @@ async fn message_length_counts_characters(pool: PgPool) {
     let server = common::spawn(pool).await;
     let mut client = Grpc::new(server.channel().await);
     let response = client
-        .get_chat(pb::GetChatRequest { chat_id: chat.id.to_string() })
+        .get_chat(pb::GetChatRequest {
+            chat_id: chat.id.to_string(),
+        })
         .await
         .unwrap()
         .into_inner();
@@ -297,7 +313,10 @@ fn oversized_text_delta_splits_on_character_boundary() {
     let parts = glyph_backend::features::chat::domain::events::split_oversized(&event);
     assert!(parts.len() > 1, "2000-byte delta must split");
     for p in &parts {
-        assert!(serde_json::to_string(&p).unwrap().len() <= 2048, "part fits");
+        assert!(
+            serde_json::to_string(&p).unwrap().len() <= 2048,
+            "part fits"
+        );
     }
     let joined: String = parts.iter().map(|p| p.text.clone().unwrap()).collect();
     assert_eq!(joined.chars().count(), 1500);
@@ -391,26 +410,27 @@ mod send {
         assert_eq!(messages[0].text.as_deref(), Some("hello"));
         assert_eq!(messages[1].kind, MessageKind::Assistant);
         assert_eq!(messages[1].status, MessageStatus::Streaming);
-        let jobs: Vec<(String, serde_json::Value)> = sqlx::query_as(
-            "SELECT kind, payload FROM jobs WHERE finished_at IS NULL",
-        )
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+        let jobs: Vec<(String, serde_json::Value)> =
+            sqlx::query_as("SELECT kind, payload FROM jobs WHERE finished_at IS NULL")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
         assert_eq!(jobs.len(), 1, "exactly one job: {jobs:?}");
         assert_eq!(jobs[0].0, "run_chat_turn");
         assert_eq!(
             jobs[0].1,
             serde_json::json!({ "chat_id": chat.id.to_string() })
         );
-        let events: Vec<String> = sqlx::query_scalar(
-            "SELECT event_type FROM events WHERE stream = $1 ORDER BY id",
-        )
-        .bind(format!("Chat${}", chat.id))
-        .fetch_all(&pool)
-        .await
-        .unwrap();
-        assert!(events.contains(&"ChatTurnStarted".to_string()), "{events:?}");
+        let events: Vec<String> =
+            sqlx::query_scalar("SELECT event_type FROM events WHERE stream = $1 ORDER BY id")
+                .bind(format!("Chat${}", chat.id))
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert!(
+            events.contains(&"ChatTurnStarted".to_string()),
+            "{events:?}"
+        );
     }
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
@@ -503,15 +523,18 @@ mod turn {
     use super::*;
     use glyph_backend::features::chat::domain::events::ChatEventKind;
     use glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner;
-    pub(super) use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
     use glyph_backend::proto::pb;
+    pub(super) use glyph_backend::proto::pb::chat_service_client::ChatServiceClient as Client;
     use std::time::Duration;
 
     pub(super) async fn seeded(pool: &PgPool) -> common::TestServer {
         runner_server(pool, Arc::new(FakeChatRunner::new())).await
     }
 
-    pub(super) async fn runner_server(pool: &PgPool, runner: Arc<dyn glyph_backend::features::chat::ports::ChatRunner>) -> common::TestServer {
+    pub(super) async fn runner_server(
+        pool: &PgPool,
+        runner: Arc<dyn glyph_backend::features::chat::ports::ChatRunner>,
+    ) -> common::TestServer {
         common::engine::seed_model(pool).await;
         common::spawn_with(
             pool.clone(),
@@ -577,19 +600,18 @@ mod turn {
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[1].kind, MessageKind::Assistant);
         assert_eq!(messages[1].status, MessageStatus::Done);
-        assert_eq!(
-            messages[1].text.as_deref(),
-            Some("Fake reply to: hello")
-        );
+        assert_eq!(messages[1].text.as_deref(), Some("Fake reply to: hello"));
         let events = events_for(&pool, chat.id).await;
-        assert!(events.contains(&"ChatTurnFinished".to_string()), "{events:?}");
-        let session: Option<i32> = sqlx::query_scalar(
-            "SELECT octet_length(pi_session) FROM chats WHERE id = $1",
-        )
-        .bind(chat.id.as_uuid())
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        assert!(
+            events.contains(&"ChatTurnFinished".to_string()),
+            "{events:?}"
+        );
+        let session: Option<i32> =
+            sqlx::query_scalar("SELECT octet_length(pi_session) FROM chats WHERE id = $1")
+                .bind(chat.id.as_uuid())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert!(session.unwrap_or(0) > 0, "session blob saved");
     }
 
@@ -613,7 +635,9 @@ mod turn {
                 Ok(Ok(event)) => event,
                 _ => break,
             };
-            if event.kind != ChatEventKind::TextDelta { continue; }
+            if event.kind != ChatEventKind::TextDelta {
+                continue;
+            }
             assert_eq!(event.offset, Some(expect_offset), "contiguous offsets");
             expect_offset += event.text.clone().unwrap_or_default().chars().count();
             got.push_str(&event.text.unwrap_or_default());
@@ -629,11 +653,15 @@ mod turn {
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
     async fn mid_turn_getchat_shows_streaming_and_matching_length(pool: PgPool) {
         use glyph_backend::infrastructure::fake_chat_runner::Script;
-        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
-            Script::Delta("word ".repeat(40)),
-            Script::Sleep(2000),
-            Script::Delta(" done".into()),
-        ]))).await;
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                Script::Delta("word ".repeat(40)),
+                Script::Sleep(2000),
+                Script::Delta(" done".into()),
+            ])),
+        )
+        .await;
         set_model(&server).await;
         let chat = new_chat(&pool).await;
         send(&server, chat.id, "hello").await;
@@ -642,23 +670,38 @@ mod turn {
         for _ in 0..100 {
             let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
             if stored.status == ChatStatus::Running {
-                let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+                let assistant = messages
+                    .iter()
+                    .find(|m| m.kind == MessageKind::Assistant)
+                    .unwrap();
                 if assistant.status == MessageStatus::Streaming {
                     let response = cc
-                        .get_chat(pb::GetChatRequest { chat_id: chat.id.to_string() })
+                        .get_chat(pb::GetChatRequest {
+                            chat_id: chat.id.to_string(),
+                        })
                         .await
                         .unwrap()
                         .into_inner();
                     let m = response.messages.last().unwrap();
                     assert_eq!(m.status, pb::ChatMessageStatus::Streaming as i32);
-                    assert_eq!(m.length as usize, assistant.text.as_deref().map(|t| t.chars().count()).unwrap_or(0));
+                    assert_eq!(
+                        m.length as usize,
+                        assistant
+                            .text
+                            .as_deref()
+                            .map(|t| t.chars().count())
+                            .unwrap_or(0)
+                    );
                     streaming_seen = true;
                     break;
                 }
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        assert!(streaming_seen, "never observed a streaming assistant message");
+        assert!(
+            streaming_seen,
+            "never observed a streaming assistant message"
+        );
         wait_idle(&pool, chat.id).await;
     }
 
@@ -667,10 +710,14 @@ mod turn {
         use glyph_backend::features::chat::ports::ChatBus;
         use glyph_backend::infrastructure::fake_chat_runner::Script;
         use glyph_backend::infrastructure::postgres::listener::ChatHub;
-        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
-            Script::Delta("The key is sk-live-abcdef123456".into()),
-            Script::Sleep(100),
-        ]))).await;
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                Script::Delta("The key is sk-live-abcdef123456".into()),
+                Script::Sleep(100),
+            ])),
+        )
+        .await;
         set_model(&server).await;
         let hub = ChatHub::new(64);
         let stop = tokio_util::sync::CancellationToken::new();
@@ -689,11 +736,23 @@ mod turn {
                 published.push_str(&event.text.unwrap_or_default());
             }
         }
-        assert!(!published.contains("sk-live-abcdef123456"), "secret leaked in a delta: {published:?}");
+        assert!(
+            !published.contains("sk-live-abcdef123456"),
+            "secret leaked in a delta: {published:?}"
+        );
         wait_idle(&pool, chat.id).await;
         let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
-        let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
-        assert!(!assistant.text.as_deref().unwrap_or("").contains("sk-live-abcdef123456"));
+        let assistant = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Assistant)
+            .unwrap();
+        assert!(
+            !assistant
+                .text
+                .as_deref()
+                .unwrap_or("")
+                .contains("sk-live-abcdef123456")
+        );
         stop.cancel();
         let _ = task.await;
     }
@@ -701,20 +760,36 @@ mod turn {
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
     async fn runner_error_fails_message_keeps_partial_text(pool: PgPool) {
         use glyph_backend::infrastructure::fake_chat_runner::Script;
-        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
-            Script::Delta("partial answer ".into()),
-            Script::Fail("The agent failed to answer.".into()),
-        ]))).await;
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                Script::Delta("partial answer ".into()),
+                Script::Fail("The agent failed to answer.".into()),
+            ])),
+        )
+        .await;
         set_model(&server).await;
         let chat = new_chat(&pool).await;
         send(&server, chat.id, "hello").await;
         wait_idle(&pool, chat.id).await;
         let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
         assert_eq!(stored.status, ChatStatus::Idle);
-        let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+        let assistant = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Assistant)
+            .unwrap();
         assert_eq!(assistant.status, MessageStatus::Failed);
-        assert_eq!(assistant.error.as_deref(), Some("The agent failed to answer."));
-        assert!(assistant.text.as_deref().unwrap_or("").starts_with("partial answer"));
+        assert_eq!(
+            assistant.error.as_deref(),
+            Some("The agent failed to answer.")
+        );
+        assert!(
+            assistant
+                .text
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("partial answer")
+        );
         let events = events_for(&pool, chat.id).await;
         assert!(events.contains(&"ChatTurnFailed".to_string()), "{events:?}");
     }
@@ -723,17 +798,21 @@ mod turn {
 // --- Cancel and recovery (3.5) -----------------------------------------------
 
 mod cancel {
-    use super::turn::{runner_server, seeded, send, set_model, wait_idle, Client};
+    use super::turn::{Client, runner_server, seeded, send, set_model, wait_idle};
     use super::*;
     use glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner;
-    use std::time::Duration;
     use glyph_backend::infrastructure::fake_chat_runner::Script;
+    use std::time::Duration;
 
     async fn sleep_server(pool: &PgPool) -> common::TestServer {
-        runner_server(pool, Arc::new(FakeChatRunner::scripted(vec![
-            Script::Delta("thinking ".into()),
-            Script::Sleep(600_000),
-        ]))).await
+        runner_server(
+            pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                Script::Delta("thinking ".into()),
+                Script::Sleep(600_000),
+            ])),
+        )
+        .await
     }
 
     async fn recovery_server(pool: &PgPool) -> common::TestServer {
@@ -768,10 +847,17 @@ mod cancel {
         .unwrap();
         let started = std::time::Instant::now();
         wait_idle(&pool, chat.id).await;
-        assert!(started.elapsed() < Duration::from_secs(2), "cancel took {:?}", started.elapsed());
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "cancel took {:?}",
+            started.elapsed()
+        );
         let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
         assert_eq!(stored.status, ChatStatus::Idle);
-        let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant).unwrap();
+        let assistant = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Assistant)
+            .unwrap();
         assert_eq!(assistant.status, MessageStatus::Failed);
         assert_eq!(assistant.error.as_deref(), Some("Cancelled."));
     }
@@ -798,10 +884,12 @@ mod cancel {
         send(&server, chat.id, "long").await;
         tokio::time::sleep(Duration::from_millis(300)).await;
         // Simulate a dead worker: stale lock, no heartbeat.
-        sqlx::query("UPDATE jobs SET locked_at = now() - interval '10 minutes', locked_by = 'dead-worker'")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "UPDATE jobs SET locked_at = now() - interval '10 minutes', locked_by = 'dead-worker'",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query("DELETE FROM job_workers")
             .execute(&pool)
             .await
@@ -811,14 +899,15 @@ mod cancel {
             let (stored, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
             let assistant = messages.iter().find(|m| m.kind == MessageKind::Assistant);
             if stored.status == ChatStatus::Idle
-                && assistant
-                    .and_then(|m| m.error.clone())
-                    .as_deref()
+                && assistant.and_then(|m| m.error.clone()).as_deref()
                     == Some("The turn was interrupted before it finished.")
             {
                 break;
             }
-            assert!(started.elapsed() < Duration::from_secs(120), "not recovered in time");
+            assert!(
+                started.elapsed() < Duration::from_secs(120),
+                "not recovered in time"
+            );
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
     }
@@ -856,7 +945,10 @@ mod cancel {
                 );
                 break;
             }
-            assert!(started.elapsed() < Duration::from_secs(120), "not recovered in time");
+            assert!(
+                started.elapsed() < Duration::from_secs(120),
+                "not recovered in time"
+            );
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
     }
@@ -874,7 +966,10 @@ mod watch {
     use tower::util::ServiceExt;
 
     /// One decoded gRPC-Web frame from the response body.
-    async fn frame(body: &mut axum::body::Body, buf: &mut Vec<u8>) -> Option<pb::WatchChatResponse> {
+    async fn frame(
+        body: &mut axum::body::Body,
+        buf: &mut Vec<u8>,
+    ) -> Option<pb::WatchChatResponse> {
         #[allow(clippy::never_loop)]
         loop {
             while buf.len() >= 5 {
@@ -894,7 +989,10 @@ mod watch {
     }
 
     async fn open(server: &common::TestServer, chat: ChatId) -> (axum::body::Body, Vec<u8>) {
-        let request = pb::WatchChatRequest { chat_id: chat.to_string() }.encode_to_vec();
+        let request = pb::WatchChatRequest {
+            chat_id: chat.to_string(),
+        }
+        .encode_to_vec();
         let mut wire = vec![0u8];
         wire.extend_from_slice(&(request.len() as u32).to_be_bytes());
         wire.extend_from_slice(&request);
@@ -940,11 +1038,13 @@ mod watch {
     async fn stream_opens_with_heartbeat_and_delivers_deltas_and_updates(pool: PgPool) {
         let server = super::turn::runner_server(
             &pool,
-            Arc::new(glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner::scripted(vec![
-                glyph_backend::infrastructure::fake_chat_runner::Script::Delta(
-                    "The quick brown fox jumps over the lazy dog again and again".into(),
-                ),
-            ])),
+            Arc::new(
+                glyph_backend::infrastructure::fake_chat_runner::FakeChatRunner::scripted(vec![
+                    glyph_backend::infrastructure::fake_chat_runner::Script::Delta(
+                        "The quick brown fox jumps over the lazy dog again and again".into(),
+                    ),
+                ]),
+            ),
         )
         .await;
         super::turn::set_model(&server).await;
@@ -966,7 +1066,9 @@ mod watch {
                         assert_eq!(e.chat_id, chat.id.to_string());
                         saw_delta = true;
                     }
-                    pb::ChatEventType::ChatUpdated | pb::ChatEventType::MessageUpdated if saw_delta => {
+                    pb::ChatEventType::ChatUpdated | pb::ChatEventType::MessageUpdated
+                        if saw_delta =>
+                    {
                         return event;
                     }
                     _ => {}
@@ -1036,21 +1138,25 @@ mod tools {
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
     async fn text_tool_text_produces_three_messages_in_seq_order(pool: PgPool) {
-        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
-            Script::Delta("Thinking about it… ".into()),
-            tool_finished(
-                "Edited the definition.",
-                serde_json::json!({
-                    "workflow_id": "11111111-1111-1111-1111-111111111111",
-                    "workflow_name": "Weekly digest",
-                    "summary": "Edited the definition.",
-                    "previous_yaml": "name: Old\n",
-                    "fingerprint": "abc123",
-                }),
-                false,
-            ),
-            Script::Delta("Done, the schedule is set.".into()),
-        ]))).await;
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                Script::Delta("Thinking about it… ".into()),
+                tool_finished(
+                    "Edited the definition.",
+                    serde_json::json!({
+                        "workflow_id": "11111111-1111-1111-1111-111111111111",
+                        "workflow_name": "Weekly digest",
+                        "summary": "Edited the definition.",
+                        "previous_yaml": "name: Old\n",
+                        "fingerprint": "abc123",
+                    }),
+                    false,
+                ),
+                Script::Delta("Done, the schedule is set.".into()),
+            ])),
+        )
+        .await;
         set_model(&server).await;
         let chat = new_chat(&pool).await;
         send(&server, chat.id, "add a schedule").await;
@@ -1067,7 +1173,10 @@ mod tools {
             ],
             "{kinds:?}"
         );
-        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let tool = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Tool)
+            .unwrap();
         let call = tool.tool.as_ref().unwrap();
         assert_eq!(call.name, "update_workflow");
         assert_eq!(call.summary, "Edited the definition.");
@@ -1078,11 +1187,17 @@ mod tools {
         // The pre-change YAML never leaves through the proto.
         let mut cc = turn::Client::new(server.channel().await);
         let response = cc
-            .get_chat(pb::GetChatRequest { chat_id: chat.id.to_string() })
+            .get_chat(pb::GetChatRequest {
+                chat_id: chat.id.to_string(),
+            })
             .await
             .unwrap()
             .into_inner();
-        let tool_msg = response.messages.iter().find(|m| m.kind == pb::ChatMessageKind::Tool as i32).unwrap();
+        let tool_msg = response
+            .messages
+            .iter()
+            .find(|m| m.kind == pb::ChatMessageKind::Tool as i32)
+            .unwrap();
         let exposed = tool_msg.tool.as_ref().unwrap();
         assert!(exposed.revertible);
         assert_eq!(exposed.summary, "Edited the definition.");
@@ -1093,18 +1208,22 @@ mod tools {
 
     #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
     async fn tool_without_preceding_text_leaves_no_empty_assistant(pool: PgPool) {
-        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
-            tool_finished(
-                "Edited the definition.",
-                serde_json::json!({
-                    "workflow_id": "11111111-1111-1111-1111-111111111111",
-                    "previous_yaml": "name: Old\n",
-                    "fingerprint": "abc123",
-                }),
-                false,
-            ),
-            Script::Delta("All done.".into()),
-        ]))).await;
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                tool_finished(
+                    "Edited the definition.",
+                    serde_json::json!({
+                        "workflow_id": "11111111-1111-1111-1111-111111111111",
+                        "previous_yaml": "name: Old\n",
+                        "fingerprint": "abc123",
+                    }),
+                    false,
+                ),
+                Script::Delta("All done.".into()),
+            ])),
+        )
+        .await;
         set_model(&server).await;
         let chat = new_chat(&pool).await;
         send(&server, chat.id, "edit it").await;
@@ -1112,7 +1231,9 @@ mod tools {
         let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
         assert_eq!(messages.len(), 3, "{messages:?}"); // user, tool, assistant
         assert!(
-            messages.iter().all(|m| m.text.as_deref().is_none_or(|t| !t.is_empty())),
+            messages
+                .iter()
+                .all(|m| m.text.as_deref().is_none_or(|t| !t.is_empty())),
             "an empty message survived: {messages:?}"
         );
     }
@@ -1121,29 +1242,44 @@ mod tools {
     async fn tool_summary_and_detail_are_redacted(pool: PgPool) {
         // The dev secrets come from the environment; a literal database
         // password style marker is caught by the sk- pattern instead.
-        let server = runner_server(&pool, Arc::new(FakeChatRunner::scripted(vec![
-            tool_finished(
-                "Updated with sk-live-abcdef123456",
-                serde_json::json!({
-                    "workflow_id": "11111111-1111-1111-1111-111111111111",
-                    "detail": "token sk-live-abcdef123456 rejected",
-                    "previous_yaml": "name: Old\n",
-                    "fingerprint": "abc123",
-                }),
-                false,
-            ),
-            Script::Delta("Done.".into()),
-        ]))).await;
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![
+                tool_finished(
+                    "Updated with sk-live-abcdef123456",
+                    serde_json::json!({
+                        "workflow_id": "11111111-1111-1111-1111-111111111111",
+                        "detail": "token sk-live-abcdef123456 rejected",
+                        "previous_yaml": "name: Old\n",
+                        "fingerprint": "abc123",
+                    }),
+                    false,
+                ),
+                Script::Delta("Done.".into()),
+            ])),
+        )
+        .await;
         set_model(&server).await;
         let chat = new_chat(&pool).await;
         send(&server, chat.id, "edit").await;
         wait_idle(&pool, chat.id).await;
         let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
-        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let tool = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Tool)
+            .unwrap();
         let call = tool.tool.as_ref().unwrap();
-        assert!(!call.summary.contains("sk-live-abcdef123456"), "{}", call.summary);
         assert!(
-            !call.detail.as_deref().unwrap_or("").contains("sk-live-abcdef123456"),
+            !call.summary.contains("sk-live-abcdef123456"),
+            "{}",
+            call.summary
+        );
+        assert!(
+            !call
+                .detail
+                .as_deref()
+                .unwrap_or("")
+                .contains("sk-live-abcdef123456"),
             "{:?}",
             call.detail
         );
@@ -1165,10 +1301,17 @@ mod tools {
         send(&server, chat.id, "edit").await;
         wait_idle(&pool, chat.id).await;
         let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
-        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let tool = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Tool)
+            .unwrap();
         let call = tool.tool.as_ref().unwrap();
         assert!(call.is_error);
-        assert!(call.summary.contains("changed since you exported"), "{}", call.summary);
+        assert!(
+            call.summary.contains("changed since you exported"),
+            "{}",
+            call.summary
+        );
         assert!(!call.revertible());
     }
 
@@ -1190,7 +1333,10 @@ mod tools {
         .await;
         wait_idle(&pool, chat.id).await;
         let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
-        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let tool = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Tool)
+            .unwrap();
         let call = tool.tool.as_ref().unwrap();
         assert_eq!(call.name, "create_workflow");
         assert!(!call.is_error, "{:?}", call.summary);
@@ -1257,15 +1403,7 @@ mod revert {
     /// post-change fingerprint. Setup runs on a scratch server that is
     /// dropped first: two live servers on one pool would race their job
     /// workers for the turn.
-    async fn real_edit(
-        pool: &PgPool,
-    ) -> (
-        common::TestServer,
-        Chat,
-        Uuid,
-        String,
-        String,
-    ) {
+    async fn real_edit(pool: &PgPool) -> (common::TestServer, Chat, Uuid, String, String) {
         let scratch = runner_server(
             pool,
             Arc::new(FakeChatRunner::scripted(vec![Script::Delta(
@@ -1302,7 +1440,9 @@ mod revert {
         .unwrap();
         // The revert's CAS key is the post-change fingerprint.
         let after_edit = defs
-            .export_definition(pb::ExportDefinitionRequest { workflow_id: id.clone() })
+            .export_definition(pb::ExportDefinitionRequest {
+                workflow_id: id.clone(),
+            })
             .await
             .unwrap()
             .into_inner();
@@ -1367,11 +1507,15 @@ mod revert {
                 server.channel().await,
             );
         let current = defs
-            .export_definition(pb::ExportDefinitionRequest { workflow_id: id.clone() })
+            .export_definition(pb::ExportDefinitionRequest {
+                workflow_id: id.clone(),
+            })
             .await
             .unwrap()
             .into_inner();
-        let later = current.yaml.replace("name: Reverted once", "name: Changed again");
+        let later = current
+            .yaml
+            .replace("name: Reverted once", "name: Changed again");
         defs.apply_definition(pb::ApplyDefinitionRequest {
             workflow_id: id.clone(),
             yaml: later,
@@ -1387,7 +1531,9 @@ mod revert {
         );
         // Nothing was written: the workflow kept the later edit.
         let after = defs
-            .export_definition(pb::ExportDefinitionRequest { workflow_id: id.clone() })
+            .export_definition(pb::ExportDefinitionRequest {
+                workflow_id: id.clone(),
+            })
             .await
             .unwrap()
             .into_inner();
@@ -1416,8 +1562,13 @@ mod revert {
         send(&server, chat.id, "list").await;
         wait_idle(&pool, chat.id).await;
         let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
-        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
-        let err = revert(&server, chat.id, tool.id.as_uuid()).await.unwrap_err();
+        let tool = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Tool)
+            .unwrap();
+        let err = revert(&server, chat.id, tool.id.as_uuid())
+            .await
+            .unwrap_err();
         assert_eq!(err.code(), tonic::Code::FailedPrecondition);
     }
 
@@ -1427,15 +1578,18 @@ mod revert {
         let mut watch = turn::Client::new(server.channel().await);
         use futures_util::StreamExt;
         let mut stream = watch
-            .watch_chat(pb::WatchChatRequest { chat_id: chat.id.to_string() })
+            .watch_chat(pb::WatchChatRequest {
+                chat_id: chat.id.to_string(),
+            })
             .await
             .unwrap()
             .into_inner();
         revert(&server, chat.id, message).await.expect("revert ok");
         // The watcher must see a MessageUpdated for the reverted card.
-        while let Some(frame) = tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
-            .await
-            .expect("stream stalled")
+        while let Some(frame) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
+                .await
+                .expect("stream stalled")
         {
             let frame = frame.unwrap();
             if frame.event.as_ref().is_some_and(|e| {

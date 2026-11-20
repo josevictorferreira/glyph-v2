@@ -18,7 +18,11 @@ const KEY: &str = "velox-key-123456";
 fn runner(timeout: Duration) -> PiChatRunner {
     PiChatRunner::new(
         PiChatConfig {
-            pi_bin: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_pi_chat.sh").into(),
+            pi_bin: concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/fake_pi_chat.sh"
+            )
+            .into(),
             timeout,
             velox_base_url: "https://velox.test/v1".into(),
             velox_api_key: Some(SecretString::from(KEY.to_string())),
@@ -42,7 +46,10 @@ async fn drive(
     runner: &PiChatRunner,
     turn: Turn,
     cancel: CancellationToken,
-) -> (Vec<AgentEvent>, glyph_backend::features::chat::ports::TurnEnd) {
+) -> (
+    Vec<AgentEvent>,
+    glyph_backend::features::chat::ports::TurnEnd,
+) {
     let (tx, mut rx) = mpsc::channel(64);
     let end = runner.run(turn, tx, cancel).await;
     let mut events = Vec::new();
@@ -194,7 +201,10 @@ async fn timeout_terminates_and_reports_the_matching_error() {
     .await;
     assert!(started.elapsed() < Duration::from_secs(20));
     let error = end.error.expect("timeout error");
-    assert_eq!(error.human, "The agent took longer than 1 seconds and was stopped.");
+    assert_eq!(
+        error.human,
+        "The agent took longer than 1 seconds and was stopped."
+    );
     assert!(error.technical.contains("timed out"), "{}", error.technical);
 }
 
@@ -210,12 +220,7 @@ async fn cancel_terminates_the_process() {
         })
     };
     let started = std::time::Instant::now();
-    let (_, end) = drive(
-        &runner,
-        turn("velox/sleep-chat-model", "hi", None),
-        cancel,
-    )
-    .await;
+    let (_, end) = drive(&runner, turn("velox/sleep-chat-model", "hi", None), cancel).await;
     timer.await.unwrap();
     assert!(started.elapsed() < Duration::from_secs(20));
     assert!(end.error.is_some(), "cancelled turn must carry an error");
