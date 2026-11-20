@@ -5,6 +5,12 @@ all-features = false
 [advisories]
 version = 2
 yanked = "deny"
+ignore = [
+    # chrono/chrono-tz are unmaintained (RUSTSEC-2026-0543/0555) with no safe
+    # upgrade; migrating to jiff is its own project. Tracked for follow-up.
+    "RUSTSEC-2026-0543",
+    "RUSTSEC-2026-0555",
+]
 
 [licenses]
 version = 2

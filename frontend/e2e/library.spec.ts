@@ -121,6 +121,9 @@ test("duplicate copies a workflow without step ids", async ({ page }) => {
 
 test("command palette: ⌘K opens and New workflow runs", async ({ page }) => {
   await page.goto("/");
+  // Wait for the React shell: the palette's keyboard listener mounts with
+  // the providers, which can land after the load event on a warm database.
+  await expect(page.getByRole("banner")).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(page.getByTestId("command-palette")).toBeVisible();
   await page.getByTestId("command-input").fill("new workflow");

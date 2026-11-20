@@ -67,7 +67,9 @@ case "$model" in
     exit 1
     ;;
   sleep-chat-model)
-    sleep 600
+    # exec: the script process becomes sleep, so a SIGTERM to it ends the
+    # turn immediately instead of leaving an orphan holding the pipes.
+    exec sleep 600
     ;;
   *)
     echo "fake_pi_chat: unknown model $model" >&2
