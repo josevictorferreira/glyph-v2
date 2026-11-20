@@ -182,10 +182,20 @@ pub async fn build_with(
     {
         Some(runner) => (runner, Arc::new(OnceLock::new())),
         None => match config.step_runner {
-            // The real Pi chat runner arrives with phase 5; until then the
-            // deterministic runner stands in so wiring is exercised.
             StepRunnerKind::Fake => default_chat_runner(),
-            StepRunnerKind::Pi => default_chat_runner(),
+            StepRunnerKind::Pi => {
+                let runner = crate::infrastructure::pi::chat_runner::PiChatRunner::new(
+                    crate::infrastructure::pi::chat_runner::PiChatConfig {
+                        pi_bin: config.pi_bin.clone(),
+                        timeout: config.pi_timeout,
+                        velox_base_url: config.velox_base_url.clone(),
+                        velox_api_key: config.velox_api_key.clone(),
+                        agent_api_url: format!("http://127.0.0.1:{}", config.listen_addr.port()),
+                    },
+                    redactor(config),
+                );
+                (Arc::new(runner) as Arc<dyn ChatRunner>, Arc::new(OnceLock::new()))
+            }
         },
     };
     let chat_publisher: Arc<dyn ChatPublisher> = Arc::new(store.clone());

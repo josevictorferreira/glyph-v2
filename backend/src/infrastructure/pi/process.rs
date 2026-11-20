@@ -117,17 +117,19 @@ pub fn child_env(home: &Path) -> Vec<(String, String)> {
 }
 
 /// Spawns Pi with argv only (never a shell), `env_clear()` plus the
-/// allow-list, stdin closed and pipes captured.
+/// allow-list and any caller-supplied extras, stdin closed and pipes
+/// captured.
 pub fn spawn(
     pi_bin: &str,
     args: &[String],
     home: &Path,
     work: &Path,
+    extra_env: &[(String, String)],
 ) -> Result<Child, String> {
     Command::new(pi_bin)
         .args(args)
         .env_clear()
-        .envs(child_env(home))
+        .envs(child_env(home).into_iter().chain(extra_env.to_vec()))
         .current_dir(work)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

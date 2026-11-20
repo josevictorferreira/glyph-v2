@@ -161,7 +161,7 @@ impl PiStepRunner {
         work: &std::path::Path,
         progress: &Arc<dyn ProgressSink>,
     ) -> Result<Captured, String> {
-        let mut child = process::spawn(&self.config.pi_bin, args, home, work)?;
+        let mut child = process::spawn(&self.config.pi_bin, args, home, work, &[])?;
 
         let mut stdout = child.stdout.take().ok_or("no stdout pipe")?;
         let mut stderr = child.stderr.take().ok_or("no stderr pipe")?;
