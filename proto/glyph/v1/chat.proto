@@ -12,6 +12,7 @@ service ChatService {
   rpc DeleteChat(DeleteChatRequest) returns (DeleteChatResponse);
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
   rpc CancelTurn(CancelTurnRequest) returns (CancelTurnResponse);
+  rpc RevertChange(RevertChangeRequest) returns (RevertChangeResponse);
   rpc WatchChat(WatchChatRequest) returns (stream WatchChatResponse);
 }
 
@@ -125,6 +126,11 @@ message SendMessageRequest {
 }
 message SendMessageResponse {}
 
+message RevertChangeRequest {
+  string chat_id = 1;
+  string message_id = 2;
+}
+message RevertChangeResponse {}
 message CancelTurnRequest {
   string chat_id = 1;
 }

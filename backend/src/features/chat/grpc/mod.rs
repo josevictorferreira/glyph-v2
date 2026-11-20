@@ -237,6 +237,24 @@ impl Rpc for ChatGrpc {
             .await?;
         Ok(Response::new(pb::SendMessageResponse {}))
     }
+    async fn revert_change(
+        &self,
+        r: Request<pb::RevertChangeRequest>,
+    ) -> Rsp<pb::RevertChangeResponse> {
+        let chat = parse_id(&r.get_ref().chat_id, "chat_id")?;
+        let message = parse_id(&r.get_ref().message_id, "message_id")?;
+        self.service.revert(chat, message).await.map_err(|e| {
+            // A stale fingerprint means the workflow changed after the
+            // agent's edit: the revert-specific message, nothing written.
+            match e {
+                crate::shared::error::DomainError::Conflict => Status::aborted(
+                    "This workflow changed after the agent's edit, so it can't be reverted automatically.",
+                ),
+                other => other.into(),
+            }
+        })?;
+        Ok(Response::new(pb::RevertChangeResponse {}))
+    }
     async fn cancel_turn(&self, r: Request<pb::CancelTurnRequest>) -> Rsp<pb::CancelTurnResponse> {
         self.service
             .cancel_turn(parse_id(&r.get_ref().chat_id, "chat_id")?)

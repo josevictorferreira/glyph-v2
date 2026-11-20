@@ -167,7 +167,8 @@ pub async fn build_with(
         clock.clone(),
     );
     // --- chat --------------------------------------------------------------
-    let chat = ChatService::new(Arc::new(store.clone()), settings.clone(), clock.clone());
+    let chat = ChatService::new(Arc::new(store.clone()), settings.clone(), clock.clone())
+        .with_definitions(definitions.clone());
     // The default fake carries a slot `FAKE_TOOL:` markers use to call the
     // agent routes; bootstrap fills it once the router exists (the runner
     // is behind an `Arc` before then).

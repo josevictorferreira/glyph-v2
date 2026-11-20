@@ -1208,3 +1208,243 @@ mod tools {
         assert_eq!(got.workflow.unwrap().summary.unwrap().name, "Agent made");
     }
 }
+
+// --- Revert (5.1) --------------------------------------------------------------
+mod revert {
+    use super::turn::{runner_server, send, set_model, wait_idle};
+    use super::*;
+    use glyph_backend::infrastructure::fake_chat_runner::{FakeChatRunner, Script};
+    use glyph_backend::proto::pb;
+
+    /// Sends a message that produces one successful `update_workflow` tool
+    /// message with the given revert payload; returns (server, chat, msg id).
+    async fn edited_chat(
+        pool: &PgPool,
+        workflow_id: &str,
+        previous_yaml: &str,
+        fingerprint: &str,
+    ) -> (common::TestServer, Chat, Uuid) {
+        let server = runner_server(
+            pool,
+            Arc::new(FakeChatRunner::scripted(vec![Script::ToolResult {
+                name: "update_workflow".into(),
+                text: "Edited the definition.".into(),
+                details: serde_json::json!({
+                    "workflow_id": workflow_id,
+                    "workflow_name": "Weekly digest",
+                    "summary": "Edited the definition.",
+                    "previous_yaml": previous_yaml,
+                    "fingerprint": fingerprint,
+                }),
+                is_error: false,
+            }])),
+        )
+        .await;
+        set_model(&server).await;
+        let chat = new_chat(pool).await;
+        send(&server, chat.id, "edit it").await;
+        wait_idle(pool, chat.id).await;
+        let (_, messages) = store(pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages
+            .iter()
+            .find(|m| m.kind == MessageKind::Tool)
+            .unwrap_or_else(|| panic!("no tool message; got {messages:?}"));
+        (server, chat, tool.id.as_uuid())
+    }
+
+    /// Creates a real helper workflow and a chat whose single turn records
+    /// a successful `update_workflow` with the pre-change YAML and the
+    /// post-change fingerprint. Setup runs on a scratch server that is
+    /// dropped first: two live servers on one pool would race their job
+    /// workers for the turn.
+    async fn real_edit(
+        pool: &PgPool,
+    ) -> (
+        common::TestServer,
+        Chat,
+        Uuid,
+        String,
+        String,
+    ) {
+        let scratch = runner_server(
+            pool,
+            Arc::new(FakeChatRunner::scripted(vec![Script::Delta(
+                "editing".into(),
+            )])),
+        )
+        .await;
+        let mut defs =
+            glyph_backend::proto::pb::definition_service_client::DefinitionServiceClient::new(
+                scratch.channel().await,
+            );
+        let created = defs
+            .import_workflow(pb::ImportWorkflowRequest {
+                yaml: "name: Revert me\nsteps:\n - name: one\n   kind: helper\n".into(),
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        let id = created.workflow.unwrap().summary.unwrap().id;
+        let pre = defs
+            .export_definition(pb::ExportDefinitionRequest {
+                workflow_id: id.clone(),
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        let edit = pre.yaml.replace("name: Revert me", "name: Reverted once");
+        defs.apply_definition(pb::ApplyDefinitionRequest {
+            workflow_id: id.clone(),
+            yaml: edit,
+            fingerprint: pre.fingerprint.clone(),
+        })
+        .await
+        .unwrap();
+        // The revert's CAS key is the post-change fingerprint.
+        let after_edit = defs
+            .export_definition(pb::ExportDefinitionRequest { workflow_id: id.clone() })
+            .await
+            .unwrap()
+            .into_inner();
+        drop(defs);
+        drop(scratch);
+        let (server, chat, message) =
+            edited_chat(pool, &id, &pre.yaml, &after_edit.fingerprint).await;
+        (server, chat, message, id, pre.yaml)
+    }
+
+    async fn revert(
+        server: &common::TestServer,
+        chat: ChatId,
+        message: Uuid,
+    ) -> Result<pb::RevertChangeResponse, tonic::Status> {
+        let mut cc = turn::Client::new(server.channel().await);
+        cc.revert_change(pb::RevertChangeRequest {
+            chat_id: chat.to_string(),
+            message_id: message.to_string(),
+        })
+        .await
+        .map(|r| r.into_inner())
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn revert_restores_previous_yaml_and_marks_the_message(pool: PgPool) {
+        let (server, chat, message, id, pre_yaml) = real_edit(&pool).await;
+        revert(&server, chat.id, message).await.expect("revert ok");
+        let mut defs =
+            glyph_backend::proto::pb::definition_service_client::DefinitionServiceClient::new(
+                server.channel().await,
+            );
+        // The next export equals the pre-change YAML.
+        let after = defs
+            .export_definition(pb::ExportDefinitionRequest { workflow_id: id })
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(after.yaml, pre_yaml);
+        // The message is marked reverted.
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages.iter().find(|m| m.id.as_uuid() == message).unwrap();
+        assert!(tool.tool.as_ref().unwrap().reverted);
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn a_second_revert_says_already_reverted(pool: PgPool) {
+        let (server, chat, message, _id, _pre) = real_edit(&pool).await;
+        revert(&server, chat.id, message).await.expect("first ok");
+        let err = revert(&server, chat.id, message).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+        assert_eq!(err.message(), "This change was already reverted.");
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn a_later_edit_refuses_and_writes_nothing(pool: PgPool) {
+        let (server, chat, message, id, pre) = real_edit(&pool).await;
+        // Someone edits after the agent's edit: the stored (post-edit)
+        // fingerprint is stale.
+        let mut defs =
+            glyph_backend::proto::pb::definition_service_client::DefinitionServiceClient::new(
+                server.channel().await,
+            );
+        let current = defs
+            .export_definition(pb::ExportDefinitionRequest { workflow_id: id.clone() })
+            .await
+            .unwrap()
+            .into_inner();
+        let later = current.yaml.replace("name: Reverted once", "name: Changed again");
+        defs.apply_definition(pb::ApplyDefinitionRequest {
+            workflow_id: id.clone(),
+            yaml: later,
+            fingerprint: current.fingerprint,
+        })
+        .await
+        .unwrap();
+        let err = revert(&server, chat.id, message).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::Aborted);
+        assert_eq!(
+            err.message(),
+            "This workflow changed after the agent's edit, so it can't be reverted automatically."
+        );
+        // Nothing was written: the workflow kept the later edit.
+        let after = defs
+            .export_definition(pb::ExportDefinitionRequest { workflow_id: id.clone() })
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(after.yaml.contains("Changed again"), "{}", after.yaml);
+        assert_ne!(after.yaml, pre);
+        // And the message is NOT marked reverted.
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages.iter().find(|m| m.id.as_uuid() == message).unwrap();
+        assert!(!tool.tool.as_ref().unwrap().reverted);
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn a_non_revertible_message_is_rejected(pool: PgPool) {
+        let server = runner_server(
+            &pool,
+            Arc::new(FakeChatRunner::scripted(vec![Script::ToolResult {
+                name: "list_workflows".into(),
+                text: "one workflow".into(),
+                details: serde_json::json!({ "count": 1 }),
+                is_error: false,
+            }])),
+        )
+        .await;
+        set_model(&server).await;
+        let chat = new_chat(&pool).await;
+        send(&server, chat.id, "list").await;
+        wait_idle(&pool, chat.id).await;
+        let (_, messages) = store(&pool).find(chat.id).await.unwrap().unwrap();
+        let tool = messages.iter().find(|m| m.kind == MessageKind::Tool).unwrap();
+        let err = revert(&server, chat.id, tool.id.as_uuid()).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    }
+
+    #[sqlx::test(migrator = "glyph_backend::infrastructure::postgres::migrate::MIGRATOR")]
+    async fn revert_emits_message_updated(pool: PgPool) {
+        let (server, chat, message, _id, _pre) = real_edit(&pool).await;
+        let mut watch = turn::Client::new(server.channel().await);
+        use futures_util::StreamExt;
+        let mut stream = watch
+            .watch_chat(pb::WatchChatRequest { chat_id: chat.id.to_string() })
+            .await
+            .unwrap()
+            .into_inner();
+        revert(&server, chat.id, message).await.expect("revert ok");
+        // The watcher must see a MessageUpdated for the reverted card.
+        while let Some(frame) = tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
+            .await
+            .expect("stream stalled")
+        {
+            let frame = frame.unwrap();
+            if frame.event.as_ref().is_some_and(|e| {
+                e.r#type() == pb::ChatEventType::MessageUpdated
+                    && e.message_id == message.to_string()
+            }) {
+                return;
+            }
+        }
+        panic!("no MessageUpdated after the revert");
+    }
+}

@@ -319,6 +319,30 @@ impl ChatTx for PgTx {
             .map_err(db)?;
         Ok(())
     }
+    async fn mark_message_reverted(&mut self, id: ChatMessageId) -> DomainResult<()> {
+        let blob = sqlx::query_scalar!(
+            "SELECT content FROM chat_messages WHERE id = $1 AND kind = 'tool'",
+            id.as_uuid()
+        )
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db)?
+        .ok_or(DomainError::NotFound("message"))?;
+        let mut tool = dec_tool(self.cipher.as_ref(), blob)?;
+        tool.reverted = true;
+        let content = self
+            .cipher
+            .encrypt(&serde_json::to_vec(&tool).map_err(DomainError::internal)?);
+        sqlx::query!(
+            "UPDATE chat_messages SET content = $2, updated_at = now() WHERE id = $1",
+            id.as_uuid(),
+            content,
+        )
+        .execute(&mut *self.tx)
+        .await
+        .map_err(db)?;
+        Ok(())
+    }
 
     async fn save_session(&mut self, id: ChatId, session: Option<&SessionFile>) -> DomainResult<()> {
         match session {

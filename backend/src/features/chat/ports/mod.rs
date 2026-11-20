@@ -65,6 +65,8 @@ pub trait ChatTx: UnitOfWork {
         error: Option<&str>,
     ) -> DomainResult<()>;
     async fn delete_message(&mut self, id: ChatMessageId) -> DomainResult<()>;
+    /// Flips a tool message's `reverted` flag (its stored ToolCall).
+    async fn mark_message_reverted(&mut self, id: ChatMessageId) -> DomainResult<()>;
     async fn save_session(
         &mut self,
         id: ChatId,
