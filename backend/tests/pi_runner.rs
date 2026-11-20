@@ -10,7 +10,8 @@ use glyph_backend::features::runs::{
 use glyph_backend::features::workflows::catalog_view::CatalogModel;
 use glyph_backend::features::workflows::snapshot::SnapshotTool;
 use glyph_backend::features::workflows::{CatalogReader, CatalogView};
-use glyph_backend::infrastructure::pi::runner::{PI_MAX_OUTPUT_TOKENS, PiConfig, PiStepRunner};
+use glyph_backend::infrastructure::pi::process::PI_MAX_OUTPUT_TOKENS;
+use glyph_backend::infrastructure::pi::runner::{PiConfig, PiStepRunner};
 use glyph_backend::shared::error::DomainResult;
 use glyph_backend::shared::ids::{RunId, StepRunId, WorkflowId};
 use glyph_backend::shared::output_format::OutputFileFormat;

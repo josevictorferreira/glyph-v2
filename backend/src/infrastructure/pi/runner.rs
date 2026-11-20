@@ -2,37 +2,32 @@
 //! Safety-critical: argv only (never a shell), `env_clear()` with an
 //! allow-list, a throwaway HOME, stdin closed, a hard timeout with
 //! SIGTERM → SIGKILL, and every captured byte redacted before it leaves.
+//! Provider resolution, `models.json`, env and termination live in
+//! `process.rs`, shared with the chat runner (spec 0024).
 //!
 //! Contract (verified against Pi 1.0.3):
 //!   pi --print --mode json --provider P --model M --api-key K
 //!      (--no-tools | --tools a,b) --no-session --no-extensions --no-skills
 //!      --no-context-files --system-prompt S @<workdir>/prompt.md
 
-use std::path::Path;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use secrecy::{ExposeSecret, SecretString};
-use serde_json::json;
 use tokio::io::AsyncReadExt;
-use tokio::process::{Child, Command};
 use tokio::sync::watch;
 
-use crate::features::catalog::Provider;
 use crate::features::runs::domain::session_stream::SessionCompactor;
 use crate::features::runs::domain::{pi_events, prompt};
 use crate::features::runs::{
     OutcomeStatus, ProgressSink, StepRunContext, StepRunOutcome, StepRunner,
 };
 use crate::features::workflows::CatalogReader;
+use crate::infrastructure::pi::process;
 use crate::shared::redactor::Redactor;
+use secrecy::SecretString;
 
-/// Pi's fallback output budget (16k) is exhausted by reasoning models.
-pub const PI_MAX_OUTPUT_TOKENS: u32 = 131_072;
 pub const PROGRESS_INTERVAL: Duration = Duration::from_secs(3);
-pub const KILL_GRACE: Duration = Duration::from_secs(3);
 pub const PROGRESS_FLUSH_GRACE: Duration = Duration::from_secs(5);
 
 #[derive(Clone)]
@@ -47,11 +42,6 @@ pub struct PiStepRunner {
     config: PiConfig,
     catalog: Arc<dyn CatalogReader>,
     redactor: Redactor,
-}
-
-struct Target {
-    provider: String,
-    model: String,
 }
 
 struct Captured {
@@ -70,52 +60,19 @@ impl PiStepRunner {
         }
     }
 
-    /// `provider/model` → catalog lookup else the prefix; bare → catalog
-    /// lookup by model id else the default provider (velox).
-    async fn target(&self, model_id: &str) -> Target {
-        let view = self.catalog.view().await.ok();
-        match model_id.split_once('/') {
-            Some((provider, model)) => Target {
-                provider: provider.to_string(),
-                model: model.to_string(),
-            },
-            None => Target {
-                provider: view
-                    .as_ref()
-                    .and_then(|v| v.models.iter().find(|m| m.model_id == model_id))
-                    .map(|m| m.provider.clone())
-                    .unwrap_or_else(|| Provider::DEFAULT.as_str().to_string()),
-                model: model_id.to_string(),
-            },
-        }
-    }
-
-    fn provider_settings(&self, provider: &str) -> Result<(String, String), String> {
-        let (base, key) = match Provider::parse(provider) {
-            Some(Provider::Velox) => (&self.config.velox_base_url, &self.config.velox_api_key),
-            None => {
-                return Err(format!(
-                    "{}_API_KEY is not configured",
-                    provider.to_uppercase()
-                ));
-            }
-        };
-        let key = key
-            .as_ref()
-            .map(|k| k.expose_secret().trim().to_string())
-            .filter(|k| !k.is_empty())
-            .ok_or_else(|| format!("{}_API_KEY is not configured", provider.to_uppercase()))?;
-        Ok((base.clone(), key))
-    }
-
     async fn execute(
         &self,
         ctx: &StepRunContext,
         progress: &Arc<dyn ProgressSink>,
         started: Instant,
     ) -> Result<StepRunOutcome, String> {
-        let target = self.target(ctx.model_id.as_deref().unwrap_or("")).await;
-        let (base_url, api_key) = self.provider_settings(&target.provider)?;
+        let view = self.catalog.view().await.ok();
+        let target = process::target(ctx.model_id.as_deref().unwrap_or(""), view.as_ref());
+        let (base_url, api_key) = process::provider_settings(
+            &target.provider,
+            &self.config.velox_base_url,
+            &self.config.velox_api_key,
+        )?;
 
         let workdir = tempfile::Builder::new()
             .prefix("glyph-step-run-")
@@ -126,21 +83,7 @@ impl PiStepRunner {
         let work = workdir.path().join("work");
         std::fs::create_dir_all(&agent_dir).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
-        let models = json!({
-            "providers": {
-                target.provider.clone(): {
-                    "api": "openai-completions",
-                    "apiKey": "supplied-via-cli-flag",
-                    "baseUrl": base_url,
-                    "models": [{ "id": target.model, "name": target.model, "maxTokens": PI_MAX_OUTPUT_TOKENS }],
-                }
-            }
-        });
-        std::fs::write(
-            agent_dir.join("models.json"),
-            serde_json::to_vec_pretty(&models).map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?;
+        process::write_models_json(&agent_dir, &target, &base_url)?;
         // Prompts with resolved inputs can exceed the per-argument limit
         // (MAX_ARG_STRLEN): they travel as an @file.
         let prompt_path = workdir.path().join("prompt.md");
@@ -211,50 +154,14 @@ impl PiStepRunner {
         Ok(outcome)
     }
 
-    fn child_env(home: &Path) -> Vec<(String, String)> {
-        let mut env = vec![
-            ("HOME".to_string(), home.display().to_string()),
-            (
-                "PATH".to_string(),
-                std::env::var("PATH").unwrap_or_default(),
-            ),
-            (
-                "TZ".to_string(),
-                std::env::var("TZ")
-                    .ok()
-                    .filter(|v| !v.is_empty())
-                    .unwrap_or_else(|| "UTC".into()),
-            ),
-        ];
-        // CA bundles pass through only when set: an empty value breaks TLS defaults.
-        for key in ["SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"] {
-            if let Ok(v) = std::env::var(key)
-                && !v.is_empty()
-            {
-                env.push((key.to_string(), v));
-            }
-        }
-        env
-    }
-
     async fn spawn(
         &self,
         args: &[String],
-        home: &Path,
-        work: &Path,
+        home: &std::path::Path,
+        work: &std::path::Path,
         progress: &Arc<dyn ProgressSink>,
     ) -> Result<Captured, String> {
-        let mut child = Command::new(&self.config.pi_bin)
-            .args(args)
-            .env_clear()
-            .envs(Self::child_env(home))
-            .current_dir(work)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| format!("spawning {}: {e}", self.config.pi_bin))?;
+        let mut child = process::spawn(&self.config.pi_bin, args, home, work)?;
 
         let mut stdout = child.stdout.take().ok_or("no stdout pipe")?;
         let mut stderr = child.stderr.take().ok_or("no stderr pipe")?;
@@ -308,7 +215,7 @@ impl PiStepRunner {
             }
         }
         if timed_out {
-            terminate(&mut child).await;
+            process::terminate(&mut child).await;
         }
         let stdout = session.snapshot();
         snapshots.send_replace(self.redactor.redact(&stdout));
@@ -332,22 +239,6 @@ impl PiStepRunner {
             exit_code: status.and_then(|s| s.code()),
             timed_out,
         })
-    }
-}
-
-/// SIGTERM, then SIGKILL if the process is still alive after the grace.
-async fn terminate(child: &mut Child) {
-    if let Some(pid) = child.id() {
-        let _ = nix::sys::signal::kill(
-            nix::unistd::Pid::from_raw(pid as i32),
-            nix::sys::signal::Signal::SIGTERM,
-        );
-    }
-    if tokio::time::timeout(KILL_GRACE, child.wait())
-        .await
-        .is_err()
-    {
-        let _ = child.kill().await;
     }
 }
 
