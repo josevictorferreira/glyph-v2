@@ -7,6 +7,7 @@ Glyph is a visual designer, scheduler and runner for DAG-shaped AI workflows. Ea
 - `flake.nix`: dev environment source of truth (Postgres, Rust toolchain, Pi, buf).
 - `proto/glyph/v1/*.proto`: the gRPC contract shared by backend and frontend.
 - `backend/`: Rust (axum + tonic + sqlx). See `backend/AGENTS.md`.
+- `backend/agent/`: files shipped to the chat agent's Pi home each turn (the ten-tool extension, system prompt, workflow guide).
 - `frontend/`: TypeScript React (later epic).
 - Each service owns its `Containerfile` and deploy flake: `nix run .#deploy` from `backend/` or `frontend/` builds and pushes that service's image to GHCR and restarts its deployment.
 - `.agents/specs/`: epic plan and per-spec implementation plans.
@@ -52,6 +53,7 @@ Specs, the parity audit and the cutover runbook live in `.agents/specs/` (`0012-
 - Append events and enqueue jobs in the same transaction as the state change they describe.
 - No retries for execution jobs: repeating agent-side work makes diagnostics ambiguous.
 - Invoke Pi only through an argv vector (`Command::new(pi_bin).args(..)`); never a shell. Keep `env_clear()`, the temp HOME, timeout and SIGTERM→SIGKILL handling.
+- The chat agent runs with the ten Glyph tools only — never built-in Pi tools — and its `/agent/v1/*` routes are backend-internal: the frontend proxy/nginx must never forward them.
 - Pass every agent/provider text through the `Redactor` before it is persisted, logged, published or rendered. Never log API keys, credentials or encryption keys.
 
 ## Conventions

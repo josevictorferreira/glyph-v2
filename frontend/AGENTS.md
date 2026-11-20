@@ -71,3 +71,7 @@ them. This file records the **data-layer pattern** (spec 0015). Later specs
   id. Own writes arriving as events are harmless (same data, deduped).
 - `LiveStatus` lives in `@/shared/api/live.ts` so `shared/ui` can consume it
   without importing features.
+- Chat live sync (`features/chat/use-chat-live.ts`) follows the same shape for
+  `WatchChat`, with one addition: `TEXT_DELTA` writes the delta directly into
+  the `GetChat` cache (exact key, stitching only into a message already held)
+  so replies grow in place without refetches; everything else invalidates.

@@ -41,7 +41,12 @@ nix run .#test -- --test server      # one integration test file
 | `tests/workflows.rs` | every editor RPC, lifecycle, schedule, events |
 | `tests/definition.rs` | schema route, import/apply/export/parse, tournament seed |
 | `tests/runs.rs`, `tests/worker.rs` | run engine end-to-end through the worker, downloads, job queue |
-| `tests/pi_runner.rs`, `tests/pi_contract.rs` | Pi process handling, real Pi contract |
+| `tests/pi_runner.rs`, `tests/pi_contract.rs` | Pi step process handling, real Pi contract |
+| `tests/pi_chat_runner.rs`, `tests/pi_chat_contract.rs` | chat Pi process handling, real-Pi chat contract (tools, session resume) |
+| `tests/chat.rs` | chat CRUD, turn lifecycle, streaming, cancel/recovery, revert |
+| `tests/settings.rs` | chat model setting |
+| `tests/agent_api.rs` | the ten agent tool routes |
+| `tests/agent_guide.rs` | workflow guide / extension drift |
 | `tests/scheduling.rs` | minute dispatch, idempotency, concurrent dispatchers, recurring ticker |
 | `tests/live.rs` | LISTEN/NOTIFY hub, `WatchWorkflow` |
 | `tests/shutdown.rs` | SIGTERM drain / grace on the real binary |
