@@ -7,6 +7,7 @@ import { cn } from "@/shared/lib/cn";
 import type { ChatMessage } from "@/gen/glyph/v1/chat_pb";
 import { useChatLive } from "./use-chat-live";
 import { Composer } from "./Composer";
+import { ToolCard } from "./ToolCard";
 
 export function Conversation({ chatId }: { chatId: string }) {
   const { data, isLoading } = useChat(chatId);
@@ -46,7 +47,7 @@ export function Conversation({ chatId }: { chatId: string }) {
         ) : (
           <ol className="mx-auto flex max-w-3xl flex-col gap-4">
             {messages.map((m) => (
-              <MessageRow key={m.id} message={m} />
+              <MessageRow key={m.id} chatId={chatId} message={m} />
             ))}
           </ol>
         )}
@@ -56,23 +57,14 @@ export function Conversation({ chatId }: { chatId: string }) {
   );
 }
 
-function MessageRow({ message }: { message: ChatMessage }) {
+function MessageRow({ chatId, message }: { chatId: string; message: ChatMessage }) {
   const body =
     message.kind === 1 ? (
       <div className="ml-auto max-w-[85%] rounded-lg bg-accent px-3 py-2 text-sm text-on-accent">
         {message.text}
       </div>
-    ) : message.kind === 3 ? (
-      <div
-        className="max-w-[85%] rounded-md border border-border bg-surface px-3 py-2 text-xs"
-        data-testid="tool-card"
-      >
-        <p className="font-medium">
-          {message.tool?.name}
-          {message.tool?.isError ? " (failed)" : ""}
-        </p>
-        <p className="mt-0.5 text-ink-muted">{message.tool?.summary}</p>
-      </div>
+    ) : message.kind === 3 && message.tool ? (
+      <ToolCard chatId={chatId} messageId={message.id} tool={message.tool} />
     ) : message.status === 3 ? (
       <p
         className="max-w-[85%] rounded-md border border-danger bg-danger-subtle px-3 py-2 text-sm"

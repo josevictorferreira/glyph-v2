@@ -53,6 +53,17 @@ export function useSendMessage() {
     },
   });
 }
+export function useRevertChange(chatId: string, messageId: string) {
+  const transport = useTransport();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      createClient(ChatService, transport).revertChange({ chatId, messageId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.detail(chatId) });
+    },
+  });
+}
 export function useCancelTurn() {
   const transport = useTransport();
   const queryClient = useQueryClient();
