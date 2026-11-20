@@ -12,7 +12,7 @@ import { ToolCard } from "./ToolCard";
 export function Conversation({ chatId }: { chatId: string }) {
   const { data, isLoading } = useChat(chatId);
   const messages = useMemo(() => data?.messages ?? [], [data]);
-  const running = data?.chat?.status === 1;
+  const running = data?.chat?.status === 2; // CHAT_STATUS_RUNNING
   useChatLive({ chatId });
   // Follow the bottom only when the user was already there: growing text
   // must not yank someone who scrolled up to read.

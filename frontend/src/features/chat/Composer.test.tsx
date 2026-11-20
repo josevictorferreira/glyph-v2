@@ -17,7 +17,7 @@ const services = (model: string, chat: Record<string, unknown> = {}): FakeServic
 const runningServices = (model: string, chat: Record<string, unknown> = {}): FakeServices => ({
   settings: { getSettings: () => Promise.resolve({ chatModelId: model }) },
   chat: {
-    getChat: () => Promise.resolve({ chat: { id: "c1", status: 1 }, messages: [] }),
+    getChat: () => Promise.resolve({ chat: { id: "c1", status: 2 }, messages: [] }), // RUNNING
     listChats: () => Promise.resolve({ chats: [] }),
     ...chat,
   },

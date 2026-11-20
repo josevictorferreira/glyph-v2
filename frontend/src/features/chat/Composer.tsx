@@ -7,14 +7,15 @@ import { Button } from "@/shared/ui";
 import { useSettings } from "@/features/settings";
 import { useCancelTurn, useSendMessage } from "./hooks";
 export function Composer({ chatId, running }: { chatId: string; running: boolean }) {
-  const { data: settings } = useSettings();
+  const { data: settings, isLoading } = useSettings();
   const send = useSendMessage();
   const cancel = useCancelTurn();
   const formRef = useRef<HTMLFormElement>(null);
-  const model = settings?.chatModelId;
-  // Settings still loading: show nothing rather than flapping into the
-  // "pick a model" state for a frame.
-  if (model === undefined) return null;
+  // An unset chat model omits the optional field (undefined): distinguish
+  // that from the query still loading — show nothing rather than flapping
+  // into the "pick a model" state for a frame.
+  if (isLoading) return null;
+  const model = settings?.chatModelId ?? "";
   if (model === "") {
     return (
       <div

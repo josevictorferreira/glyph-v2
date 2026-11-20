@@ -355,10 +355,12 @@ pub async fn build_with(
         list_models.clone(),
         runs.clone(),
     );
-    // The fake runner's tool markers now reach the real agent routes.
-    let _ = agent_router_slot.set(crate::features::chat::http::routes(agent.clone()));
+    let app_router = router::build(state, agent, grpc, router::cors(&config.cors_origins));
+    // The fake runner's tool markers now reach the real agent routes: the
+    // full app router (the marker posts to /agent/v1/<tool>).
+    let _ = agent_router_slot.set(app_router.clone());
     Ok(App {
-        router: router::build(state, agent, grpc, router::cors(&config.cors_origins)),
+        router: app_router,
         listen_addr: config.listen_addr,
         stop,
         background,
