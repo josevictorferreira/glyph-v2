@@ -1,0 +1,23 @@
+{"type":"session","version":3,"id":"7c9e6679-7425-40de-944b-e07fc1f90ae7","timestamp":"2024-12-03T14:00:00.000Z","cwd":"/tmp"}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"user","content":"Make a digest workflow","timestamp":1733234401000}}
+{"type":"message_end","message":{"role":"user","content":"Make a digest workflow","timestamp":1733234401000}}
+{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending","timestamp":1733234402000}}
+{"type":"message_update","usage":{"inputTokens":10,"outputTokens":1},"assistantMessageEvent":{"type":"start"}}
+{"type":"message_update","usage":{"inputTokens":10,"outputTokens":5},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"I'll "}}
+{"type":"message_update","usage":{"inputTokens":10,"outputTokens":9},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"start with "}}
+{"type":"message_update","usage":{"inputTokens":10,"outputTokens":11},"assistantMessageEvent":{"type":"thinking_delta","contentIndex":1,"delta":"plan the steps"}}
+{"type":"message_update","usage":{"inputTokens":10,"outputTokens":12},"assistantMessageEvent":{"type":"toolcall_delta","contentIndex":2,"delta":"{\"workflow_id\":\""}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"I'll start with a look at what exists.","timestamp":1733234403000}],"stopReason":"toolUse","timestamp":1733234403000}}
+{"type":"tool_execution_start","toolCallId":"call_abc123","toolName":"list_workflows","args":{}}
+{"type":"tool_execution_end","toolCallId":"call_abc123","toolName":"list_workflows","result":{"content":[{"type":"text","text":"Weekly digest (abc, active)"}],"details":{"workflows":[{"id":"abc","name":"Weekly digest","status":"active"}]}},"isError":false}
+{"type":"message_start","message":{"role":"assistant","content":[],"stopReason":"pending","timestamp":1733234404000}}
+{"type":"message_update","usage":{"inputTokens":20,"outputTokens":2},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Done. "}}
+{"type":"message_update","usage":{"inputTokens":20,"outputTokens":4},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Here you go."}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Done. Here you go.","timestamp":1733234405000}],"stopReason":"endTurn","timestamp":1733234405000}}
+{"type":"turn_end","message":{"role":"assistant","content":[{"type":"text","text":"Done. Here you go."}]},"toolResults":[]}
+not json at all
+{"type":"agent_end","messages":[],"willRetry":false}
+{"type":"agent_settled"}
+{"type":"message_update","usage":{},"assistantMessageEvent":{"type":"error","reason":"abort","error":{"message":"provider exploded"}}}
