@@ -86,9 +86,39 @@ export function AppShell({
   );
 }
 
-/** Minimal 0014 sidebar: logo, Home link; the library list arrives in 0016. */
+/** Primary navigation, shared by the header bar and the mobile drawer. */
+function PrimaryNav({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <nav aria-label="Main" className="flex items-center gap-1" onClick={onNavigate}>
+      <Link
+        to="/"
+        activeOptions={{ exact: true }}
+        className="flex h-7 items-center rounded-md px-2 text-sm font-semibold tracking-wide text-ink-muted hover:bg-surface-2 hover:text-ink"
+        activeProps={{ className: "bg-surface-2 text-ink font-medium" }}
+      >
+        Home
+      </Link>
+      <Link
+        to="/chat"
+        activeOptions={{ exact: false }}
+        className="flex h-7 items-center rounded-md px-2 text-sm font-semibold tracking-wide text-ink-muted hover:bg-surface-2 hover:text-ink"
+        activeProps={{ className: "bg-surface-2 text-ink font-medium" }}
+      >
+        Chat
+      </Link>
+      <Link
+        to="/settings"
+        className="flex h-7 items-center rounded-md px-2 text-sm font-semibold tracking-wide text-ink-muted hover:bg-surface-2 hover:text-ink"
+        activeProps={{ className: "bg-surface-2 text-ink font-medium" }}
+      >
+        Settings
+      </Link>
+    </nav>
+  );
+}
+
+/** Minimal 0014 sidebar: logo only; the library list arrives in 0016. */
 export function DefaultSidebar() {
-  const { theme, toggle } = useTheme();
   return (
     <>
       <div className="flex h-11 items-center gap-2 border-b border-border px-3">
@@ -100,36 +130,32 @@ export function DefaultSidebar() {
         </span>
         <span className="text-sm font-semibold tracking-wide">Glyph</span>
       </div>
-      <nav className="flex-1 overflow-y-auto p-2" aria-label="Main">
-        <Link
-          to="/"
-          activeOptions={{ exact: true }}
-          className="flex h-7 items-center rounded-md px-2 text-sm text-ink-muted hover:bg-surface-2 hover:text-ink"
-          activeProps={{ className: "bg-surface-2 text-ink font-medium" }}
-        >
-          Home
-        </Link>
-      </nav>
-      <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
-        <span className="text-xs text-ink-subtle">Workflows arrive in 0016</span>
-        <IconButton
-          size="sm"
-          label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          onClick={toggle}
-        >
-          {theme === "dark" ? "☀" : "☾"}
-        </IconButton>
-      </div>
+      <div className="flex-1" />
     </>
   );
 }
 
-/** Minimal 0014 header: theme toggle + breadcrumb slot. */
+/** Header: brand mark, primary nav and theme toggle in one full-width bar. */
 export function DefaultHeader({ title }: { title?: string }) {
+  const { theme, toggle } = useTheme();
   return (
     <>
+      <span
+        className="grid size-6 shrink-0 place-items-center rounded-md bg-accent text-on-accent"
+        aria-hidden
+      >
+        <Layers size={14} />
+      </span>
       {title ? <span className="text-sm font-medium">{title}</span> : null}
-      <span className="ml-auto text-xs text-ink-subtle">Glyph</span>
+      <PrimaryNav />
+      <IconButton
+        size="sm"
+        className="ml-auto"
+        label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        onClick={toggle}
+      >
+        {theme === "dark" ? "☀" : "☾"}
+      </IconButton>
     </>
   );
 }

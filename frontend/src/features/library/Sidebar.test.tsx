@@ -1,7 +1,7 @@
 // Library sidebar tests (spec 0016), mounted through the real route tree so
 // router context (current workflow, navigation) is exercised.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { TimestampSchema } from "@bufbuild/protobuf/wkt";
 import { RunStatus, WorkflowStatus } from "@/gen/glyph/v1/common_pb";
@@ -51,11 +51,15 @@ const mount = (
   });
 
 describe("LibrarySidebar", () => {
-  it("shows Chat and Settings links (spec 0024)", async () => {
+  it("keeps primary nav out of the sidebar strip (top-bar fix)", async () => {
+    // Home/Chat/Settings live in the app header: confined to the sidebar's
+    // fixed width, Settings used to be cut off at the strip's edge.
     const { unmount } = mount([]);
-    await screen.findByRole("link", { name: "Home" });
-    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    await screen.findByTestId("library-sidebar");
+    const sidebar = screen.getByTestId("library-sidebar");
+    expect(within(sidebar).queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole("link", { name: "Chat" })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
     unmount();
   });
 

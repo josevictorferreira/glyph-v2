@@ -103,32 +103,7 @@ export function LibrarySidebar({ className }: { className?: string }) {
         >
           <PanelLeft />
         </Button>
-        <Link
-          to="/"
-          activeOptions={{ exact: true }}
-          className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold tracking-wide hover:bg-surface-2"
-          aria-label="Home"
-        >
-          Home
-        </Link>
-        <Link
-          to="/chat"
-          activeOptions={{ exact: false }}
-          className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold tracking-wide hover:bg-surface-2"
-          aria-label="Chat"
-        >
-          Chat
-        </Link>
-        <Link
-          to="/settings"
-          className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold tracking-wide hover:bg-surface-2"
-          aria-label="Settings"
-        >
-          Settings
-        </Link>
-        {!collapsed && (
-          <span className="ml-auto text-xs font-normal text-ink-subtle">Workflows</span>
-        )}
+        {!collapsed && <span className="text-sm font-semibold tracking-wide">Workflows</span>}
       </div>
 
       {!collapsed && (

@@ -43,6 +43,20 @@ describe("AppShell", () => {
     expect(screen.getByTestId("app-header")).toHaveTextContent("header-slot");
     expect(screen.getByTestId("app-main")).toHaveTextContent("main-content");
   });
+  it("shows the primary nav links in the single top bar (0024 fix)", async () => {
+    renderWithApp(undefined, { route: "/", services });
+    await screen.findByTestId("app-shell");
+    const header = screen.getByTestId("app-header");
+    expect(within(header).getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
+    expect(within(header).getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/chat");
+    expect(within(header).getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+    expect(
+      screen.getByRole("button", { name: /Switch to (light|dark) theme/ }),
+    ).toBeInTheDocument();
+  });
 
   it("stays mounted across route navigation", async () => {
     const user = userEvent.setup();
@@ -61,19 +75,35 @@ describe("AppShell", () => {
 });
 
 // Audit ticket 6: the mobile drawer closes after navigating (picking a
-// workflow from it must reveal the destination).
+// workflow from it must reveal the destination). Primary nav (Home) lives in
+// the header now, so the drawer's links are workflow rows.
 describe("AppShell mobile drawer", () => {
   it("closes the drawer when a link inside it is activated", async () => {
-    // Start on a workflow page so the drawer's Home link actually navigates.
-    const { router } = renderWithApp(undefined, { route: "/workflows/abc", services });
+    // Start on a workflow page so the drawer's row link actually navigates.
+    const withWorkflow = {
+      ...services,
+      workflow: {
+        ...services.workflow,
+        listWorkflows: () =>
+          Promise.resolve(
+            create(ListWorkflowsResponseSchema, {
+              workflows: [create(WorkflowSummarySchema, { id: "xyz", name: "Drawer target" })],
+            }),
+          ),
+      },
+    };
+    const { router } = renderWithApp(undefined, {
+      route: "/workflows/abc",
+      services: withWorkflow,
+    });
     expect(router).toBeDefined();
     await screen.findByTestId("canvas");
     fireEvent.click(screen.getByTestId("open-sidebar"));
     // The real user path: activating a link inside the drawer (mouse click or
     // Enter on a focused link — both fire click) navigates and closes it.
     const drawer = screen.getByTestId("app-sidebar-drawer");
-    fireEvent.click(within(drawer).getByRole("link", { name: "Home" }));
+    fireEvent.click(within(drawer).getByRole("link", { name: /Drawer target/ }));
     await waitFor(() => expect(screen.queryByTestId("app-sidebar-drawer")).not.toBeInTheDocument());
-    await waitFor(() => expect(router!.state.location.pathname).toBe("/"));
+    await waitFor(() => expect(router!.state.location.pathname).toBe("/workflows/xyz"));
   });
 });
