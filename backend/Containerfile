@@ -27,6 +27,9 @@ RUN mkdir -p backend/src \
  && rm -rf src
 
 COPY backend/src ./backend/src
+# 0024 chat agent: prompt, tool extension and guide embedded via include_str!
+# from src/infrastructure/pi/chat_runner.rs (paths under backend/agent/).
+COPY backend/agent ./backend/agent
 # sqlx::migrate! embeds ./migrations at compile time. tests/ is not needed:
 # its fixtures are only include_str!'d under #[cfg(test)].
 COPY backend/migrations ./backend/migrations
