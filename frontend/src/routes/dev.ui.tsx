@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useTransport } from "@connectrpc/connect-query";
 import { createClient } from "@connectrpc/connect";
 import {
@@ -89,7 +89,12 @@ function DevPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-4 py-2.5">
-        <h1 className="text-sm font-semibold">UI showcase (dev only)</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-sm font-semibold">UI showcase (dev only)</h1>
+          <Link to="/dev/rare" className="text-xs font-medium text-accent hover:underline">
+            RareUI gallery →
+          </Link>
+        </div>
         <Button size="sm" onClick={toggle}>
           Theme: {theme}
         </Button>

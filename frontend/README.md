@@ -71,3 +71,4 @@ E2E_REUSE_SERVER=1 pnpm e2e   # + PLAYWRIGHT_CHROMIUM_PATH on NixOS
 - `e2e` — Playwright specs
 
 `/dev/ui` renders every primitive against the current theme tokens (dev-only showcase).
+`/dev/rare` renders a dev-only gallery of 31 components inspired by [Rare UI](https://www.rareui.com) (`src/shared/ui/rare/`), reimplemented on the Glyph design system.

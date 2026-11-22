@@ -14,6 +14,7 @@ import { Route as ChatRouteImport } from './routes/chat'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ChatIndexRouteImport } from './routes/chat.index'
 import { Route as ChatChatIdRouteImport } from './routes/chat.$chatId'
+import { Route as DevRareRouteImport } from './routes/dev.rare'
 import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as WorkflowsIdRouteImport } from './routes/workflows.$id'
 import { Route as WorkflowsIdIndexRouteImport } from './routes/workflows.$id.index'
@@ -46,6 +47,11 @@ const ChatChatIdRoute = ChatChatIdRouteImport.update({
   id: '/$chatId',
   path: '/$chatId',
   getParentRoute: () => ChatRoute,
+} as any)
+const DevRareRoute = DevRareRouteImport.update({
+  id: '/dev/rare',
+  path: '/dev/rare',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DevUiRoute = DevUiRouteImport.update({
   id: '/dev/ui',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRouteWithChildren
   '/settings': typeof SettingsRoute
   '/chat/$chatId': typeof ChatChatIdRoute
+  '/dev/rare': typeof DevRareRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id': typeof WorkflowsIdRouteWithChildren
   '/chat/': typeof ChatIndexRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/chat/$chatId': typeof ChatChatIdRoute
+  '/dev/rare': typeof DevRareRoute
   '/dev/ui': typeof DevUiRoute
   '/chat': typeof ChatIndexRoute
   '/workflows/$id/definition': typeof WorkflowsIdDefinitionRoute
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/chat': typeof ChatRouteWithChildren
   '/settings': typeof SettingsRoute
   '/chat/$chatId': typeof ChatChatIdRoute
+  '/dev/rare': typeof DevRareRoute
   '/dev/ui': typeof DevUiRoute
   '/workflows/$id': typeof WorkflowsIdRouteWithChildren
   '/chat/': typeof ChatIndexRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/settings'
     | '/chat/$chatId'
+    | '/dev/rare'
     | '/dev/ui'
     | '/workflows/$id'
     | '/chat/'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/chat/$chatId'
+    | '/dev/rare'
     | '/dev/ui'
     | '/chat'
     | '/workflows/$id/definition'
@@ -155,6 +166,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/settings'
     | '/chat/$chatId'
+    | '/dev/rare'
     | '/dev/ui'
     | '/workflows/$id'
     | '/chat/'
@@ -169,6 +181,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChatRoute: typeof ChatRouteWithChildren
   SettingsRoute: typeof SettingsRoute
+  DevRareRoute: typeof DevRareRoute
   DevUiRoute: typeof DevUiRoute
   WorkflowsIdRoute: typeof WorkflowsIdRouteWithChildren
 }
@@ -209,6 +222,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/chat/$chatId'
       preLoaderRoute: typeof ChatChatIdRouteImport
       parentRoute: typeof ChatRoute
+    }
+    '/dev/rare': {
+      id: '/dev/rare'
+      path: '/dev/rare'
+      fullPath: '/dev/rare'
+      preLoaderRoute: typeof DevRareRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dev/ui': {
       id: '/dev/ui'
@@ -308,6 +328,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChatRoute: ChatRouteWithChildren,
   SettingsRoute: SettingsRoute,
+  DevRareRoute: DevRareRoute,
   DevUiRoute: DevUiRoute,
   WorkflowsIdRoute: WorkflowsIdRouteWithChildren,
 }
