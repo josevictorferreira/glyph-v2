@@ -78,4 +78,17 @@ describe("ChatPage list", () => {
     renderWithApp(undefined, { route: "/chat", services });
     expect(await screen.findByTestId("chat-empty")).toHaveTextContent(/No conversations yet/);
   });
+
+  it("Escape cancels rename and deleting active chat navigates to /chat", async () => {
+    const { services, deleteChat } = makeServices([chat("c1", "One", 1)]);
+    const rendered = renderWithApp(undefined, { route: "/chat/c1", services });
+    fireEvent.click(await screen.findByRole("button", { name: "Rename One" }));
+    const input = await screen.findByLabelText("Chat title");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByLabelText("Chat title")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete One" }));
+    await waitFor(() => expect(deleteChat).toHaveBeenCalled());
+    await waitFor(() => expect(rendered.router!.state.location.pathname).toBe("/chat"));
+  });
 });

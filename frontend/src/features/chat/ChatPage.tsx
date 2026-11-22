@@ -91,6 +91,9 @@ function ChatList({
                       name="title"
                       defaultValue={chat.title}
                       autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setRenaming(null);
+                      }}
                       className="h-7 w-full rounded-md border border-border bg-surface px-2 text-sm"
                       aria-label="Chat title"
                     />
@@ -112,7 +115,7 @@ function ChatList({
                     >
                       {chat.title || "Untitled"}
                     </button>
-                    <span className="hidden shrink-0 gap-0.5 group-hover:flex">
+                    <span className="flex shrink-0 gap-0.5 md:hidden md:group-hover:flex md:group-focus-within:flex">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -127,7 +130,18 @@ function ChatList({
                         size="sm"
                         aria-label={`Delete ${chat.title || "Untitled"}`}
                         className="h-6 w-6 px-0"
-                        onClick={() => remove.mutate({ chatId: chat.id })}
+                        onClick={() =>
+                          remove.mutate(
+                            { chatId: chat.id },
+                            {
+                              onSuccess: () => {
+                                if (chat.id === chatId) {
+                                  void navigate({ to: "/chat" });
+                                }
+                              },
+                            },
+                          )
+                        }
                       >
                         <Trash />
                       </Button>

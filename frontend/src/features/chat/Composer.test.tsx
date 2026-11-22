@@ -2,6 +2,7 @@
 // running the input is disabled and Stop calls CancelTurn; without a model
 // the composer is replaced by a link to Settings.
 import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { ConnectError, Code } from "@connectrpc/connect";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithApp } from "../../../test/render";
 import type { FakeServices } from "../../../test/fakeTransport";
@@ -61,5 +62,37 @@ describe("Composer", () => {
     expect(await screen.findByTestId("composer-missing-model")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open Settings" })).toBeTruthy();
     expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("disables Send when empty or whitespace-only and spans full width", async () => {
+    renderWithApp(undefined, {
+      services: services("m/x"),
+      route: "/chat/c1",
+    });
+    const textarea = await screen.findByRole("textbox", { name: "Message" });
+    const sendBtn = screen.getByRole("button", { name: "Send" });
+    expect(sendBtn).toBeDisabled();
+    expect(screen.getByTestId("composer").className).toContain("w-full");
+
+    fireEvent.change(textarea, { target: { value: "   \n  " } });
+    expect(sendBtn).toBeDisabled();
+
+    fireEvent.change(textarea, { target: { value: "hello" } });
+    expect(sendBtn).toBeEnabled();
+  });
+
+  it("preserves draft and shows an alert when send fails", async () => {
+    const sendMessage = vi.fn(() =>
+      Promise.reject(new ConnectError("network down", Code.Unavailable)),
+    );
+    renderWithApp(undefined, {
+      services: services("m/x", { sendMessage }),
+      route: "/chat/c1",
+    });
+    const textarea = (await screen.findByRole("textbox", { name: "Message" })) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "keep my draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("network down");
+    expect(textarea.value).toBe("keep my draft");
   });
 });

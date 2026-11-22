@@ -83,9 +83,10 @@ describe("Conversation", () => {
     expect(await screen.findByText(/Edited .Design POC Tournament./)).toBeTruthy();
   });
 
-  it("shows a hint when the chat has no messages yet", async () => {
+  it("shows a hint when the chat has no messages yet and a back link", async () => {
     const response = create(GetChatResponseSchema, { chat: baseChat, messages: [] });
     renderWithApp(undefined, { route: "/chat/c1", services: services(response) });
     expect(await screen.findByTestId("conversation-empty")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Back to conversations" })).toBeTruthy();
   });
 });
